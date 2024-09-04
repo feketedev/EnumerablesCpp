@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="Enumerables::Def::AutoEnumerable&lt;*&gt;">
+    <DisplayString Optional="true">{ResultsView}</DisplayString>
+    <Expand HideRawView="true">
+      <Synthetic Name="TElement" Optional="true">
+        <DisplayString>{ResultsView,view(elemType)}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="ResultsView">
+        <DisplayString Optional="true" Condition="ResultsView.Status">{ResultsView}</DisplayString>
+        <DisplayString>Disabled by preprocessor macro.</DisplayString>
+        <Expand>
+          <Item Name="Status" Optional="true">ResultsView.Status,sb</Item>
+          <ExpandedItem Optional="true">ResultsView.Elements,view(simple)</ExpandedItem>
+        </Expand>
+      </Synthetic>
+      <Synthetic Name="Realization">
+        <DisplayString Condition="strncmp(&quot;$T1&quot;, &quot;std::function&lt;&quot;, 14) == 0">Interfaced</DisplayString>
+        <DisplayString>Templated</DisplayString>
+      </Synthetic>
+    </Expand>
+  </Type>
+  <Type Name="Enumerables::Def::ResultBuffer&lt;*&gt;">
+    <DisplayString IncludeView="elemType">{"$T1",sb}</DisplayString>
+    <DisplayString Condition="Status[0] == 'N'" ExcludeView="elemType">{Status,na}</DisplayString>
+    <DisplayString Condition="Status[0] != 'N'" ExcludeView="elemType">{Elements}</DisplayString>
+    <Expand>
+      <!--<Item Name="TElement">"$T1"</Item>-->
+      <Item Name="Status"   ExcludeView="elemType">Status,sb</Item>
+      <Item Name="Elements" ExcludeView="elemType">Elements,view(simple)</Item>
+    </Expand>
+  </Type>
+</AutoVisualizer>

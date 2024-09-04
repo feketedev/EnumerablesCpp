@@ -1,0 +1,376 @@
+Testing Enumerables...
+
+
+Simple ranges:          2, 3, 4, 5, 6, 
+10, 9, 8, 7, 
+
+Numbers:          12, 0, -5, -6, 84, 6, 7, 
+
+
+Let's test again: 12, 0, -5, -6, 84, 6, 7, 
+
+
+Same assessment through interfaces:
+12, 0, -5, -6, 84, 6, 7, 
+12, 0, -5, -6, 84, 6, 7, 
+
+
+Positive evens:     12, 84, 6, 
+
+Through interfaces: 12, 84, 6, 
+
+
+Positive evens *2:  24, 168, 12, 
+
+Through interfaces: 24, 168, 12, 
+
+
+Skip 1 Take 2:      0, -5, 
+
+Through interfaces: 0, -5, 
+
+
+Skip 3 Take 5:      -6, 84, 6, 7, 
+
+Through interfaces: -6, 84, 6, 7, 
+
+
+Skip 10 Take 1:     
+
+Through interfaces: 
+
+Single '7':      7
+Single '8':      
+
+'5' Once:      5
+
+
+Differences between numbers:  -12, -5, -1, 90, -78, 1, 
+
+
+
+Ten-Four:  10, 4, 
+
+
+a:  12, 
+
+
+
+No positive evens:  13, 0, -5, -6, 85, 7, 7, 
+
+
+
+Flattened lists:  13, 1, -5, -6, 85, 7, 7, 13, 1, -5, -6, 85, 7, 7, 13, 1, -5, -6, 85, 7, 7, 
+
+
+Flattened lists:  13, 1, -5, -6, 85, 7, 7, 13, 1, -5, -6, 85, 7, 7, 13, 1, -5, -6, 85, 7, 7, 
+
+
+{5 a}, {6 b}, {-4 z}, {10 g}, {-4 a}, {10 f}, {5 x}, 
+{5 a}, {6 b}, {-4 z}, {10 g}, {-4 a}, {10 f}, {5 x}, 
+{5 a}, 
+{5 a}, {6 b}, {10 g}, {10 f}, {5 x}, 
+
+Letters w/positive: a, b, g, f, x, 
+
+With max ints:      {10 g}, {10 f}, 
+
+
+With min ints:      {-4 z}, {-4 a}, 
+
+
+
+Incremented:        6, 7, -3, 11, -3, 11, 6, 
+
+
+Double Incremented: 7, 8, -2, 12, -2, 12, 7, 
+
+Zipped Incr.-pos.:  {6 a}, {7 b}, {-3 g}, {11 f}, {-3 x}, 
+
+
+1, 2, 3, 
+1, 2, 3, 
+1, 2, 3, 
+
+Given by const &...
+
+
+Wrapped array:                 2, 3, 4, 5, 
+
+
+Cached enumeration (max 4):    2, 3, 4, 
+
+
+Materialized enumerationarray: 2, 3, 4, 
+
+Given by prvalue...
+
+
+Copied self-contained:         2, 3, 4, 5, 
+
+
+Moved  self-contained:         2, 3, 4, 5, 
+
+Given by prvalue...
+Taken by const &:   2, 3, 4, 5, 
+
+Given by const &...
+Taken by const &:   2, 3, 4, 5, 
+
+Given by prvalue...
+Taken by prvalue:   2, 3, 4, 5, 
+
+Given by const &...
+Taken by prvalue:   2, 3, 4, 5, 
+
+Given by &...
+Taken by prvalue:   2, 3, 4, 5, 
+
+Given by &...
+Taken by &:         2, 3, 4, 5, 
+
+Given by &...
+Taken by const &:   2, 3, 4, 5, 
+
+Given by ptr...
+Taken by const ptr: 2, 3, 4, 5, 
+
+Given by ptr...
+Taken by ptr:       2, 3, 4, 5, 
+
+
+PRnums:  6, 7, 8, 9, 
+
+
+Max:     9, 
+ == 9 == 9
+
+Testing implicit conversion of container...
+Taken by &:         5, 6, 7, 8, 
+Taken by const &:   5, 6, 7, 8, 
+Taken by prvalue:   5, 6, 7, 8, 
+
+From const...
+Taken by const &:   5, 6, 7, 8, 
+Taken by prvalue:   5, 6, 7, 8, 
+
+From rvalue...
+Taken by const &:   2, 3, 4, 5, 
+Taken by const &:   2, 3, 8, 10, 
+Taken by prvalue:   2, 3, 8, 10, 
+
+noise test
+ctor(1)
+move(1)
+ctor(2)
+copy(2)
+ctor(3)
+dtor(3)
+dtor(2)
+dtor(2)
+dtor(1)
+dtor(1)
+
+
+-- Basic storable operation --
+move(2)
+dtor(2)
+
+Storing as value...
+copy(1)
+move(4)
+
+Accessing...
+lval access(1)
+copy(1)
+copy(2)
+move(3)
+
+Exiting scope
+dtor(3)
+dtor(2)
+dtor(1)
+dtor(4)
+dtor(1)
+
+Storing as ref...
+ctor(1)
+
+Accessing...
+lval access(1)
+copy(1)
+const lval access(1)
+copy(1)
+nonconst access(1)
+move access(1)
+copy(1)
+
+Exiting scope
+dtor(1)
+dtor(1)
+dtor(1)
+dtor(1)
+
+-- Constructing list --
+ctor(1)
+ctor(2)
+ctor(3)
+
+-- Testing Filter by reference --
+direct iteration: 1, 3, 
+
+converting ToList
+copy(1)
+move(1)
+dtor(1)
+copy(3)
+list iteration: 1, 3, 
+
+converting ToMaterialized
+copy(1)
+move(1)
+dtor(1)
+copy(3)
+materialized iteration: 1, 3, 
+
+taking Minimums
+minimums iteration:
+1, 
+
+taking Maximums
+maximums iteration: 3, 
+
+Exiting scope
+dtor(1)
+dtor(3)
+dtor(1)
+dtor(3)
+
+converting ToSnapshot
+cached iteration: 1, 3, 
+
+Exiting scope
+
+-- Testing Filter by value --
+direct iteration: copy(1)
+dtor(1)
+copy(1)
+1, dtor(1)
+copy(2)
+dtor(2)
+copy(3)
+dtor(3)
+copy(3)
+3, dtor(3)
+
+
+converting ToList
+copy(1)
+dtor(1)
+copy(1)
+move(1)
+dtor(1)
+copy(2)
+dtor(2)
+copy(3)
+dtor(3)
+copy(3)
+move(1)
+dtor(1)
+move(3)
+dtor(3)
+list iteration: 1, 3, 
+
+converting ToMaterialized
+copy(1)
+dtor(1)
+copy(1)
+move(1)
+dtor(1)
+copy(2)
+dtor(2)
+copy(3)
+dtor(3)
+copy(3)
+move(1)
+dtor(1)
+move(3)
+dtor(3)
+materialized iteration: copy(1)
+1, dtor(1)
+copy(3)
+3, dtor(3)
+
+
+taking Minimums
+minimums iteration:
+copy(1)
+dtor(1)
+copy(1)
+move(1)
+dtor(1)
+copy(2)
+dtor(2)
+copy(3)
+dtor(3)
+copy(3)
+dtor(3)
+copy(1)
+1, dtor(1)
+dtor(1)
+
+
+taking Maximums
+maximums iteration: copy(1)
+dtor(1)
+copy(1)
+move(1)
+dtor(1)
+copy(2)
+dtor(2)
+copy(3)
+dtor(3)
+copy(3)
+dtor(1)
+move(3)
+dtor(3)
+copy(3)
+3, dtor(3)
+dtor(3)
+
+
+Exiting scope
+dtor(1)
+dtor(3)
+dtor(1)
+dtor(3)
+
+Exiting scope
+dtor(3)
+dtor(2)
+dtor(1)
+
+
+Init by-val ints:  1, 2, 3, 4, 
+
+
+Init explicit by-val ints:  1, 2, 3, 4, 
+
+
+Init by-ref ints:  7, 6, 5, 
+
+
+Init by-ref ints:  8, 6, 5, 
+
+
+Init explicit by-ref ints:  1, 6, 5, 
+
+
+Init explicit pointers:     1, 6, 10, 
+
+
+Wrap referred init-list:  10, 11, 12, 13, 14, 
+60 60
+55 55
+20 20
+15 15

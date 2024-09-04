@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{E9F3D24B-E3DA-4BAA-B03C-A6DA39EC2CD5}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Tests.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)TestUtils.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ArithmeticTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)ConstructionTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)FiltrationTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Operations.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Examples.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)LambdaHandlingTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)LegacyTests.cpp">
+      <DeploymentContent>false</DeploymentContent>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)MiscellaneousTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)OptResultTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)PerfTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)TestUtils.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Fundamentals.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)TypeHelpersTests.cpp" />
+  </ItemGroup>
+</Project>

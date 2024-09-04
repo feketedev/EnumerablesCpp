@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{45d41acc-2c3c-43d2-bc10-02aa73ffc7c7}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_ConfigDefaults.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_Enumerators.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_Implementation.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_Interface.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_InterfaceTypes.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_TypeHelpers.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_TypeHelperBasics.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_GenericStorage.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables_ChainTool.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)Enumerables.natvis" />
+  </ItemGroup>
+</Project>
