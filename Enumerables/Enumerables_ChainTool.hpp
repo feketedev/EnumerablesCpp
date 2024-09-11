@@ -323,9 +323,9 @@ namespace Def {
 														 Src&&,
 														 TypeHelpers::StorableT<ToInit> >
 	{
-		static_assert (!std::is_lvalue_reference<ToInit>() || std::is_lvalue_reference<Src>(),
+		static_assert (!std::is_lvalue_reference<ToInit>::value || std::is_lvalue_reference<Src>::value,
 					   "Requested lvalue reference to an rvalue.");
-		static_assert (!std::is_reference<ToInit>() || TypeHelpers::IsRefCompatible<ToInit, Src>,
+		static_assert (!std::is_reference<ToInit>::value || TypeHelpers::IsRefCompatible<ToInit, Src>,
 					   "The specified types are not reference-compatible.");
 
 		return std::forward<Src>(x);

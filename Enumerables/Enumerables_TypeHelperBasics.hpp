@@ -117,7 +117,7 @@ namespace TypeHelpers {
 	template <class T>
 	struct RootPointed {
 		using Type = T;
-		static_assert (!is_pointer<T>() && !is_reference<T>(), "Internal error.");
+		static_assert (!is_pointer<T>::value && !is_reference<T>::value, "Internal error.");
 	};
 	template <class T>
 	struct RootPointed<T*>					{ using Type = typename RootPointed<T>::Type; };
@@ -170,7 +170,8 @@ namespace TypeHelpers {
 		using Type = void;
 	};
 	template <class T, class U>
-	struct CommonOrVoid<T, U, std::void_t<std::common_type_t<T, U>>> {
+	struct CommonOrVoid<T, U, std::void_t< decltype(false ? declval<T>() : declval<U>()),		// hardened SFINAE for old STL (VS2015)
+										   std::common_type_t<T, U>						  >> {
 		using Type = std::common_type_t<T, U>;
 	};
 

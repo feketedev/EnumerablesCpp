@@ -144,15 +144,15 @@ namespace TypeHelpers {
 		{
 			template <class Iterated, class TElem>		void CoreChecks()
 			{
-				static_assert (is_reference<Iterated>() || !is_reference<TElem>(),
+				static_assert (is_reference<Iterated>::value || !is_reference<TElem>::value,
 							   "Container iterates over pr-values. Can't enumerate them by reference directly!\n"
 							   "V -> const V& conversion is possible by explicitly creating a snapshot of the container\n"
 							   "like:  \"Enumerate(cont).ToMaterialized<const V&>()\"");
 
-				static_assert (!is_reference<Iterated>() || !is_reference<TElem>() || !HasConstValue<Iterated> || HasConstValue<TElem>,
+				static_assert (!is_reference<Iterated>::value || !is_reference<TElem>::value || !HasConstValue<Iterated> || HasConstValue<TElem>,
 							   "No const V& -> V& conversion, existing objects cannot lose const qualifier!");
 
-				static_assert (!is_reference<TElem>() || std::is_convertible<Iterated, TElem>(),
+				static_assert (!is_reference<TElem>::value || std::is_convertible<Iterated, TElem>::value,
 							   "Container iterates over a type that is not compatible with the enumerated interface.");
 			}
 
@@ -161,7 +161,7 @@ namespace TypeHelpers {
 				// (V& -> V)  copy is silently allowed
 				// -- perf implications allowed silently, but prvalue enumerations aren't even used with costly copyable types.
 				//    In contrast, conversion ctors seem far less expected to run under the hood...
-				static_assert (is_reference<TElem>() || std::is_same<BaseT<Iterated>, BaseT<TElem>>(),
+				static_assert (is_reference<TElem>::value || std::is_same<BaseT<Iterated>, BaseT<TElem>>(),
 							   "Conversion required to obtain the targeted element type.\n"
 							   "For clarity, make it explicit as:	\"Enumerate<TargetedType>(cont)\"");
 			}
@@ -170,7 +170,7 @@ namespace TypeHelpers {
 
 		template <class Iterated, class TElem>		void ByRef()
 		{
-			static_assert (is_reference<Iterated>() || !is_reference<TElem>() || HasConstValue<TElem>,
+			static_assert (is_reference<Iterated>::value || !is_reference<TElem>::value || HasConstValue<TElem>,
 						   "Container iterates over pr-values. Can't enumerate them by non-const reference!\n"
 						   "No V -> V& conversion!");
 
@@ -180,7 +180,7 @@ namespace TypeHelpers {
 
 		template <class Iterated, class TElem>		void ByValue()
 		{
-			static_assert (!is_reference<TElem>() || HasConstValue<TElem>,
+			static_assert (!is_reference<TElem>::value || HasConstValue<TElem>,
 						   "A self-contained (aka. Materialized) enumeration cannot use non-const & elements, "
 						   "as an Enumerable itself must be immutable!");
 
@@ -598,13 +598,13 @@ namespace TypeHelpers {
 		template <class DeducedRes, class Trg, class L>
 		auto	WrapIfConversionReqd(L&& lambda, enable_if_t<!is_same<DeducedRes, Trg>::value>* = nullptr)
 		{
-			static_assert (!is_reference<Trg>() || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
+			static_assert (!is_reference<Trg>::value || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
 						   "Requested result type loses const qualifier.");
-			static_assert (is_convertible<DeducedRes, Trg>(),
+			static_assert (is_convertible<DeducedRes, Trg>::value,
 						   "Given function has incompatible return type.");
-			static_assert (!is_void<DeducedRes>(),
+			static_assert (!is_void<DeducedRes>::value,
 						   "HINT: Return type deduced to void. Can happen with unbound template-parameters for a function.");
-			static_assert (is_reference<DeducedRes>() && !is_rvalue_reference<DeducedRes>() || !is_reference<Trg>(),
+			static_assert (is_reference<DeducedRes>::value && !is_rvalue_reference<DeducedRes>::value || !is_reference<Trg>::value,
 						   "Function returns r-value, expected reference would become dangling!");
 
 			return ReturnConverter<std::decay_t<L>, Trg> { forward<L>(lambda) };
@@ -664,7 +664,7 @@ namespace TypeHelpers {
 			using CorrectedRes	= NonExpiringMemberT<T, DeducedRes>;
 			using TargetRes		= OverrideT<R, CorrectedRes>;
 
-			static_assert (is_lvalue_reference<T>() || is_pointer<T>() || !is_reference<TargetRes>(),
+			static_assert (is_lvalue_reference<T>::value || is_pointer<T>::value || !is_reference<TargetRes>::value,
 						   "Selected member cannot be a reference if input object is an r-value!");
 
 			return WrapIfConversionReqd<DeducedRes, TargetRes>(forward<L>(lambda));
@@ -712,7 +712,7 @@ namespace TypeHelpers {
 
 			using DeducedRes = decltype(declval<AppliedL>().operator()(declval<T>()));
 
-			static_assert (is_convertible<DeducedRes, bool>(), "The predicate function must evaluate to bool!");
+			static_assert (is_convertible<DeducedRes, bool>::value, "The predicate function must evaluate to bool!");
 
 			return WrapIfConversionReqd<DeducedRes, bool>(forward<L>(lambda));
 		}

@@ -455,7 +455,7 @@ namespace Def {
 	template <class S>
 	Optional<S>   AutoEnumerable<TFactory>::Avg() const
 	{
-		static_assert (std::is_floating_point<S>(), "Intended for floating-point operations.");
+		static_assert (std::is_floating_point<S>::value, "Intended for floating-point operations.");
 
 		auto	enumerator = GetEnumerator();
 		size_t	count = 0;

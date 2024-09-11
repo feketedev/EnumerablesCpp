@@ -818,8 +818,14 @@ namespace EnumerableTests {
 
 
 	struct PerfResult {
-		Microseconds	runtime		= Microseconds::zero();
-		size_t			allocations = 0;
+		Microseconds	runtime;
+		size_t			allocations;
+
+		PerfResult(Microseconds	runtime = Microseconds::zero(), size_t allocations = 0)
+			: runtime { runtime }, allocations { allocations }
+		{
+				
+		}
 
 		void operator += (const PerfResult& part)
 		{

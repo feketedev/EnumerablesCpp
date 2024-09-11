@@ -1239,7 +1239,7 @@ namespace Def {
 
 	public:
 		// CONSIDER: ETORUSAGE_ASSERTs? Would require extra bytes here - prob. not worth it this case.
-		TAcc		Current()		  override final	{ return accumulator; }
+		TAcc		Current()		  override final	{ return *accumulator; }
 		SizeInfo	Measure()	const override final	{ return this->source.Measure(); }
 
 		template <class Factory>
@@ -1308,7 +1308,7 @@ namespace Def {
 
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<!IsNone<IM> && is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
 		{
 			this->accumulator.AcceptRvo([this]() -> decltype(auto) {
 				return initAccumulator(this->source.Current());
@@ -1316,7 +1316,7 @@ namespace Def {
 		}
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<!is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<!IsNone<IM> && !is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
 		{
 			static_assert(IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
 						  "Can't convert input element into TAcc. (Narrowing not supported.)");
@@ -1456,21 +1456,21 @@ namespace Def {
 	template <class C>
 	using IfContainerSizeOnly = enable_if_t< HasQueryableSize<C>::value &&
 											!HasIteratorDifference<C>,
-											unsigned >;
+											void >;
 
 	template <class C>
 	using IfTrySizeIterators = enable_if_t< !HasQueryableSize<C>::value ||
 											HasIteratorDifference<C>,
-											unsigned >;
+											void >;
 
 
-	template <class ForcedResult = void, class C, IfTrySizeIterators<C&> = 0>
+	template <class ForcedResult = void, class C, class = IfTrySizeIterators<C&>>
 	auto CreateEnumeratorFor(C& container) -> IteratorEnumerator<IteratorT<C&>, ForcedResult>
 	{
 		return { AdlBegin(container), AdlEnd(container) };
 	}
 
-	template <class ForcedResult = void, class C, IfContainerSizeOnly<C&> = 0>
+	template <class ForcedResult = void, class C, class = IfContainerSizeOnly<C&>>
 	auto CreateEnumeratorFor(C& container) -> ContainerEnumerator<C, ForcedResult>
 	{
 		return { container };
@@ -1520,10 +1520,10 @@ namespace Def {
 	class AccuDeducer {
 
 		template <class A, class E, class C>
-		static auto TryCombine() -> CombinedT<A, E, C>;
+		static auto TryCombine() -> enable_if_t<IsCallable<C, A, E>::value, CombinedT<A, E, C>>;
 
 		template <class A, class E, class C>
-		static auto TryCombine() -> AppliedMemberT<A, C, E>;
+		static auto TryCombine() -> enable_if_t<IsCallableMember<A, C, E>::value, AppliedMemberT<A, C, E>>;
 
 		template <class A, class E, class C>
 		static auto TryCombine() -> enable_if_t<!IsCallable<C, A, E>::value && !IsCallableMember<A, C, E>::value, void>;
@@ -1562,7 +1562,7 @@ namespace Def {
 
 			using TProposed   = OverrideT<ForcedAcc, TImplicit>;
 
-			static_assert (!is_void<TCallResult>() || !is_void<ForcedAcc>(),
+			static_assert (!is_void<TCallResult>::value || !is_void<ForcedAcc>::value,
 						   "Aggregator function is not callable with (TElem, TElem)"
 						   " or it results void. \n"
 						   "Specify accumulator type or initial value explicitly!"	);
@@ -1579,7 +1579,7 @@ namespace Def {
 			using TCompatible = CompatResultT<Init, TCallResult>;
 			using TNoExp	  = LambdaCreators::NonExpiringMemberT<TElem, TCompatible>;
 
-			static_assert (!is_void<ForcedAcc>() || !is_void<TCompatible>(), "Can't deduce common compatible type. Speficy Accumulator type explicitly!");
+			static_assert (!is_void<ForcedAcc>::value || !is_void<TCompatible>::value, "Can't deduce common compatible type. Speficy Accumulator type explicitly!");
 
 			// TODO: Vague but practical check for functions choosing between const&s (e.g. std::max) to prevent referring temporaries.
 			//		 For now only known problematic cases get decayed. ForcedAcc is unconstrained.
@@ -1597,9 +1597,9 @@ namespace Def {
 			static constexpr bool isCallable = IsCallable<Combiner, TProposed, TElem>::value
 											|| IsCallableMember<TProposed, Combiner, TElem>::value;
 
-			static_assert ( is_void<ForcedAcc>() || is_constructible<ForcedAcc, Init>(), "SFINAE error.");
-			static_assert ( is_void<ForcedAcc>() || isCallable,	"Combiner function not callable with the specified accumulator.");
-			static_assert (!is_void<ForcedAcc>() || isCallable,	"Combiner function not callable with the deduced accumulator "
+			static_assert ( is_void<ForcedAcc>::value || is_constructible<ForcedAcc, Init>::value, "SFINAE error.");
+			static_assert ( is_void<ForcedAcc>::value || isCallable,	"Combiner function not callable with the specified accumulator.");
+			static_assert (!is_void<ForcedAcc>::value || isCallable,	"Combiner function not callable with the deduced accumulator "
 																"(common reference for its result and Init or decayed Init)." );
 
 			using TAcc = typename CombineCheck<Combiner, TProposed>::TAcc;

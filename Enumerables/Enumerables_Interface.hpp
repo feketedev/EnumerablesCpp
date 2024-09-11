@@ -236,14 +236,14 @@ namespace Def {
 		/// Wrap container implicitly to an interfaced Enumerable.
 		template <
 			class Container,
-			IfContainerLike<Container&, int> = 0,
-			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value, int> = 0
+			class = IfContainerLike<Container&>,
+			class = enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
+								&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value>
 		>
 		AutoEnumerable(Container& c) :
 			AutoEnumerable { [&c]() { 
 				return InterfacedEnumerator<TElem> { [&c]() { return CreateEnumeratorFor<TElem>(c); } };
-			}}
+			}, true }
 		{
 			ContainerWrapChecks::ByRefImplicit<IterableT<Container&>, TElem>();
 		}
@@ -253,15 +253,15 @@ namespace Def {
 		/// @remarks:	typical subjects are function results and returned locals [if eligible to NRVO]
 		template <
 			class Container,
-			IfContainerLike<const Container&, int> = 0,
-			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& !std::is_lvalue_reference<Container>::value
-						&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value, int> = 0
+			class = IfContainerLike<const Container&>,
+			class = enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
+								&& !std::is_lvalue_reference<Container>::value
+								&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value>
 		>
 		AutoEnumerable(Container&& cont) :
 			AutoEnumerable { [c = move(cont)]() {
 				return InterfacedEnumerator<TElem> { [&c]() { return CreateEnumeratorFor<TElem>(c); } };
-			}}
+			}, true }
 		{
 			ContainerWrapChecks::ByValueImplicit<IterableT<Container&>, TElem>();
 		}
@@ -321,7 +321,7 @@ namespace Def {
 		template <class Mapper, class VForced = void>
 		static decltype(auto) IndepMapper(Mapper& m)
 		{
-			static_assert (!is_member_object_pointer<Mapper>(), "Use projection (.Select) to access a member with related lifetime!");
+			static_assert (!is_member_object_pointer<Mapper>::value, "Use projection (.Select) to access a member with related lifetime!");
 			return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m));
 		}
 
@@ -536,8 +536,8 @@ namespace Def {
 		auto Decay()		&&		{ return Move().template As<TElemDecayed>(); }
 
 		/// Copy ref elements to form pr-values. (Readability helper.)
-		auto Copy()			const &	{ return		Decay();	static_assert(is_reference<TElem>(), "Already copies."); }
-		auto Copy()			&&		{ return Move().Decay();	static_assert(is_reference<TElem>(), "Already copies."); }
+		auto Copy()			const &	{ return		Decay();	static_assert(is_reference<TElem>::value, "Already copies."); }
+		auto Copy()			&&		{ return Move().Decay();	static_assert(is_reference<TElem>::value, "Already copies."); }
 
 
 		// --- Misc. sequence conversions ---
@@ -1039,7 +1039,7 @@ namespace Def {
 	template <class V = size_t, class Container>
 	auto IndexRange(Container& list)
 	{
-		static_assert (!is_reference<V>(), "Index type should not be reference.");
+		static_assert (!is_reference<V>::value, "Index type should not be reference.");
 
 		struct IndexRangeFactory {
 			const Container&  list;
@@ -1067,7 +1067,7 @@ namespace Def {
 	template <class V = size_t, class Container>
 	auto IndexRangeReversed(Container& list)
 	{
-		static_assert (!is_reference<V>(), "Index type should not be reference.");
+		static_assert (!is_reference<V>::value, "Index type should not be reference.");
 
 		struct RevIndexRangeFactory {
 			const Container&  list;

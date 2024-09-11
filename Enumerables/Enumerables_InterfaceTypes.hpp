@@ -122,11 +122,11 @@ namespace Enumerables {
 
 		using TDecayed		= std::decay_t<T>;
 
-		template <class F>
-		using IfFallbackFun	= std::enable_if_t<std::is_same<TypeHelpers::InvokeResultT<F>, OptResult>::value>;
+		template <class F, class R = TypeHelpers::InvokeResultT<F>>
+		using IfFallbackFun	= std::enable_if_t<std::is_same<R, OptResult>::value>;
 
-		template <class F>
-		using IfDefaultFun	= std::enable_if_t<std::is_convertible<TypeHelpers::InvokeResultT<F>, T>::value>;
+		template <class F, class R = TypeHelpers::InvokeResultT<F>>
+		using IfDefaultFun	= std::enable_if_t<std::is_convertible<R, T>::value>;
 
 		template <class M, class TT = T>
 		using MapResult		= decltype(TypeHelpers::LambdaCreators::CustomMapper<TT>(std::declval<M&&>()).operator()(std::declval<TT>()));
@@ -253,11 +253,11 @@ namespace Enumerables {
 		/// [Choice made over references.]
 		const OptResult&	OrFallback(const OptResult& b)  const &	{ return HasValue() ? *this : b; }
 		OptResult&			OrFallback(OptResult& b)			  &	{ return HasValue() ? *this : b; }
-		OptResult&&			OrFallback(OptResult&& b)			 &&	{ return HasValue() ? std::move(*this) : std::move(b); }		// <- possible to chain within 1 expression
+		OptResult&&			OrFallback(OptResult&& b)			 &&	{ if (HasValue()) return std::move(*this);  return std::move(b); }	// <- possible to chain within 1 expression
 
 		/// If this has no value, chose the argument of the same optional type.
 		/// [Value return - move/copy as appropriate.]
-		OptResult			OrFallback(const OptResult& b)		 &&	{ return HasValue() ? std::move(*this) : OptResult { b }; }		// <- expected asymmetric usage!
+		OptResult			OrFallback(const OptResult& b)		 &&	{ return HasValue() ? std::move(*this) : OptResult { b }; }			// <- expected asymmetric usage!
 		OptResult			OrFallback(OptResult&& b)		const &	{ return HasValue() ? OptResult { *this } : std::move(b); }
 
 		/// Only if this has no value, call the given function to produce a fallback value of the same optional type.

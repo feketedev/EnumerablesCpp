@@ -28,26 +28,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -94,6 +94,7 @@
       <LanguageStandard>stdcpp14</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -111,6 +112,7 @@
       <LanguageStandard>stdcpp14</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -167,21 +169,21 @@
     <None Include="legacyOutput140.txt">
       <CopyDestination Condition="$(PlatformToolset.TrimStart('v')) &lt; 142">legacyOutput.txt</CopyDestination>
     </None>
-    <None Include="legacyOutput142.txt">
-      <CopyDestination Condition="$(PlatformToolset.TrimStart('v')) >= 142">legacyOutput.txt</CopyDestination>
-    </None>
+	<None Include="legacyOutput142.txt">
+	  <CopyDestination Condition="$(PlatformToolset.TrimStart('v')) >= 142">legacyOutput.txt</CopyDestination>
+	</None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <!-- Custom copy action that supports renaming -->
   <ItemGroup>
-    <TestReferenceToCopy Include="@(None->HasMetadata('CopyDestination'))" />
+	<TestReferenceToCopy Include="@(None->HasMetadata('CopyDestination'))" />
   </ItemGroup>
   <Target Name="CopyTestReferences" AfterTargets="Build"
-          Inputs ="@(TestReferenceToCopy)" 
+          Inputs ="@(TestReferenceToCopy)"
           Outputs="@(TestReferenceToCopy->'$(OutDir)%(CopyDestination)')">
-    <Message Text="Copy TestReference: @(TestReferenceToCopy) -> %(CopyDestination)" Importance="high"/>
-    <Copy SourceFiles="@(TestReferenceToCopy)" DestinationFiles="$(OutDir)%(CopyDestination)" />
+	<Message Text="Copy TestReference: @(TestReferenceToCopy) -> %(CopyDestination)" Importance="high"/>
+	<Copy SourceFiles="@(TestReferenceToCopy)" DestinationFiles="$(OutDir)%(CopyDestination)" />
   </Target>
 </Project>
