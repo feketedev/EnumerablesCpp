@@ -8,6 +8,7 @@ It follows a pragmatic approach with the core objectives of:
  * by automatically deducing convenient defaults (for type parameters) wherever possible
  * but still have the ability to manually override those
  * prioritize convenience, but try to minimize overhead too (often by providing a way to opt-out)
+ * depend solely on STL (but allow configuration of algorithms to use custom container types)
 
 The pragmatism should take form in sensible **limitations** of the scope, not in a low level of attention to details.
 Particularly:

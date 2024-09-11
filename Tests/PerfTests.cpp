@@ -1167,11 +1167,11 @@ namespace EnumerableTests {
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  =======================================================================================");
+		Greet("  ===================================================================================================");
 		Greet("  Long sequences summary:");
 		PrintCompact(results1);
 		std::cout << std::endl;
-		Greet("  ---------------------------------------------------------------------------------------");
+		Greet("  ---------------------------------------------------------------------------------------------------");
 		Greet("  Short sequences summary:");
 		PrintCompact(results2);
 	}

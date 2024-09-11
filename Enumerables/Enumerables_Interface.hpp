@@ -212,7 +212,6 @@ namespace Def {
 	#pragma endregion
 
 
-
 	// =========== Constructors ======================================================================================================
 	#pragma region
 	
@@ -268,7 +267,6 @@ namespace Def {
 		}
 
 	#pragma endregion
-
 
 
 	// =========== Chaining utils ====================================================================================================
@@ -785,7 +783,12 @@ namespace Def {
 		/// @remarks	
 		///		Mostly an internal tool for utilizing existing Enumerators to implement terminal operations concisely.
 		///		CONSIDER: for usage somehow at parameters, like EnumerableRef<T> ?
-		auto ToReferenced() const &;
+		auto ToReferenced() const &
+		{
+			auto proxy = [this]() { return GetEnumerator(); };
+			return AutoEnumerable<decltype(proxy)> { move(proxy), isPure, false };
+		}
+
 		auto ToReferenced()	&& = delete;
 
 	#pragma endregion

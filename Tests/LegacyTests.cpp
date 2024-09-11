@@ -887,7 +887,7 @@ namespace Legacy {
 		constexpr size_t MaxChunk = 300;
 		constexpr size_t MaxPrint = 5;
 		char			 line[MaxChunk], actLine[MaxChunk];
-		long			 ln = 0;
+		long			 ln = 1;
 		long			 diffs = 0;
 
 		while (reference.getline(line, MaxChunk)) {

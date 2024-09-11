@@ -2,6 +2,7 @@
 #include "Tests.hpp"
 #include "TestUtils.hpp"
 #include "Enumerables.hpp"
+#include <memory>
 
 
 
@@ -599,11 +600,11 @@ namespace EnumerableTests {
 	static void Predicates()
 	{
 		std::vector<int>			directInts	{ 1, 2, 3 };
-		std::vector<IntHolder>		simpHolders { { 3 }, { 4 }, { 1 }, { 2 } };
+		std::vector<IntHolder>		simpHolders { { 3, 0 }, { 4, 0 }, { 1, 0 }, { 2, 0 } };
 		std::vector<IntHeapHolder>	heapHolders;
-		heapHolders.push_back({ std::make_unique<int>(5) });
-		heapHolders.push_back({ std::make_unique<int>(6) });
-		heapHolders.push_back({ std::make_unique<int>(7) });
+		heapHolders.push_back({ std::make_unique<int>(5), 0 });
+		heapHolders.push_back({ std::make_unique<int>(6), 0 });
+		heapHolders.push_back({ std::make_unique<int>(7), 0 });
 
 		NO_MORE_HEAP;
 

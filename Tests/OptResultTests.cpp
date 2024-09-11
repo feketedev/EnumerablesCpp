@@ -2,6 +2,7 @@
 #include "Tests.hpp"
 #include "TestUtils.hpp"
 #include "Enumerables_InterfaceTypes.hpp"
+#include <memory>
 
 
 #define ASSERT_OPT_TYPE(T, optional)	static_assert (std::is_same<T, decltype(*optional)>(),  "Optional payload type check failed.")

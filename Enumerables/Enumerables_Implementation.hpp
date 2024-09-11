@@ -574,16 +574,6 @@ namespace Def {
 				 .Map([](const S& sv) -> TElem { return Revive(sv); });
 	}
 
-
-	template<class TFactory>
-	auto AutoEnumerable<TFactory>::ToReferenced() const &
-	{
-		return WrapFactory(
-			[this]() { return GetEnumerator(); },
-			isPure, false
-		);
-	}
-
 #pragma endregion
 
 

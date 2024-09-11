@@ -250,13 +250,18 @@ namespace Enumerables {
 
 
 		/// If this has no value, chose the argument of the same optional type.
+		/// [Choice made over references.]
 		const OptResult&	OrFallback(const OptResult& b)  const &	{ return HasValue() ? *this : b; }
 		OptResult&			OrFallback(OptResult& b)			  &	{ return HasValue() ? *this : b; }
 		OptResult&&			OrFallback(OptResult&& b)			 &&	{ return HasValue() ? std::move(*this) : std::move(b); }		// <- possible to chain within 1 expression
+
+		/// If this has no value, chose the argument of the same optional type.
+		/// [Value return - move/copy as appropriate.]
 		OptResult			OrFallback(const OptResult& b)		 &&	{ return HasValue() ? std::move(*this) : OptResult { b }; }		// <- expected asymmetric usage!
 		OptResult			OrFallback(OptResult&& b)		const &	{ return HasValue() ? OptResult { *this } : std::move(b); }
 
 		/// Only if this has no value, call the given function to produce a fallback value of the same optional type.
+		/// [Value return - move/copy as appropriate.]
 		template <class F, class = IfFallbackFun<F>>
 		OptResult			OrFallback(F&& getFallback)		const &	{ return HasValue() ? *this : getFallback(); }
 
@@ -266,28 +271,26 @@ namespace Enumerables {
 
 
 		/// If this has no value, fallback to a guaranteed value.
-		/// Value return (move/copy as appropriate).
+		/// [Value return - move/copy as appropriate.]
 		template <class TT = T, std::enable_if_t<!std::is_reference<TT>::value, int> = 0>
 		TDecayed			OrDefault(const TDecayed& def)		 && { return HasValue() ? std::move(*this).Value() : T { def }; }
 		TDecayed			OrDefault(TDecayed&& def)			 && { return HasValue() ? std::move(*this).Value() : std::move(def); }
 		TDecayed			OrDefault(TDecayed&& def)		const & { return HasValue() ? T { this->Value() }      : std::move(def); }
 
 		/// If this has no value, fallback to a guaranteed value.
-		/// Choice made by reference.
+		/// [Choice made over payload references.]
 		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed&>::value, int> = 0>
 		T&					OrDefault(T& def)				const & { return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_reference<TT>::value, int> = 0>
+		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed>::value || std::is_same<TypeHelpers::ConstValueT<TT>, const TDecayed&>::value, int> = 0>
 		const TDecayed&		OrDefault(const TDecayed& def)	const & { return HasValue() ? Value() : def; }
 
 		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed>::value, int> = 0>
 		TDecayed&			OrDefault(TDecayed& def)			  & { return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed>::value, int> = 0>
-		const TDecayed&		OrDefault(const TDecayed& def)	const & { return HasValue() ? Value() : def; }
-
 
 		/// Only if this has no value, call the fallback function to produce a guaranteed value.
+		/// [Exact payload type only.]
 		template <class F, class = IfDefaultFun<F>>
 		T					OrDefault(F&& getDefault)		const &	{ return HasValue() ? Value() : getDefault(); }
 

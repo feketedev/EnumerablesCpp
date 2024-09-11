@@ -4,6 +4,7 @@
 #include "Enumerables.hpp"
 #include <bitset>
 #include <string>
+#include <memory>
 
 
 #ifdef __clang__
