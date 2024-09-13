@@ -332,20 +332,20 @@ namespace EnumerableTests {
 		{
 			size_t init = 6;
 
-			auto max503 = Enumerables::Range(4).Aggregate(5ull, maxSize);		// In any mixed/rvalue cases,
-			auto max603 = Enumerables::Range(4).Aggregate(init, maxSize);		// the implicit type is init argument decayed!
+			auto max503 = Enumerables::Range(4).Aggregate((size_t)5, maxSize);		// In any mixed/rvalue cases,
+			auto max603 = Enumerables::Range(4).Aggregate(init,		 maxSize);		// the implicit type is init argument decayed!
 			ASSERT_TYPE (size_t, max503);
 			ASSERT_TYPE (size_t, max603);
 			ASSERT_EQ	(5,		 max503);
 			ASSERT_EQ	(6,		 max603);
 
 			int large = 20;
-			const int& max103 = nums.Aggregate(numsArr[1], maxInt);				// elemtype+init both lvalues => & result allowed
-			const int& maxLrg = nums.Aggregate(large,      maxInt);				// -> const here due to std::max
+			const int& max103 = nums.Aggregate(numsArr[1], maxInt);					// elemtype+init both lvalues => & result allowed
+			const int& maxLrg = nums.Aggregate(large,      maxInt);					// -> const here due to std::max
 			ASSERT_EQ (numsArr + 3, &max103);
 			ASSERT_EQ (&large,		&maxLrg);
 
-			ASSERT_TYPE (int, nums.Aggregate<int>(numsArr[1], maxInt));			// decaying can be forced
+			ASSERT_TYPE (int, nums.Aggregate<int>(numsArr[1], maxInt));				// decaying can be forced
 
 			// Some help is included to decay for incompatible references (but beware and use forced type when necessary)
 			ASSERT_TYPE (int, Enumerables::Empty<short&>().Aggregate(large, maxInt));
@@ -509,27 +509,30 @@ namespace EnumerableTests {
 			{
 				size_t init = 6;
 
-				auto maxes503 = Enumerables::Range(4).Scan(5ull, maxSize);
-				auto maxes603 = Enumerables::Range(4).Scan(init, maxSize);
+				auto maxes503 = Enumerables::Range(4).Scan((size_t)5, maxSize);
+				auto maxes603 = Enumerables::Range(4).Scan(init,	  maxSize);
 
-				ASSERT_ELEM_TYPE (size_t, maxes503);						// In any mixed/rvalue cases,
-				ASSERT_ELEM_TYPE (size_t, maxes603);						// the implicit type is init argument decayed!
+				ASSERT_ELEM_TYPE (size_t, maxes503);							// In any mixed/rvalue cases,
+				ASSERT_ELEM_TYPE (size_t, maxes603);							// the implicit type is init argument decayed!
 				ASSERT (AreEqual({ 5, 5, 5, 5 },  maxes503));
 				ASSERT (AreEqual({ 6, 6, 6, 6 },  maxes603));
 
 				int large = 20;
 				auto maxes103 = nums.Scan(numsArr[1], maxInt);
 				auto maxesLrg = nums.Scan(large,      maxInt);
-				ASSERT_ELEM_TYPE (const int&,		maxes103);				// elemtype+init both lvalues => & result allowed
-				ASSERT_ELEM_TYPE (const int&,		maxesLrg);				// -> const here due to std::max
+				ASSERT_ELEM_TYPE (const int&,		maxes103);					// elemtype+init both lvalues => & result allowed
+				ASSERT_ELEM_TYPE (const int&,		maxesLrg);					// -> const here due to std::max
 
 				ASSERT (AreEqual({ numsArr + 1, numsArr + 1, numsArr + 2, numsArr + 3 },	maxes103.Addresses()));
 				ASSERT (AreEqual(Enumerables::Repeat(&large, 4),							maxesLrg.Addresses()));
 
-				ASSERT_ELEM_TYPE (int, nums.Scan<int>(numsArr[1], maxInt));	// decaying can be forced
+				ASSERT_ELEM_TYPE (int, nums.Scan<int>(numsArr[1], maxInt));		// decaying can be forced
 
 				// Some help is included to decay for incompatible references (but beware and use forced type when necessary)
-				ASSERT_ELEM_TYPE (size_t, Enumerables::Empty<unsigned&>().Scan(init, maxSize));
+				using ExpectedAcc = std::conditional_t< std::is_same<size_t, unsigned>::value,
+														const unsigned&,							// on 32 bit: types match (ref-compatible)
+														size_t >;									// on 64 bit: must decay (and convert)
+				ASSERT_ELEM_TYPE (ExpectedAcc, Enumerables::Empty<unsigned&>().Scan(init, maxSize));
 
 				auto abcd = Enumerables::Range('a', 4).Scan<std::string>("",	 FUN(s, c,  s + c));
 				auto iii  = Enumerables::Range('a', 4).Scan(std::string(3, 'i'), FUN(s, c,  s + c));

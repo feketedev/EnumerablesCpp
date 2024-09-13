@@ -568,10 +568,11 @@ namespace EnumerableTests {
 			// Creation of InterfacedEnumerators use heap depending on concrete size:
 			using ConcreteEnumerator = decltype(evens)::TEnumerator;
 			
-			// IteratorEnumerator: vptr + 2 iter + bool
-			// FilterEnumerator:   vptr + lambda			 Sum = 6 ptr
-			static_assert (sizeof(ConcreteEnumerator) == 48, "Enumerator unexpectedly large.");
-			static_assert (ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE >= 48, "Wrong test setup.");
+			// IteratorEnumerator: vptr + 2 iter + padded bool
+			// FilterEnumerator:   vptr + lambda
+			constexpr size_t size = 6 * sizeof(void*);
+			static_assert (sizeof(ConcreteEnumerator) == size, "Enumerator unexpectedly large.");
+			static_assert (ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE >= size, "Wrong test setup.");
 			
 			// Simple transformations shouldn't need heap:
 			ASSERT_EQ (1, evensIfaced.Count());

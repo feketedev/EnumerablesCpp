@@ -231,7 +231,7 @@ namespace Legacy {
 
 
 		std::cout << std::endl << "Same assessment through interfaces:" << std::endl;
-		static_assert (sizeof (decltype(numbers.GetEnumerator())) == 32, "error");
+		static_assert (sizeof (decltype(numbers.GetEnumerator())) == 4 * sizeof(int*), "error");	// 2 ptrs + vptr + padded bool
 		Enumerable<int> iNumbers = numbers.Decay();
 		for (int n : iNumbers)
 			std::cout << n << ", ";
