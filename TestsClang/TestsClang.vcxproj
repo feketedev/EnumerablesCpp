@@ -22,7 +22,7 @@
     <ProjectGuid>{0155B3F6-17D7-4935-9FB0-6615A015A800}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>TestsClang</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -91,7 +91,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-range-loop-analysis -Wno-covered-switch-default -Wno-shadow-field -Wno-shadow-field-in-constructor -Wreturn-std-move-in-c++11 -Wno-gnu-zero-variadic-macro-arguments -Wno-logical-op-parentheses -Wno-sign-compare -Wno-reorder -Wno-documentation -Wno-old-style-cast -Wno-double-promotion -Wno-float-equal -Wno-parentheses -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage -Wno-unknown-warning-option %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -111,7 +111,7 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-range-loop-analysis -Wno-covered-switch-default -Wno-shadow-field -Wno-shadow-field-in-constructor -Wreturn-std-move-in-c++11 -Wno-gnu-zero-variadic-macro-arguments -Wno-logical-op-parentheses -Wno-sign-compare -Wno-reorder -Wno-documentation -Wno-old-style-cast -Wno-double-promotion -Wno-float-equal -Wno-parentheses -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage -Wno-unknown-warning-option %(AdditionalOptions)</AdditionalOptions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
@@ -130,7 +130,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-range-loop-analysis -Wno-covered-switch-default -Wno-shadow-field -Wno-shadow-field-in-constructor -Wreturn-std-move-in-c++11 -Wno-gnu-zero-variadic-macro-arguments -Wno-logical-op-parentheses -Wno-sign-compare -Wno-reorder -Wno-documentation -Wno-old-style-cast -Wno-double-promotion -Wno-float-equal -Wno-parentheses -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage -Wno-unknown-warning-option %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -154,7 +154,7 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-range-loop-analysis -Wno-covered-switch-default -Wno-shadow-field -Wno-shadow-field-in-constructor -Wreturn-std-move-in-c++11 -Wno-gnu-zero-variadic-macro-arguments -Wno-logical-op-parentheses -Wno-sign-compare -Wno-reorder -Wno-documentation -Wno-old-style-cast -Wno-double-promotion -Wno-float-equal -Wno-parentheses -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage -Wno-unknown-warning-option %(AdditionalOptions)</AdditionalOptions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>

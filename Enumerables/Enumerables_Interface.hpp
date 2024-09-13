@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *										  Enumerables for C++ 	v2.0a										  *
+	 *										Enumerables for C++ 	v2.0a-17									  *
 	 *																											  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
