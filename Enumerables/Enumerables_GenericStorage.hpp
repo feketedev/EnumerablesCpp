@@ -26,7 +26,7 @@ namespace TypeHelpers {
 	/// Holds a pointer bypassing a reference for unified storage/access in generic code.
 	template <class T>
 	class RefHolder {
-		static_assert (!is_reference<T>::value, "Use with (qualified) decayed type.");
+		static_assert (!is_reference<T>(), "Use with (qualified) decayed type.");
 
 		T* /*const*/ ptr;
 
@@ -34,7 +34,7 @@ namespace TypeHelpers {
 		template <class Ref, class = enable_if_t<is_same<const T, const remove_reference_t<Ref>>::value>>
 		RefHolder(Ref&& ref) : ptr { &ref }
 		{
-			static_assert (is_lvalue_reference<Ref>::value, "Reference stored from rvalue soon becomes dangling!");
+			static_assert (is_lvalue_reference<Ref>(), "Reference stored from rvalue soon becomes dangling!");
 		}
 
 		T&		 Get() const	{ return *ptr; }
@@ -81,7 +81,7 @@ namespace TypeHelpers {
 	struct RvoEmplacer {
 		using R = InvokeResultT<Factory>;
 
-		static_assert (!is_reference<R>::value, "Expecting a prvalue from factory.");
+		static_assert (!is_reference<R>(), "Expecting a prvalue from factory.");
 
 		R	obj;
 		R*	GetPtr()	{ return &obj; }
@@ -184,8 +184,8 @@ namespace TypeHelpers {
 		void InvokeFactory(Factory&& create, enable_if_t<is_same<S, Trg>::value>* = nullptr)
 		{
 			// Note: to allow conversions, use Construct! That will need a temporary anyway.
-			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
-			static_assert (is_same<typename RvoEmplacer<Factory>::R, S>::value, "GenericStorage deduction error.");
+			static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
+			static_assert (is_same<typename RvoEmplacer<Factory>::R, S>(), "GenericStorage deduction error.");
 			new (val.GetBuffer()) RvoEmplacer<Factory> { create };
 		}
 
@@ -193,7 +193,7 @@ namespace TypeHelpers {
 		template <class Factory, class Trg = T>
 		void InvokeFactory(Factory&& create, enable_if_t<!is_same<S, Trg>::value>* = nullptr)
 		{
-			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
+			static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
 			new (val.GetBuffer()) S { create() };
 		}
 
@@ -219,7 +219,7 @@ namespace TypeHelpers {
 		template <class Src, class Trg = T>
 		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<Trg, Src>>* = nullptr)
 		{
-			static_assert (!is_reference<T>::value, "GenericStorage Internal error.");
+			static_assert (!is_reference<T>(), "GenericStorage Internal error.");
 			T& v = Value();
 			v    = std::forward<Src>(src);
 			return v;

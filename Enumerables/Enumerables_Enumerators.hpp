@@ -408,7 +408,7 @@ namespace Def {
 	///
 	template <class Enumerator, class TrgContainer, class TrgElem>
 	class HasConvertibleCache {
-		static_assert (!std::is_reference<TrgElem>::value, "Use StorableT for reference targets!");
+		static_assert (!is_reference<TrgElem>(), "Use StorableT for reference targets!");
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
 		template <class V, template <class> class C>
@@ -578,7 +578,7 @@ namespace Def {
 	public:
 		using typename IteratorEnumerator::IEnumerator::TElem;
 
-		static_assert (!is_reference<ForcedResult>::value || IsRefCompatible<ForcedResult, PointedT<TIter>>,
+		static_assert (!is_reference<ForcedResult>() || IsRefCompatible<ForcedResult, PointedT<TIter>>,
 					   "The explicitly requested type is not reference-compatible with elements - could return reference to a temporary.");
 
 		bool	FetchNext() override
@@ -620,7 +620,7 @@ namespace Def {
 	public:
 		using typename ContainerEnumerator::IEnumerator::TElem;
 
-		static_assert (!is_reference<ForcedResult>::value || IsRefCompatible<ForcedResult, IterableT<Container>>,
+		static_assert (!is_reference<ForcedResult>() || IsRefCompatible<ForcedResult, IterableT<Container>>,
 					   "The explicitly requested type is not reference-compatible with elements - could return reference to a temporary.");
 
 
@@ -917,10 +917,10 @@ namespace Def {
 		Source source;
 
 	public:
-		static_assert (!std::is_reference<TConverted>::value || std::is_reference<typename Source::TElem>::value,
+		static_assert (!is_reference<TConverted>() || is_reference<typename Source::TElem>(),
 					   "Source elements are prvalues, requested references would become dangling!");
 
-		static_assert (!is_reference<TConverted>::value || IsRefCompatible<TConverted, typename Source::TElem>,
+		static_assert (!is_reference<TConverted>() || IsRefCompatible<TConverted, typename Source::TElem>,
 					   "Requested type is not reference-compatible with source element - could return reference to a temporary.");
 
 		bool						FetchNext()		  override	{ return source.FetchNext(); }
@@ -1064,7 +1064,7 @@ namespace Def {
 	
 	template <class Source, class ContinuationSource>
 	class ConcatEnumerator final : public IEnumerator<EnumeratedT<Source>> {
-		static_assert (is_convertible<EnumeratedT<ContinuationSource>, EnumeratedT<Source>>::value, "Concat: Incompatible continuation.");
+		static_assert (is_convertible<EnumeratedT<ContinuationSource>, EnumeratedT<Source>>(), "Concat: Incompatible continuation.");
 
 		Source				source;
 		ContinuationSource	continuation;
@@ -1548,8 +1548,8 @@ namespace Def {
 
 			using Next = CombinedT<Acc&&, TElem, Wrapped>;
 
-			static_assert (is_constructible<Acc, Next>::value || is_assignable<Acc, Next>::value,
-						   "Can't convert Combiner's result into the next accumulator value."	);
+			static_assert (is_constructible<Acc, Next>() || is_assignable<Acc, Next>(),
+						   "Can't convert Combiner's result into the next accumulator value.");
 
 			using TAcc = Acc;
 		};

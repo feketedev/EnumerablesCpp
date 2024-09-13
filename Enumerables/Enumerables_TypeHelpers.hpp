@@ -122,13 +122,13 @@ namespace TypeHelpers {
 		// NOTE: Defaulting to const& (in favour of more complex types) would be somewhat analogous to Enumerate(Container&&),
 		//		 but self-contained const& Enumerables have more caveats, and seem less intuitive here!
 
-		static_assert (!is_rvalue_reference<SeedStorage>::value, "Enumerables internal error.");
+		static_assert (!is_rvalue_reference<SeedStorage>(), "Enumerables internal error.");
 
-		static_assert (is_reference<SeedStorage>::value || !is_reference<Output>::value || HasConstValue<Output>,
+		static_assert (is_reference<SeedStorage>() || !is_reference<Output>() || HasConstValue<Output>,
 					   "Mutable ref output requested, but that requires (l-value) ref initialization! "
 					   "Initializing with r-value results in materialized enumerable (having const& / pr-value support).");
 
-		static_assert (is_reference<SeedStorage>::value || !is_reference<Output>::value || is_convertible<BaseT<SeedStorage>*, BaseT<Output>*>::value,
+		static_assert (is_reference<SeedStorage>() || !is_reference<Output>() || is_convertible<BaseT<SeedStorage>*, BaseT<Output>*>(),
 					   "Const & output for a materialized enumerable is possible only with compatible types!");
 	};
 
@@ -152,7 +152,7 @@ namespace TypeHelpers {
 				static_assert (!is_reference<Iterated>() || !is_reference<TElem>() || !HasConstValue<Iterated> || HasConstValue<TElem>,
 							   "No const V& -> V& conversion, existing objects cannot lose const qualifier!");
 
-				static_assert (!is_reference<TElem>() || std::is_convertible<Iterated, TElem>(),
+				static_assert (!is_reference<TElem>() || is_convertible<Iterated, TElem>(),
 							   "Container iterates over a type that is not compatible with the enumerated interface.");
 			}
 
@@ -161,7 +161,7 @@ namespace TypeHelpers {
 				// (V& -> V)  copy is silently allowed
 				// -- perf implications allowed silently, but prvalue enumerations aren't even used with costly copyable types.
 				//    In contrast, conversion ctors seem far less expected to run under the hood...
-				static_assert (is_reference<TElem>() || std::is_same<BaseT<Iterated>, BaseT<TElem>>(),
+				static_assert (is_reference<TElem>() || is_same<BaseT<Iterated>, BaseT<TElem>>(),
 							   "Conversion required to obtain the targeted element type.\n"
 							   "For clarity, make it explicit as:	\"Enumerate<TargetedType>(cont)\"");
 			}
@@ -209,10 +209,10 @@ namespace TypeHelpers {
 	// CONSIDER: Update to common_type (CompatResultT)?
 	template <class Vote1, class Vote2>
 	struct ConcatTypeDeducer {
-		static_assert (is_reference<Vote1>::value == is_reference<Vote2>::value,
+		static_assert (is_reference<Vote1>() == is_reference<Vote2>(),
 					   "Can't Concat references with pr-values implicitly. Specify forced element type for clarity!");
 
-		static_assert (is_reference<Vote1>::value || is_pointer<Vote1>::value && is_pointer<Vote2>::value || is_same<const Vote1, const Vote2>::value,
+		static_assert (is_reference<Vote1>() || is_pointer<Vote1>() && is_pointer<Vote2>() || is_same<const Vote1, const Vote2>(),
 					   "Concatenation requires element value conversion (if possible). Specify forced element type for clarity!");
 
 		using T1 = BaseOrPointedT<Vote1>;
@@ -222,7 +222,7 @@ namespace TypeHelpers {
 							   conditional_t< is_convertible<T1*, T2*>::value,	Vote2,
 							   void >>>;
 
-		static_assert (!is_void<CommonBaseVote>::value,
+		static_assert (!is_void<CommonBaseVote>(),
 					   "Neither element type points/references a public base class of the other. "
 					   "You may specify a common ancestor manually."							  );
 
@@ -230,7 +230,7 @@ namespace TypeHelpers {
 										ConstValueT<CommonBaseVote>,
 										CommonBaseVote >;
 
-		static_assert (is_convertible<Vote1, TCommon>::value && is_convertible<Vote2, TCommon>::value,
+		static_assert (is_convertible<Vote1, TCommon>() && is_convertible<Vote2, TCommon>(),
 					   "Enumerables::Concat internal error. Try to specify forced element type.");
 	};
 

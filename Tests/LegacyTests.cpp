@@ -666,7 +666,7 @@ namespace Legacy {
 		{
 			auto localInts = Enumerate({ 1, 2, 3, 4 });
 			ints = localInts;
-			static_assert (std::is_same<decltype(localInts)::TElem, int>::value, "error");
+			static_assert (std::is_same<decltype(localInts)::TElem, int>(), "error");
 		}
 		Print("Init by-val ints:  ", ints);
 		{

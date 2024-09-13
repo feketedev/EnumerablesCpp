@@ -157,8 +157,6 @@ namespace Def {
 	template <class TForced, class TCommon0, class C1, class C2>
 	auto ConcatInternal(C1&& cont1, C2&& cont2)
 	{
-		static_assert (is_lvalue_reference<C2>::value || is_rvalue_reference<decltype(forward<C2>(cont2))>::value, "ASDF");
-
 		using Eb1 = decltype(Enumerate<TForced>(forward<C1>(cont1)));
 		using Eb2 = decltype(Enumerate<TForced>(forward<C2>(cont2)));
 
@@ -551,9 +549,9 @@ namespace Def {
 	template <class V>
 	auto AutoEnumerable<TFactory>::ToMaterialized() const
 	{
-		static_assert (!is_reference<V>::value || std::is_const<remove_reference_t<V>>::value,
+		static_assert (!is_reference<V>() || is_const<remove_reference_t<V>>(),
 					   "A materialized enumeration must be const - no access by nonconst ref.");
-		static_assert (std::is_convertible<TElem, V>::value, "Incompatible output specified.");
+		static_assert (is_convertible<TElem, V>(), "Incompatible output specified.");
 
 		return Enumerate<V>(this->ToList());
 	}
@@ -563,7 +561,7 @@ namespace Def {
 	auto AutoEnumerable<TFactory>::ToSnapshot() const
 	{
 		// actually this works for prvalues too, but is wasteful!
-		static_assert (is_reference<TElem>::value, "For by-value enumerations use ToMaterialized instead!");
+		static_assert (is_reference<TElem>(), "For by-value enumerations use ToMaterialized instead!");
 
 		using S = StorableT<TElem>;
 

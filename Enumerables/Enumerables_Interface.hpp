@@ -172,7 +172,7 @@ namespace Def {
 		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// "deeper" const for predicates
 
 
-		static_assert(!is_reference<TFactory>::value,	"AutoEnumerable construction error");
+		static_assert(!is_reference<TFactory>(), "AutoEnumerable construction error");
 
 
 		/// Execute the factory function.
@@ -1175,7 +1175,7 @@ namespace Def {
 	template <class R, class I, class = R*>
 	auto InitEnumerable(std::initializer_list<I>&& init)
 	{
-		static_assert (!is_reference<R>::value, "Enumerables internal error.");
+		static_assert (!is_reference<R>(), "Enumerables internal error.");
 
 		// NOTE: List-init support is assumed only here for ListType! Is it expectable?
 		return Enumerate<R>(ListType<I>(init));

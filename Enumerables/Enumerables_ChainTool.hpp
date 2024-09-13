@@ -156,7 +156,7 @@ namespace Def {
 		/*const*/ TArgsStorage		parametrizedCtorArgs;
 		/*const*/ SteadyStorage		steadyCtorArgs;
 
-		static_assert (!std::is_reference<SourceFactory>::value, "Factory of source Enumerator must be stored here.");
+		static_assert (!std::is_reference<SourceFactory>(), "Factory of source Enumerator must be stored here.");
 
 		auto operator ()() const
 		{
@@ -178,7 +178,7 @@ namespace Def {
 		/*const*/ TArgsStorage			parametrizedCtorArgs;
 		/*const*/ SteadyStorage			steadyCtorParams;
 
-		static_assert (!std::is_reference<SourceFactoryStorage>::value && IsGroundTuple<SourceFactoryStorage>, "Factories must be stored here.");
+		static_assert (!std::is_reference<SourceFactoryStorage>() && IsGroundTuple<SourceFactoryStorage>, "Factories must be stored here.");
 
 		auto operator ()() const
 		{
@@ -237,9 +237,9 @@ namespace Def {
 	auto ChainFactory(SourceFact&& sourceFact, SteadyParamPack<SteadyArgs...>&& sargs, Args&&... args)
 	{
 		// just against cryptic errors...
-		static_assert (!std::is_lvalue_reference<SourceFact>::value || std::is_copy_constructible<std::remove_reference_t<SourceFact>>::value,
+		static_assert (!std::is_lvalue_reference<SourceFact>() || std::is_copy_constructible<std::remove_reference_t<SourceFact>>(),
 					   "Can't chain by copy: the source factory contains uncopiable elements!"		);
-		static_assert (std::is_move_constructible<std::remove_reference_t<SourceFact>>::value,
+		static_assert (std::is_move_constructible<std::remove_reference_t<SourceFact>>(),
 					   "Can't chain: the source factory contains unmovable and uncopiable elements!");
 
 		using SF				  = typename std::remove_reference_t<SourceFact>;
