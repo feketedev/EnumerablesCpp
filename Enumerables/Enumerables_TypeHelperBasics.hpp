@@ -149,7 +149,7 @@ namespace TypeHelpers {
 	constexpr bool HasConstValue = is_same<ConstValueT<OverrideT<T, int>>, T>::value;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && std::is_assignable<Trg, Src>::value;
+	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && std::is_assignable<Trg&, Src>::value;
 
 	template <class Trg, class Src>
 	constexpr bool IsRefCompatible = is_convertible<remove_reference_t<Src>*, remove_reference_t<Trg>*>::value;

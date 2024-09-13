@@ -198,12 +198,20 @@ namespace TypeHelpers {
 		}
 
 
+		// Check with optimization: constexpr for unmatching types
+		template <class Src>
+		constexpr bool IsNotSelf(const Src&)   const	{ return true; }
+		bool		   IsNotSelf(const T& src) const	{ return &src != &Value(); }
+
+
 		/// only if already initialized!
 		template <class Src, class Trg = T>
 		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<Trg, Src>>* = nullptr)
 		{
-			Destroy();
-			Construct(std::forward<Src>(src));
+			if (IsNotSelf(src)) {
+				Destroy();
+				Construct(std::forward<Src>(src));
+			}
 			return Value();
 		}
 
@@ -232,8 +240,8 @@ namespace TypeHelpers {
 		alignas (T) char buffer[sizeof(T)];
 
 	public:
-		T*			GetBuffer()			{ return reinterpret_cast<T*>(&buffer[0]); }
-		const T*	GetBuffer()	const	{ return reinterpret_cast<T*>(&buffer[0]); }
+		T*			GetBuffer()			{ return reinterpret_cast<T*>	   (&buffer[0]); }
+		const T*	GetBuffer()	const	{ return reinterpret_cast<const T*>(&buffer[0]); }
 		const T&	Get()		const	{ return *GetBuffer(); }
 		T&			Get()				{ return *GetBuffer(); }
 
