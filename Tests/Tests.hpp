@@ -1,7 +1,6 @@
 #pragma once
 
 #ifdef __clang__
-#	pragma clang diagnostic ignored "-Wdeprecated-redundant-constexpr-static-def"
 #	pragma clang diagnostic ignored "-Wreturn-std-move-in-c++11"
 #	pragma clang diagnostic ignored "-Wreserved-id-macro"
 #endif

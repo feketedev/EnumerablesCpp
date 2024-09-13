@@ -172,6 +172,8 @@ namespace EnumerableTests {
 		}
 	};
 
+	template <>		const char Squares<int>::Name[]		= "Square integers";
+	template <>		const char Squares<double>::Name[]	= "Square doubles";
 
 
 
@@ -310,6 +312,9 @@ namespace EnumerableTests {
 		}
 	};
 
+	template <>		const char NeighborDiffs<int>::Name[]	 = "Pairwise diffs int";
+	template <>		const char NeighborDiffs<double>::Name[] = "Pairwise diffs double";
+	
 
 
 	struct OrderByOtherField : public PairTestBase {
@@ -660,35 +665,6 @@ namespace EnumerableTests {
 			return q.Sum();
 		}
 	};
-
-
-
-
-	template <>		const char Squares<int>::Name[]		= "Square integers";
-	template <>		const char Squares<double>::Name[]	= "Square doubles";
-
-	template <>		const char NeighborDiffs<int>::Name[]	 = "Pairwise diffs int";
-	template <>		const char NeighborDiffs<double>::Name[] = "Pairwise diffs double";
-
-
-	// C++17 can get rid of these
-	constexpr const char DirectCopy::Name[];
-	constexpr const char CopyFromDict::Name[];
-	constexpr const char ConversionCopy::Name[];
-	constexpr const char SubrangeFiltered::Name[];
-	constexpr const char IntSort::Name[];
-	constexpr const char IntSort2::Name[];
-	constexpr const char OrderByOtherField::Name[];
-	constexpr const char FilterByField::Name[];
-	constexpr const char ProjectFiltered::Name[];
-	constexpr const char PositiveMinimumsOrdered::Name[];
-	constexpr const char PositiveMinimums::Name[];
-	constexpr const char DblPositiveMinimums::Name[];
-	constexpr const char MinSearch::Name[];
-	constexpr const char SumField::Name[];
-	constexpr const char SumInts::Name[];
-	constexpr const char SumDoubles::Name[];
-	constexpr const char SumDoubles2::Name[];
 
 #pragma endregion
 

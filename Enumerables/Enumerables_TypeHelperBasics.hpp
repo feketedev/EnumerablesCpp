@@ -211,9 +211,8 @@ namespace TypeHelpers {
 
 	// ===== Function detections ======================================================================================
 
-	// TODO 17: invoke_result_t
 	template <class Func, class... Args>
-	using InvokeResultT = std::result_of_t<Func(Args...)>;
+	using InvokeResultT = std::invoke_result_t<Func, Args...>;
 
 
 
