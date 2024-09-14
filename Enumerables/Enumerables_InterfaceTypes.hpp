@@ -115,9 +115,8 @@ namespace Enumerables {
 	/// A simplified, logically immutable optional type, offering & support and rich chaining/transformation features.
 	template <class T>
 	class OptResult final {
-		const StopReason  error = StopReason::None;
-
-		TypeHelpers::GenericStorage<T, TypeHelpers::UnionHolder>  storage;
+		const StopReason				error	= StopReason::None;
+		TypeHelpers::GenericStorage<T>	storage;
 
 
 		using TDecayed		= std::decay_t<T>;

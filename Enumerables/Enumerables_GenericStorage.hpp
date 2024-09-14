@@ -14,6 +14,7 @@
 
 
 #include "Enumerables_TypeHelperBasics.hpp"
+#include <new>
 
 
 
@@ -101,14 +102,13 @@ namespace TypeHelpers {
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
 	/// Defines all supposable operations, but leaves their management (even lifetime handling!) to the user/inheritor.
-	/// @remarks
-	///		Strategies are just to avoid char[] casting when possible (e.g. for debugging without natvis; +avoid reinterpret anyway).
-	///		C++17 basically renders them obsolete with std::launder.
-	///	    [A direct storage strategy could also have been existed to enforce initialization, but found no use-case.]
-	template <class T, template <class> class Storage>
+	template <class T>
 	class GenericStorage {
 		using S	= StorableT<T>;
-		Storage<S> val;
+		union { S val; };
+
+		S&			Storage()				{ return *std::launder(&val); }
+		const S&	Storage()		const	{ return *std::launder(&val); }
 
 	public:
 		// NOTE: Old clang crashes on auto&/auto* return types, hence need to augment it.
@@ -118,22 +118,22 @@ namespace TypeHelpers {
 
 		// ---- Access ----
 
-		const T&	Value()			const&	{ return Revive(val.Get()); }
-		T&			Value()				 &	{ return Revive(val.Get()); }
-		T&&			Value()				&&	{ return PassRevived(val.Get()); }
-		T&&			PassValue()				{ return PassRevived(val.Get()); }
+		const T&	Value()			const&	{ return Revive(Storage()); }
+		T&			Value()				 &	{ return Revive(Storage()); }
+		T&&			Value()				&&	{ return PassRevived(Storage()); }
+		T&&			PassValue()				{ return PassRevived(Storage()); }
 
 		const T&	operator *()	const&	{ return Value(); }
 		T&			operator *()		 &	{ return Value(); }
-		T&&			operator *()		&&	{ return move(*this).Value(); }
+		T&&			operator *()		&&	{ return PassValue(); }
 
-		// Note: &-collapsing suffice for Value(), but * needs auto	 -> or explicit help
+		// &-collapsing suffice for Value(), but pointers need auto*  --> or explicit help
 		Ptr			operator ->()			{ return &Value(); }
 		ConstPtr	operator ->()	const	{ return &Value(); }
 
 		operator	const T&()		const&	{ return Value(); }
 		operator	T&()				 &	{ return Value(); }
-		operator	T&&()				&&	{ return move(*this).Value(); }
+		operator	T&&()				&&	{ return PassValue(); }
 
 
 		// ---- Outsourced lifetime management (!) ----
@@ -141,7 +141,7 @@ namespace TypeHelpers {
 		GenericStorage()	{}
 		~GenericStorage()	{}
 
-		void Destroy()		{ val.Get().~S(); }
+		void Destroy()		{ Storage().~S(); }
 
 
 		// copy/move manually if appropriate!
@@ -150,25 +150,25 @@ namespace TypeHelpers {
 		/// if only @p src is initialized!
 		void MoveFrom(GenericStorage& src)
 		{
-			new (val.GetBuffer()) S { std::move(src).Value() };
+			new (&val) S { src.PassValue() };
 		}
 
 		/// if only @p src is initialized!
 		void CopyFrom(const GenericStorage& src)
 		{
-			new (val.GetBuffer()) S { src.Value() };
+			new (&val) S { src.Value() };
 		}
 
 
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { ForwardParams, std::forward<Args>(ctorArgs)... }
+		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { std::forward<Args>(ctorArgs)... }
 		{
 		}
 
 		template <class Fact>
-		GenericStorage(FactoryInvokeSelector, Fact& create) : val { TypeHelpers::InvokeFactory, create }
+		GenericStorage(FactoryInvokeSelector, Fact& create) : val { create() }
 		{
 		}
 
@@ -176,7 +176,7 @@ namespace TypeHelpers {
 		template <class... Args>
 		void Construct(Args&&... ctorArgs)
 		{
-			new (val.GetBuffer()) S { std::forward<Args>(ctorArgs)... };
+			new (&val) S { std::forward<Args>(ctorArgs)... };
 		}
 
 
@@ -186,7 +186,7 @@ namespace TypeHelpers {
 			// Note: to allow conversions, use Construct! That will need a temporary anyway.
 			static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
 			static_assert (is_same<typename RvoEmplacer<Factory>::R, S>(), "GenericStorage deduction error.");
-			new (val.GetBuffer()) RvoEmplacer<Factory> { create };
+			new (&val) RvoEmplacer<Factory> { create };
 		}
 
 		// shortcut for S = RefHolder<T>
@@ -194,7 +194,7 @@ namespace TypeHelpers {
 		void InvokeFactory(Factory&& create, enable_if_t<!is_same<S, Trg>::value>* = nullptr)
 		{
 			static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
-			new (val.GetBuffer()) S { create() };
+			new (&val) S { create() };
 		}
 
 
@@ -223,66 +223,6 @@ namespace TypeHelpers {
 			T& v = Value();
 			v    = std::forward<Src>(src);
 			return v;
-		}
-	};
-
-#pragma endregion
-
-
-
-
-#pragma region GenericStorage Strategies
-
-	// The conventional way			// TODO 17: No need from c++17
-	template <class T>
-	class BytesHolder final {
-
-		alignas (T) char buffer[sizeof(T)];
-
-	public:
-		T*			GetBuffer()			{ return reinterpret_cast<T*>	   (&buffer[0]); }
-		const T*	GetBuffer()	const	{ return reinterpret_cast<const T*>(&buffer[0]); }
-		const T&	Get()		const	{ return *GetBuffer(); }
-		T&			Get()				{ return *GetBuffer(); }
-
-		BytesHolder() = default;
-
-		template <class... Args>
-		BytesHolder(ParamForwardSelector, Args&&... ctorArgs)
-		{
-			new (buffer) T { std::forward<Args>(ctorArgs)... };
-		}
-
-		template <class Fact>
-		BytesHolder(FactoryInvokeSelector, Fact& create)
-		{
-			new (buffer) RvoEmplacer<Fact> { create };
-		}
-	};
-
-
-	// Better for intellisense, no casts - but should not be reassigned without std::launder!
-	template <class T>
-	class UnionHolder final {
-
-		union { T val; };
-
-	public:
-		const T&	Get() const		{ return val; }
-		T&			Get()			{ return val; }
-		T*			GetBuffer()		{ return &val;}
-
-		~UnionHolder() {}			// user responsibility!
-		UnionHolder()  {}
-
-		template <class... Args>
-		UnionHolder(ParamForwardSelector, Args&&... ctorArgs)	: val { std::forward<Args>(ctorArgs)... }
-		{
-		}
-
-		template <class Fact>
-		UnionHolder(FactoryInvokeSelector, Fact& create)		: val { create() }
-		{
 		}
 	};
 

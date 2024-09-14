@@ -811,24 +811,16 @@ namespace TypeHelpers {
 
 #pragma region Generalized Storage
 
-	template <class T>
-	using ReassignableStorageFor = conditional_t< IsHeadAssignable<StorableT<T>, StorableT<T>>,
-													GenericStorage<T, UnionHolder>,
-													GenericStorage<T, BytesHolder>			   >;
-
-
 	/// Ensure assignment capability - even for an immutable class.
 	template <class T>
-	class Reassignable final : private ReassignableStorageFor<T> {
-		using Storage = ReassignableStorageFor<T>;
-
+	class Reassignable final : private GenericStorage<T> {
 	public:
-		using Storage::Storage;		// ctor - "ReassignableStorageFor" had fun compiler differences around injected class name :D
+		using GenericStorage<T>::GenericStorage;
 
 		Reassignable() = delete;
 
 		template <class TT = T, class = enable_if_t<IsBraceConstructible<T, TT>::value>>
-		Reassignable(TT&& val) : Storage { ForwardParams, forward<TT>(val) }
+		Reassignable(TT&& val) : GenericStorage<T> { ForwardParams, forward<TT>(val) }
 		{
 		}
 		Reassignable(const Reassignable& src)	{ this->CopyFrom(src); }
@@ -836,11 +828,11 @@ namespace TypeHelpers {
 
 		~Reassignable()							{ this->Destroy(); }
 
-		using Storage::Value;
-		using Storage::PassValue;
-		using Storage::operator *;
-		using Storage::operator ->;
-		using Storage::operator T&;
+		using GenericStorage<T>::Value;
+		using GenericStorage<T>::PassValue;
+		using GenericStorage<T>::operator *;
+		using GenericStorage<T>::operator ->;
+		using GenericStorage<T>::operator T&;
 
 
 		template <class S>
@@ -886,7 +878,7 @@ namespace TypeHelpers {
 
 	/// Value with deferred, possibly repeated initialization.
 	template <class T>
-	class Deferred final : private ReassignableStorageFor<T> {
+	class Deferred final : private GenericStorage<T> {
 		bool initialized = false;
 
 	public:
@@ -911,11 +903,11 @@ namespace TypeHelpers {
 
 
 		// no asserts, not a public type
-		using ReassignableStorageFor<T>::Value;
-		using ReassignableStorageFor<T>::PassValue;
-		using ReassignableStorageFor<T>::operator *;
-		using ReassignableStorageFor<T>::operator ->;
-		using ReassignableStorageFor<T>::operator T&;
+		using GenericStorage<T>::Value;
+		using GenericStorage<T>::PassValue;
+		using GenericStorage<T>::operator *;
+		using GenericStorage<T>::operator ->;
+		using GenericStorage<T>::operator T&;
 
 
 		template <class S>
