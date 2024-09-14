@@ -115,9 +115,9 @@ namespace Def {
 		SmallListType<TDebugValue, 4>	Elements;
 
 		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible<V>::value>* = nullptr);
+		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<is_copy_constructible<V>::value>* = nullptr);
 		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible<V>::value>* = nullptr);
+		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!is_copy_constructible<V>::value>* = nullptr);
 	};
 
 #endif
@@ -220,7 +220,7 @@ namespace Def {
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
 		AutoEnumerable(TFactory&& factory, bool pureSource = true, bool stepToDebug = true) :
 			factory { move(factory) },
-			isPure  { pureSource && std::is_copy_constructible<TElem>::value }
+			isPure  { pureSource && is_copy_constructible<TElem>::value }
 		{
 #		if ENUMERABLES_USE_RESULTSVIEW
 #			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
@@ -255,7 +255,7 @@ namespace Def {
 			class Container,
 			class = IfContainerLike<const Container&>,
 			class = enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-								&& !std::is_lvalue_reference<Container>::value
+								&& !is_lvalue_reference<Container>::value
 								&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value>
 		>
 		AutoEnumerable(Container&& cont) :
@@ -338,7 +338,7 @@ namespace Def {
 		static auto	ComparatorForProperty(Mapper& getProperty)
 		{
 			using CP = TElemConstParam;
-			return [prop = LambdaCreators::CustomMapper<CP, TPropOvrd>(std::forward<Mapper>(getProperty))](CP l, CP r) -> bool
+			return [prop = LambdaCreators::CustomMapper<CP, TPropOvrd>(forward<Mapper>(getProperty))](CP l, CP r) -> bool
 			{
 				return prop(l) < prop(r);
 			};
@@ -383,7 +383,7 @@ namespace Def {
 		template <class BinOp>
 		static auto SwappedBinop(BinOp&& opp)
 		{
-			return [op = std::forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
+			return [op = forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
 		}
 
 
@@ -949,7 +949,7 @@ namespace Def {
 	template <class V = void, class Vin>
 	auto Once(Vin&& val)
 	{
-		return Repeat<V>(std::forward<Vin>(val), 1u);
+		return Repeat<V>(forward<Vin>(val), 1u);
 	}
 
 
@@ -1201,13 +1201,13 @@ namespace Def {
 	using IfInitValues = enable_if_t<!is_reference<ForcedResult>::value && !is_void<ForcedResult>::value, int>;
 
 	template <class ForcedResult, class I>
-	using IfInitDeducedRefs   = enable_if_t< std::is_pointer<I>::value &&
+	using IfInitDeducedRefs   = enable_if_t< is_pointer<I>::value &&
 											(	is_void<ForcedResult>::value
 											||	is_reference<ForcedResult>::value &&
 												is_convertible<remove_pointer_t<I>&, ForcedResult>::value),
 											int >;
 	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t< !std::is_pointer<I>::value &&
+	using IfInitDeducedValues = enable_if_t< !is_pointer<I>::value &&
 											 (is_void<ForcedResult>::value || is_convertible<I, ForcedResult>::value),
 											 int >;
 

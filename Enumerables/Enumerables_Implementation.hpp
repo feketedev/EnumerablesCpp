@@ -157,8 +157,6 @@ namespace Def {
 	template <class TForced, class TCommon0, class C1, class C2>
 	auto ConcatInternal(C1&& cont1, C2&& cont2)
 	{
-		static_assert (is_lvalue_reference<C2>::value || is_rvalue_reference<decltype(forward<C2>(cont2))>::value, "ASDF");
-
 		using Eb1 = decltype(Enumerate<TForced>(forward<C1>(cont1)));
 		using Eb2 = decltype(Enumerate<TForced>(forward<C2>(cont2)));
 
@@ -551,9 +549,9 @@ namespace Def {
 	template <class V>
 	auto AutoEnumerable<TFactory>::ToMaterialized() const
 	{
-		static_assert (!is_reference<V>::value || std::is_const<remove_reference_t<V>>::value,
+		static_assert (!is_reference<V>::value || is_const<remove_reference_t<V>>::value,
 					   "A materialized enumeration must be const - no access by nonconst ref.");
-		static_assert (std::is_convertible<TElem, V>::value, "Incompatible output specified.");
+		static_assert (is_convertible<TElem, V>::value, "Incompatible output specified.");
 
 		return Enumerate<V>(this->ToList());
 	}
@@ -647,7 +645,7 @@ namespace Def {
 
 	template <class T>
 	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible<V>::value>*)
+	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<is_copy_constructible<V>::value>*)
 	{
 		if (autoCall && (GetSize(Elements) > 0 || Status[0] == 'E'))
 			return;
@@ -678,7 +676,7 @@ namespace Def {
 
 	template <class T>
 	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible<V>::value>*)
+	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!is_copy_constructible<V>::value>*)
 	{
 		ENUMERABLES_INTERNAL_ASSERT (!isPure);
 		Status = "Not available for this type.";

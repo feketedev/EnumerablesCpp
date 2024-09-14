@@ -77,7 +77,7 @@ namespace Def {
 
 	/// Actual iterator distance, if available.
 	template <class It>
-	auto TryGetIterDistance(const It& s, const It& e) -> std::enable_if_t<HasQueryableDistance<It>::value, SizeInfo>
+	auto TryGetIterDistance(const It& s, const It& e) -> enable_if_t<HasQueryableDistance<It>::value, SizeInfo>
 	{
 		auto diff = e - s;
 
@@ -96,7 +96,7 @@ namespace Def {
 
 
 	template <class It>
-	auto TryGetIterDistance(const It&, const It&) -> std::enable_if_t<!HasQueryableDistance<It>::value, SizeInfo>
+	auto TryGetIterDistance(const It&, const It&) -> enable_if_t<!HasQueryableDistance<It>::value, SizeInfo>
 	{
 		// NOTE: Assuming that iterators belong to containers -> which are finite
 		return { Boundedness::Bounded };
@@ -408,7 +408,7 @@ namespace Def {
 	///
 	template <class Enumerator, class TrgContainer, class TrgElem>
 	class HasConvertibleCache {
-		static_assert (!std::is_reference<TrgElem>::value, "Use StorableT for reference targets!");
+		static_assert (!is_reference<TrgElem>::value, "Use StorableT for reference targets!");
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
 		template <class V, template <class> class C>
@@ -917,7 +917,7 @@ namespace Def {
 		Source source;
 
 	public:
-		static_assert (!std::is_reference<TConverted>::value || std::is_reference<typename Source::TElem>::value,
+		static_assert (!is_reference<TConverted>::value || is_reference<typename Source::TElem>::value,
 					   "Source elements are prvalues, requested references would become dangling!");
 
 		static_assert (!is_reference<TConverted>::value || IsRefCompatible<TConverted, typename Source::TElem>,

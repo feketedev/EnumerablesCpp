@@ -26,6 +26,7 @@ namespace TypeHelpers {
 	using std::is_assignable;
 	using std::is_const;
 	using std::is_constructible;
+	using std::is_copy_constructible;
 	using std::is_convertible;
 	using std::is_void;
 	using std::is_reference;
@@ -108,7 +109,7 @@ namespace TypeHelpers {
 	using RemovePtrRefT = conditional_t<is_pointer<remove_reference_t<T>>::value, remove_reference_t<T>, T>;
 
 	template <class T>
-	using RemoveScalarRefT = conditional_t< is_pointer<remove_reference_t<T>>::value || std::is_scalar<remove_reference_t<T>>::value,
+	using RemoveScalarRefT = conditional_t< is_pointer<remove_reference_t<T>>::value || is_scalar<remove_reference_t<T>>::value,
 										    BaseT<T>,
 										    T >;
 
@@ -149,7 +150,7 @@ namespace TypeHelpers {
 	constexpr bool HasConstValue = is_same<ConstValueT<OverrideT<T, int>>, T>::value;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && std::is_assignable<Trg&, Src>::value;
+	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && is_assignable<Trg&, Src>::value;
 
 	template <class Trg, class Src>
 	constexpr bool IsRefCompatible = is_convertible<remove_reference_t<Src>*, remove_reference_t<Trg>*>::value;
@@ -285,7 +286,7 @@ namespace TypeHelpers {
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
 	template <class T, class... Args>
 	constexpr bool IsConstructibleAnyway = IsBraceConstructible<T, Args...>::value
-										|| std::is_constructible<T, Args...>::value;
+										|| is_constructible<T, Args...>::value;
 
 
 
@@ -315,35 +316,35 @@ namespace TypeHelpers {
 	using IfVoid = enable_if_t<is_void<T>::value>;
 
 	template <class T, class S = T>
-	using IfPRValue = std::enable_if_t<!std::is_reference<T>::value, S>;
+	using IfPRValue = enable_if_t<!is_reference<T>::value, S>;
 
 	template <class T, class S = T>
-	using IfReference = std::enable_if_t<std::is_reference<T>::value, S>;
+	using IfReference = enable_if_t<is_reference<T>::value, S>;
 
 	template <class T, class S = T>
-	using IfMutRVal = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value &&
-										(std::is_rvalue_reference<T>::value || !std::is_reference<T>::value),
-										S >;
+	using IfMutRVal = enable_if_t< !is_const<remove_reference_t<T>>::value &&
+								   (is_rvalue_reference<T>::value || !is_reference<T>::value),
+								   S >;
 
 	template <class T, class S = T>
-	using IfLVal = std::enable_if_t< std::is_lvalue_reference<T>::value, S>;
+	using IfLVal = enable_if_t< is_lvalue_reference<T>::value, S>;
 
 	template <class T, class S = T>
-	using IfMutLVal = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value &&
-										std::is_lvalue_reference<T>::value,
-										S >;
+	using IfMutLVal = enable_if_t< !is_const<remove_reference_t<T>>::value &&
+								   is_lvalue_reference<T>::value,
+								   S >;
 
 
 	template <class T, class S = T>
-	using IfConst = std::enable_if_t<std::is_const<std::remove_reference_t<T>>::value, S>;
+	using IfConst = enable_if_t<is_const<remove_reference_t<T>>::value, S>;
 
 	template <class T, class S = T>
-	using IfMutable = std::enable_if_t<!std::is_const<std::remove_reference_t<T>>::value, S>;
+	using IfMutable = enable_if_t<!is_const<remove_reference_t<T>>::value, S>;
 
 	template <class T, class S = T>
-	using IfValueOrMutable = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value
-											|| !std::is_reference<T>::value,
-											   S >;
+	using IfValueOrMutable = enable_if_t< !is_const<remove_reference_t<T>>::value
+									   || !is_reference<T>::value,
+										  S >;
 
 }		// namespace TypeHelpers
 }		// namespace Enumerables

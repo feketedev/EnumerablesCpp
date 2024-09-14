@@ -67,7 +67,7 @@ namespace TypeHelpers {
 
 	/// Get final access to the stored entity, if possible as an rvalue
 	template <class V>	V&			PassRevived(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&&			PassRevived(V& stored)					{ return std::move(stored); }
+	template <class V>	V&&			PassRevived(V& stored)					{ return move(stored); }
 
 #pragma endregion
 
@@ -150,7 +150,7 @@ namespace TypeHelpers {
 		/// if only @p src is initialized!
 		void MoveFrom(GenericStorage& src)
 		{
-			new (val.GetBuffer()) S { std::move(src).Value() };
+			new (val.GetBuffer()) S { src.PassValue() };
 		}
 
 		/// if only @p src is initialized!
@@ -163,7 +163,7 @@ namespace TypeHelpers {
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { ForwardParams, std::forward<Args>(ctorArgs)... }
+		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { ForwardParams, forward<Args>(ctorArgs)... }
 		{
 		}
 
@@ -176,7 +176,7 @@ namespace TypeHelpers {
 		template <class... Args>
 		void Construct(Args&&... ctorArgs)
 		{
-			new (val.GetBuffer()) S { std::forward<Args>(ctorArgs)... };
+			new (val.GetBuffer()) S { forward<Args>(ctorArgs)... };
 		}
 
 
@@ -210,7 +210,7 @@ namespace TypeHelpers {
 		{
 			if (IsNotSelf(src)) {
 				Destroy();
-				Construct(std::forward<Src>(src));
+				Construct(forward<Src>(src));
 			}
 			return Value();
 		}
@@ -221,7 +221,7 @@ namespace TypeHelpers {
 		{
 			static_assert (!is_reference<T>::value, "GenericStorage Internal error.");
 			T& v = Value();
-			v    = std::forward<Src>(src);
+			v    = forward<Src>(src);
 			return v;
 		}
 	};
@@ -250,7 +250,7 @@ namespace TypeHelpers {
 		template <class... Args>
 		BytesHolder(ParamForwardSelector, Args&&... ctorArgs)
 		{
-			new (buffer) T { std::forward<Args>(ctorArgs)... };
+			new (buffer) T { forward<Args>(ctorArgs)... };
 		}
 
 		template <class Fact>
@@ -276,7 +276,7 @@ namespace TypeHelpers {
 		UnionHolder()  {}
 
 		template <class... Args>
-		UnionHolder(ParamForwardSelector, Args&&... ctorArgs)	: val { std::forward<Args>(ctorArgs)... }
+		UnionHolder(ParamForwardSelector, Args&&... ctorArgs)	: val { forward<Args>(ctorArgs)... }
 		{
 		}
 
