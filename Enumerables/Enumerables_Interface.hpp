@@ -181,7 +181,7 @@ namespace Def {
 
 		/// Only to be directly consumable by for ( : ).
 		EnumeratorAdapter<TEnumerator>	begin()	const	{ ViewTrigger();  return { factory }; }
-		EnumeratorAdapter<TEnumerator>	end()	const	{ return {}; }
+		constexpr EnumeratorAdapterEnd	end()	const	{ return {}; }
 
 
 

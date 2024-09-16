@@ -270,58 +270,34 @@ namespace TypeHelpers {
 }
 namespace Def {
 
+	
+	/// Represents the end() against any EnumeratorAdapter.
+	struct EnumeratorAdapterEnd {};
+
 
 	/// Adapts an Enumerator for usage inside range-based for (mimicking a legacy iterator).
 	template <class TEnumerator>
 	class EnumeratorAdapter {
-		// TODO 17: optional initialization is required until c++17, as begin(), end() must have the same type.
-		union {
-			TEnumerator enumerator;
-		};
-		const bool isEmptyMock;
-		bool	   hasNext;
+		TEnumerator		enumerator;
+		bool			hasCurrent;
 
 	public:
 		decltype(auto)	operator  *()	{ return enumerator.Current(); }
-		void			operator ++()	{ hasNext = enumerator.FetchNext(); }
+		void			operator ++()	{ hasCurrent = enumerator.FetchNext(); }
 
-		/// Hack, as value of 'end' is don't care.
-		/// Assuming end != beg won't get called (in line with the standard), end() returns a Null-Object.
-		bool operator !=(const EnumeratorAdapter<TEnumerator>& end)
-		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (end.isEmptyMock, "EnumeratorAdapter is Intended for range-based for only!");
-			(void)end;
-			return hasNext;
-		}
-
-		/// Represent an empty enumeration for end().
-		///	Unfortunately a separate type cannot be used until C++17.
-		EnumeratorAdapter() : isEmptyMock { true }, hasNext { false }
-		{
+		bool operator !=(EnumeratorAdapterEnd) const
+		{ 
+			return hasCurrent;
 		}
 
 		template <class Fact>
-		EnumeratorAdapter(const Fact& factory) : enumerator { factory() }, isEmptyMock { false }
+		EnumeratorAdapter(const Fact& factory) : enumerator { factory() }
 		{
-			// fresh enumerators point ahead the first element
-			hasNext = enumerator.FetchNext();
+			hasCurrent = enumerator.FetchNext();
 		}
 
-		// This type should only exist temporarily in for ( : ).
-		// Not even a move should be called, but its implementation is mandatory until c++17.
-		EnumeratorAdapter(const EnumeratorAdapter&) = delete;
-
-		EnumeratorAdapter(EnumeratorAdapter&& src) : isEmptyMock { src.isEmptyMock }, hasNext { src.hasNext }
-		{
-			if (!isEmptyMock)
-				new (&enumerator) TEnumerator { std::move(src.enumerator) };
-		}
-
-		~EnumeratorAdapter()
-		{
-			if (!isEmptyMock)
-				enumerator.~TEnumerator();
-		}
+		// This type should only exist temporarily in for ( : ). Not even a move should be called.
+		EnumeratorAdapter(EnumeratorAdapter&&) = delete;
 	};
 
 #pragma endregion
