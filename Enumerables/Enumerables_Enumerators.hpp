@@ -149,26 +149,23 @@ namespace Def {
 		using TElem = T;
 
 		/// @returns:	A next element is available.
-		virtual bool			FetchNext()		  = 0;
+		virtual bool		FetchNext()		  = 0;
 
 		/// Current element if FetchNext returned true.
-		virtual T				Current()		  = 0;
+		virtual T			Current()		  = 0;
 
 		/// Try to inform about the remaining element count.
 		/// @remarks
 		///		Designed to be called before any FetchNext.
 		///		Mid-sequence the behaviour is defined, but the result may degrade to Unknown.
 		///		Lightweight: shouldn't rely on heavier datastructures used by FetchNext.
-		virtual SizeInfo		Measure()	const = 0;
-
-		// Technical virtual move ctor, related to inline buffer handling.
-		virtual IEnumerator<T>* MoveTo(void* mem) = 0;
+		virtual SizeInfo	Measure()	const = 0;
 
 		virtual ~IEnumerator();
 
+	protected:
 		// Copy is undesired, we have factories and a bit different logic then iterators.
 		IEnumerator(const IEnumerator<T>&) = delete;
-		IEnumerator(IEnumerator<T>&&)	   = default;
 		IEnumerator()					   = default;
 	};
 
@@ -221,7 +218,6 @@ namespace Def {
 		bool				FetchNext()		override	{ return ptr->FetchNext(); }
 		T					Current()		override	{ return ptr->Current();   }
 		SizeInfo			Measure() const	override	{ return ptr->Measure();   }
-		IEnumerator<T>*		MoveTo(void*)   override	{ throw LogicException("Internal error: directly nested InterfacedEnumerators??"); }
 
 		template <class Et>	Et*	TryCast()				{ return dynamic_cast<Et*>(ptr); }
 		IEnumerator<T>&			WrappedInterface()		{ return *ptr; }
@@ -248,13 +244,6 @@ namespace Def {
 		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<!SureFitsInline<InvokeResultT<NestedFactory>>(), int> = 0)
 			: ptr { new InvokeResultT<NestedFactory> { fact() } }
 		{
-		}
-
-		InterfacedEnumerator(InterfacedEnumerator&& src)
-			: ptr { src.IsOnHeap() ? src.ptr : src.ptr->MoveTo(fixBuffer) }
-		{
-			if (src.IsOnHeap())
-				src.ptr = nullptr;
 		}
 	};
 
@@ -333,8 +322,7 @@ namespace Def {
 			{
 			}
 		};
-
-		Deferred<State>		fetchState;
+		Deferred<State>  fetchState;
 
 	public:
 		virtual TCache CalcResults() = 0;
@@ -360,15 +348,8 @@ namespace Def {
 
 			return fetchState->HasMore();
 		}
-
-		CachingEnumerator(CachingEnumerator&&) = default;
-		CachingEnumerator() = default;
-
-		~CachingEnumerator() override;
 	};
 
-	template <class V, template <class> class Container>
-	CachingEnumerator<V, Container>::~CachingEnumerator() = default;
 
 
 
@@ -472,10 +453,9 @@ namespace Def {
 	template <class T>
 	class EmptyEnumerator : public IEnumerator<T> {
 	public:
-		bool			FetchNext()		  override	{ return false; }
-		T				Current()		  override	{ ENUMERABLES_CLIENT_BREAK(EmptyError);  throw LogicException(EmptyError); }
-		SizeInfo		Measure()   const override	{ return { Boundedness::Exact, 0 }; }
-		IEnumerator<T>* MoveTo(void* mem) override	{ return new (mem) EmptyEnumerator { std::move(*this) }; }
+		bool		FetchNext()	      override	{ return false; }
+		T			Current()	      override	{ ENUMERABLES_CLIENT_BREAK(EmptyError);  throw LogicException(EmptyError); }
+		SizeInfo	Measure()	const override	{ return { Boundedness::Exact, 0 }; }
 	};
 
 
@@ -488,13 +468,11 @@ namespace Def {
 	public:
 		using typename RepeaterEnumerator::IEnumerator::TElem;
 
-		bool				FetchNext()		  override	{ return true; }
-		TElem				Current()		  override	{ return value; }
-		SizeInfo			Measure()	const override	{ return Boundedness::Unbounded; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) RepeaterEnumerator { std::move(*this) }; }
+		bool		FetchNext()	      override	{ return true; }
+		TElem		Current()	      override	{ return value; }
+		SizeInfo	Measure()	const override	{ return Boundedness::Unbounded; }
 
 		RepeaterEnumerator(const V& val) : value { val } {}
-		RepeaterEnumerator(RepeaterEnumerator&&) = default;
 	};
 
 
@@ -515,6 +493,7 @@ namespace Def {
 			return curr;
 		}
 
+
 		bool	FetchNext()	override
 		{
 			// CONSIDER 17: are non-movable types useful? Would require 2 alternating accumulators to do RVO.
@@ -529,11 +508,9 @@ namespace Def {
 			return true;
 		}
 
-		SizeInfo			Measure()   const override	{ return Boundedness::Unbounded; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) SequenceEnumerator { std::move(*this) }; }
+		SizeInfo  Measure()	const override	{ return Boundedness::Unbounded; }
 
 		SequenceEnumerator(const V& start, const Stepper& step) : curr { ForwardParams, start }, step { step }  {}
-		SequenceEnumerator(SequenceEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -572,13 +549,9 @@ namespace Def {
 			return *curr;
 		}
 
-
-		SizeInfo			Measure()   const override	{ return TryGetIterDistance(curr, end); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) IteratorEnumerator { std::move(*this) }; }
-
+		SizeInfo  Measure() const override	{ return TryGetIterDistance(curr, end); }
 
 		IteratorEnumerator(const TIter& beg, const TIter& end) : curr { beg },	end { end }  {}
-		IteratorEnumerator(IteratorEnumerator&&) = default;
 	};
 
 
@@ -627,15 +600,7 @@ namespace Def {
 			};
 		}
 
-
-		IEnumerator<TElem>*  MoveTo(void* mem) override
-		{
-			return new (mem) ContainerEnumerator { std::move(*this) };
-		}
-
-
 		ContainerEnumerator(Container& subject) : subject { subject }  {}
-		ContainerEnumerator(ContainerEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -670,7 +635,7 @@ namespace Def {
 	public:
 		using typename FilterEnumerator::IEnumerator::TElem;
 
-		bool	FetchNext()	override
+		bool	  FetchNext()	  override
 		{
 			bool any = source.FetchNext();
 			while (any && !pred(source.Current()))
@@ -679,13 +644,11 @@ namespace Def {
 			return any;
 		}
 
-		TElem				Current()		  override	{ return source.Current(); }
-		SizeInfo			Measure()   const override	{ return source.Measure().Filtered(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FilterEnumerator { std::move(*this) }; }
+		TElem	  Current()		  override	{ return source.Current(); }
+		SizeInfo  Measure() const override	{ return source.Measure().Filtered(); }
 
 		template <class Factory>
 		FilterEnumerator(Factory&& getSource, const TPred& pred) : source { getSource() }, pred { pred }  {}
-		FilterEnumerator(FilterEnumerator&&) = default;
 	};
 
 
@@ -748,18 +711,24 @@ namespace Def {
 			}
 		}
 
-		TElem				Current()		  override
+
+		TElem	Current() override
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (mode != FilterMode::TakeWhile || active,	DepletedError);
 			ENUMERABLES_ETOR_USAGE_ASSERT (!dbgReleased,							DepletedError);
 			return source.Current();
 		}
-		SizeInfo			Measure()   const override	{ return source.Measure().Filtered(mode != FilterMode::SkipUntil); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FilterUntilEnumerator { std::move(*this) };     }
+
+
+		SizeInfo	Measure() const override
+		{
+			return source.Measure().Filtered(mode != FilterMode::SkipUntil); 
+		}
+
 
 		template <class Factory>
-		FilterUntilEnumerator(Factory&& getSource, const TPred& pred, FilterMode mode) : source { getSource() }, pred { pred }, mode { mode }  {}
-		FilterUntilEnumerator(FilterUntilEnumerator&&) = default;
+		FilterUntilEnumerator(Factory&& getSource, const TPred& pred, FilterMode mode)
+			: source { getSource() }, pred { pred }, mode { mode }  {}
 	};
 
 
@@ -776,8 +745,10 @@ namespace Def {
 
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
+		
+		TElem	Current()	override	{ return source.Current(); }
 
-		bool		FetchNext() override
+		bool	FetchNext()	override
 		{
 			while (source.FetchNext()) {
 				bool inOper = SetOperations::Contains(operand, source.Current());
@@ -787,7 +758,8 @@ namespace Def {
 			return false;
 		}
 
-		SizeInfo	Measure() const override
+
+		SizeInfo  Measure()	const override
 		{
 			SizeInfo s = source.Measure();
 			return intersect
@@ -795,8 +767,6 @@ namespace Def {
 				: s.Filtered();
 		}
 
-		TElem				Current()		  override	{ return source.Current(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) SetFilterEnumerator { std::move(*this) }; }
 
 		template <class SrcFactory, class OpFactory>
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
@@ -807,8 +777,6 @@ namespace Def {
 			auto etor = getOpSource();
 			operand   = ObtainCachedResults<SetOperations, S>(etor, 0);
 		}
-
-		SetFilterEnumerator(SetFilterEnumerator&&) = default;
 	};
 
 
@@ -856,7 +824,7 @@ namespace Def {
 		}
 
 
-		SizeInfo	Measure() const override
+		SizeInfo Measure() const override
 		{
 			SizeInfo s0 = source.Measure();
 
@@ -866,19 +834,11 @@ namespace Def {
 		}
 
 
-		IEnumerator<TElem>*	MoveTo(void* mem) override
-		{
-			return new (mem) CounterEnumerator { std::move(*this) };
-		}
-
-
 		template <class Factory>
 		CounterEnumerator(Factory&& getSource, FilterMode mode, size_t count) : source { getSource() }, mode { mode }, counter { count }
 		{
 			ENUMERABLES_INTERNAL_ASSERT (mode == FilterMode::TakeWhile || mode == FilterMode::SkipUntil);
 		}
-
-		CounterEnumerator(CounterEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -899,14 +859,12 @@ namespace Def {
 		static_assert (!is_reference<TConverted>() || IsRefCompatible<TConverted, typename Source::TElem>,
 					   "Requested type is not reference-compatible with source element - could return reference to a temporary.");
 
-		bool						FetchNext()		  override	{ return source.FetchNext(); }
-		TConverted					Current()		  override	{ return source.Current();   }
-		SizeInfo					Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TConverted>*	MoveTo(void* mem) override	{ return new (mem) ConverterEnumerator { std::move(*this) }; }
+		bool		FetchNext()	      override	{ return source.FetchNext(); }
+		TConverted	Current()	      override	{ return source.Current();   }
+		SizeInfo	Measure()	const override	{ return source.Measure(); }
 
 		template <class Factory>
 		ConverterEnumerator(Factory&& getSource) : source { getSource() }  {}
-		ConverterEnumerator(ConverterEnumerator&&) = default;
 	};
 
 
@@ -919,14 +877,12 @@ namespace Def {
 	public:
 		using typename MapperEnumerator::IEnumerator::TElem;
 
-		bool				FetchNext()		  override	{ return source.FetchNext(); }
-		TElem				Current()		  override	{ return map(source.Current()); }
-		SizeInfo			Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) MapperEnumerator { std::move(*this) }; }
+		bool		FetchNext()		  override	{ return source.FetchNext(); }
+		TElem		Current()		  override	{ return map(source.Current()); }
+		SizeInfo	Measure()	const override	{ return source.Measure(); }
 
 		template <class Factory>
 		MapperEnumerator(Factory&& getSource, const Mapper& map) : source { getSource() }, map { map }  {}
-		MapperEnumerator(MapperEnumerator&&) = default;
 	};
 
 	
@@ -939,19 +895,17 @@ namespace Def {
 	public:
 		using typename IndexerEnumerator::IEnumerator::TElem;
 
-		bool FetchNext() override
+		bool	  FetchNext()	  override
 		{
 			++index;					// defined overflow
 			return source.FetchNext();
 		}
 
-		TElem				Current()		  override	{ return { index, source.Current() }; }
-		SizeInfo			Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) IndexerEnumerator { std::move(*this) }; }
+		TElem	  Current()		  override	{ return { index, source.Current() }; }
+		SizeInfo  Measure()	const override	{ return source.Measure(); }
 
 		template <class Factory>
 		IndexerEnumerator(Factory&& getSource) : source { getSource() }  {}
-		IndexerEnumerator(IndexerEnumerator&&) = default;
 	};
 
 
@@ -970,7 +924,7 @@ namespace Def {
 	public:
 		using typename CombinerEnumerator::IEnumerator::TElem;
 
-		bool	FetchNext()		override
+		bool	FetchNext()	override
 		{
 			if (nextFetched) {
 				prev.AssignCurrent(source);
@@ -987,7 +941,7 @@ namespace Def {
 		}
 
 
-		TElem	Current()		override
+		TElem	Current()	override
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (nextFetched, NotFetchedError);
 
@@ -997,12 +951,13 @@ namespace Def {
 
 		// NOTE: This implementation is non-monotonic in conjunction with ContainerEnumerator (Exact, N - 1) -> (Bound, N)
 		//		 but Measure() during enumeration is just a nice to have.
-		SizeInfo			Measure()	const override	{ return source.Measure().Subtract(!prev.IsInitialized()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) CombinerEnumerator { std::move(*this) }; }
+		SizeInfo  Measure()	const override
+		{
+			return source.Measure().Subtract(!prev.IsInitialized()); 
+		}
 
 		template <class Factory>
 		CombinerEnumerator(Factory&& getSource, const Combiner& binop) : source { getSource() }, binop { binop }  {}
-		CombinerEnumerator(CombinerEnumerator&&) = default;
 	};
 
 
@@ -1016,10 +971,9 @@ namespace Def {
 	public:
 		using typename ZipperEnumerator::IEnumerator::TElem;
 
-		TElem				Current()		  override	{ return zip(source1.Current(), source2.Current());  }
-		bool				FetchNext()		  override	{ return source1.FetchNext() && source2.FetchNext(); }
-		SizeInfo			Measure()   const override	{ return source1.Measure().Limit(source2.Measure()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) ZipperEnumerator { std::move(*this) }; }
+		TElem		Current()	      override	{ return zip(source1.Current(), source2.Current());  }
+		bool		FetchNext()	      override	{ return source1.FetchNext() && source2.FetchNext(); }
+		SizeInfo	Measure()	const override	{ return source1.Measure().Limit(source2.Measure()); }
 
 		template <class Fact1, class Fact2>
 		ZipperEnumerator(Fact1&& getSource1, Fact2&& getSource2, const Zipper& zip) :
@@ -1028,8 +982,6 @@ namespace Def {
 			zip		{ zip }
 		{
 		}
-
-		ZipperEnumerator(ZipperEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -1049,19 +1001,17 @@ namespace Def {
 	public:
 		using typename ConcatEnumerator::IEnumerator::TElem;
 
-		bool	FetchNext() override
+		bool	  FetchNext()	  override
 		{
 			sourceDepleted = sourceDepleted || !source.FetchNext();
 			return			!sourceDepleted || continuation.FetchNext();
 		}
 
-		TElem				Current()		  override	{ return sourceDepleted ? continuation.Current() : source.Current(); }
-		SizeInfo			Measure()   const override	{ return source.Measure().Add(continuation.Measure()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) ConcatEnumerator { std::move(*this) }; }
+		TElem	  Current()		  override	{ return sourceDepleted ? continuation.Current() : source.Current(); }
+		SizeInfo  Measure()	const override	{ return source.Measure().Add(continuation.Measure()); }
 
 		template <class SrcFact, class ContFact>
 		ConcatEnumerator(SrcFact&& getSource, ContFact&& getContinuation) : source { getSource() }, continuation { getContinuation() }  {}
-		ConcatEnumerator(ConcatEnumerator&&) = default;
 	};
 
 
@@ -1080,29 +1030,26 @@ namespace Def {
 	public:
 		using typename FlattenerEnumerator::IEnumerator::TElem;
 
-		bool		FetchNext() override
+		bool	  FetchNext()	  override
 		{
 			// try to advance outer enumerator as needed
 			while (!nestedEnumerator.IsInitialized() || !nestedEnumerator->FetchNext()) {
 				if (!ebSource.FetchNext())
 					return false;
 
+				// avoid move requirements on returns
 				nested.AssignCurrent(ebSource);
-
-				// possibly useful in 17: avoid move requirement (along with MoveTo(m))
 				nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
 			}
 
 			return true;
 		}
 
-		TElem				Current()		  override	{ return nestedEnumerator->Current(); }
-		SizeInfo			Measure()   const override	{ return { Boundedness::Unknown }; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FlattenerEnumerator { std::move(*this) }; }
+		TElem	  Current()		  override	{ return nestedEnumerator->Current(); }
+		SizeInfo  Measure()	const override	{ return { Boundedness::Unknown }; }
 
 		template <class Factory>
 		FlattenerEnumerator(Factory&& getSource) : ebSource { getSource() }  {}
-		FlattenerEnumerator(FlattenerEnumerator&&) = default;
 	};
 
 
@@ -1160,12 +1107,6 @@ namespace Def {
 		}
 
 
-		IEnumerator<TElem>*	MoveTo(void* mem) override
-		{
-			return new (mem) ReplayEnumerator { std::move(*this) };
-		}
-
-
 		template <class Factory>
 		ReplayEnumerator(Factory&& getSource, size_t n) :
 			source    { getSource() },
@@ -1173,8 +1114,6 @@ namespace Def {
 			headElems { SmallListOperations::Init<StorableT<TElem>, 1>(n) }
 		{
 		}
-
-		ReplayEnumerator(ReplayEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -1199,8 +1138,8 @@ namespace Def {
 					   || is_assignable<TAcc, CombinedT<TAcc, InElem, Combiner>>::value,
 					   "Accumulator type is neither constructible nor assignable from "
 					   "the result of the Aggregator function."						   );
+	
 	protected:
-
 		Source				source;
 		Storage<TAcc>		accumulator;
 
@@ -1232,8 +1171,6 @@ namespace Def {
 			accumulator	{ ForwardParams, Revive(init) }
 		{
 		}
-
-		ScannerBase(ScannerBase&&) = default;
 	};
 
 
@@ -1242,12 +1179,9 @@ namespace Def {
 	template <class Source, class Combiner, class TAcc>
 	class ScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, Reassignable> {
 	public:
-		bool				FetchNext()		  override	{ return this->CombineNext(); }
-		IEnumerator<TAcc>*	MoveTo(void* mem) override	{ return new (mem) ScannerEnumerator { std::move(*this) }; }
+		bool FetchNext() override	{ return this->CombineNext(); }
 
 		using ScannerEnumerator::ScannerBase::ScannerBase;
-
-		ScannerEnumerator(ScannerEnumerator&&) = default;
 	};
 
 
@@ -1313,7 +1247,6 @@ namespace Def {
 			return any;
 		}
 
-		IEnumerator<TAcc>*	MoveTo(void* mem) override	{ return new (mem) FetchFirstScannerEnumerator { std::move(*this) };		}
 
 		template <class Fact>
 		FetchFirstScannerEnumerator(Fact&& getSource, const Combiner& combiner, const InitAccMapper& initializer = {}) :
@@ -1321,8 +1254,6 @@ namespace Def {
 			initAccumulator	{ initializer }
 		{
 		}
-
-		FetchFirstScannerEnumerator(FetchFirstScannerEnumerator&&) = default;
 	};
 
 	#pragma endregion
@@ -1343,20 +1274,17 @@ namespace Def {
 		using typename SorterEnumerator::CachingEnumerator::TCache;
 		using typename SorterEnumerator::CachingEnumerator::TElem;
 
-		TCache	CalcResults() override
+		TCache	  CalcResults() override
 		{
 			TCache cache = ObtainCachedResults<ListOperations, StorableT<TElem>>(source, 0);
 			std::sort(AdlBegin(cache), AdlEnd(cache), ordering);
 			return cache;
 		}
 
-		SizeInfo				Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>* 	MoveTo(void* mem) override	{ return new (mem) SorterEnumerator { std::move(*this) }; }
-
+		SizeInfo  Measure() const override	{ return source.Measure(); }
 
 		template <class Factory>
 		SorterEnumerator(Factory&& getSource, const Ordering& ordering) : source { getSource() }, ordering { ordering }  {}
-		SorterEnumerator(SorterEnumerator&&) = default;
 	};
 
 
@@ -1409,15 +1337,8 @@ namespace Def {
 		}
 
 
-		IEnumerator<TElem>* MoveTo(void* mem) override
-		{
-			return new (mem) MinSeekEnumerator { std::move(*this) };
-		}
-
-
 		template <class Factory>
 		MinSeekEnumerator(Factory&& getSource, const Ordering& ordering) : source { getSource() }, isLess { ordering }  {}
-		MinSeekEnumerator(MinSeekEnumerator&&) = default;
 	};
 
 #pragma endregion
