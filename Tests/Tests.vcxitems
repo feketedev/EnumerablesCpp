@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)ArithmeticTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)ConstructionTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)FeatureTests17.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)FiltrationTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Operations.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Examples.cpp" />

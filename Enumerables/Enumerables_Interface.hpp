@@ -1154,12 +1154,11 @@ namespace Def {
 	///		   (~ the chances of malloc by std::function if converted to interfaced Enumerable<T>)
 	///		 * iterators can invalidate on a simple Push/Add/Delete...
 	///		 * a container itself is an iterator-factory
-	template <class ForcedResult = void, class It>
-	auto Enumerate(It begin, It end)
+	template <class ForcedResult = void, class TBegin, class TEnd>
+	auto Enumerate(TBegin begin, TEnd end)
 	{
-		using R = OverrideT<ForcedResult, PointedT<It>>;
 		return WrapFactory(
-			[begin, end]() { return IteratorEnumerator<It, R> { begin, end }; }
+			[b = move(begin), e = move(end)]() { return IteratorEnumerator<TBegin, TEnd, ForcedResult> { b, e }; }
 		);
 	}
 
@@ -1247,9 +1246,9 @@ namespace Def {
 	template <class ForcedResult = void, class T>
 	auto Enumerate(std::initializer_list<T>& cont)
 	{
-		using It = decltype(cont.begin());
+		using It = typename std::initializer_list<T>::iterator;
 		return WrapFactory(
-			[&cont]() { return IteratorEnumerator<It, ForcedResult> { cont.begin(), cont.end() }; }
+			[&cont]() { return IteratorEnumerator<It, It, ForcedResult> { cont.begin(), cont.end() }; }
 		);
 	}
 

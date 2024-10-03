@@ -203,6 +203,10 @@ namespace TypeHelpers {
 	template <class Container>
 	using IteratorT = decltype(begin(declval<Container>()));
 
+	/// End iterator of a C++ container (may or may not differ from IteratorT)
+	template <class Container>
+	using EndIteratorT = decltype(end(declval<Container>()));
+
 	/// Iterated type of a C++ container
 	template <class Container>
 	using IterableT = PointedT<IteratorT<Container>>;

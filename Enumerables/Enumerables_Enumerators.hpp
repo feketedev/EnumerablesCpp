@@ -56,50 +56,48 @@ namespace Def {
 
 
 	/// Whether two iterators have queriable distance.
-	template <class It>
+	template <class From, class To = From>
 	class HasQueryableDistance {
 
-		template <class I = It>
-		static auto CalcDiff(const I& a, const I& b) -> decltype(b - a);
+		template <class F = From>
+		static auto CalcDiff(const F& a, const To& b) -> decltype(b - a);
 
 		static void CalcDiff(...);
 
 	public:
-		using					DiffType = decltype(CalcDiff(declval<It>(), declval<It>()));
+		using					DiffType = decltype(CalcDiff(declval<From>(), declval<To>()));
 		static constexpr bool	value	 = !is_void<DiffType>::value;
 	};
 
 
 	template <class Container>
-	constexpr bool HasIteratorDifference = HasQueryableDistance<IteratorT<Container>>::value;
+	constexpr bool HasIteratorDifference = HasQueryableDistance<IteratorT<Container>, EndIteratorT<Container>>::value;
 
 
 
 	/// Actual iterator distance, if available.
-	template <class It>
-	auto TryGetIterDistance(const It& s, const It& e) -> std::enable_if_t<HasQueryableDistance<It>::value, SizeInfo>
+	template <class From, class To>
+	SizeInfo TryGetIterDistance(const From& s, const To& e)
 	{
-		auto diff = e - s;
+		if constexpr (!HasQueryableDistance<From, To>::value) {
+			// NOTE: Assuming that iterators belong to containers -> which are finite
+			return { Boundedness::Bounded };
+		}
+		else {
+			auto diff = e - s;
 
-		static_assert (std::numeric_limits<decltype(diff)>::digits <= std::numeric_limits<size_t>::digits
-					   && std::is_integral<decltype(diff)>::value,
-					   "Unsafe cast to size_t.");
+			static_assert (std::numeric_limits<decltype(diff)>::digits <= std::numeric_limits<size_t>::digits
+						   && std::is_integral<decltype(diff)>::value,
+						   "Unsafe cast to size_t.");
 
-		// infrequent call, unknown types, rather make sure
-		if (diff >= 0)
-			return { Boundedness::Exact, static_cast<size_t>(diff) };
+			// infrequent call, unknown types, rather make sure
+			if (diff >= 0)
+				return { Boundedness::Exact, static_cast<size_t>(diff) };
 
-		// quite improbably an internal bug
-		ENUMERABLES_CLIENT_BREAK ("Negative iterator distance??");
-		throw LogicException("Negative iterator distance.");
-	}
-
-
-	template <class It>
-	auto TryGetIterDistance(const It&, const It&) -> std::enable_if_t<!HasQueryableDistance<It>::value, SizeInfo>
-	{
-		// NOTE: Assuming that iterators belong to containers -> which are finite
-		return { Boundedness::Bounded };
+			// quite improbably an internal bug
+			ENUMERABLES_CLIENT_BREAK ("Negative iterator distance??");
+			throw LogicException("Negative iterator distance.");
+		}
 	}
 
 	#pragma endregion
@@ -108,7 +106,7 @@ namespace Def {
 
 	#pragma region Nested iterable handling (e.g. Flatten)
 
-	template <class TIter, class ForcedResult = void>	class IteratorEnumerator;
+	template <class TBegin, class TEnd = TBegin, class ForcedResult = void>   class IteratorEnumerator;
 
 
 	/// Provides an Enumerator to traverse any container or AutoEnumerable in a uniform way (internally in Enumerators).
@@ -118,16 +116,13 @@ namespace Def {
 	template <class T>
 	struct UniformEnumerationDeducer {
 
-		template <class Eb>
-		static auto GetEnumerator(Eb& enumerable) -> enable_if_t<IsAutoEnumerable<Eb>::value, decltype(enumerable.GetEnumerator())>
+		template <class Iterable>
+		static auto GetEnumerator(Iterable& src)
 		{
-			return enumerable.GetEnumerator();
-		}
-
-		template <class C>
-		static auto GetEnumerator(C& collection) -> enable_if_t<!IsAutoEnumerable<C>::value, IteratorEnumerator<decltype(AdlBegin(collection))>>
-		{
-			return { AdlBegin(collection), AdlEnd(collection) };
+			if constexpr (IsAutoEnumerable<Iterable>::value)
+				return src.GetEnumerator();
+			else
+				return IteratorEnumerator { AdlBegin(src), AdlEnd(src) };
 		}
 
 		using TEnumerator = decltype(GetEnumerator(declval<T&>()));
@@ -519,19 +514,17 @@ namespace Def {
 
 	#pragma region Container Enumerators
 
-	// TODO 17: Support for different TBegin and TEnd (instead of TIter)
-
 	/// An Enumerator to wrap legacy C++ iterators.
-	template <class TIter, class ForcedResult/* = void*/>
-	class IteratorEnumerator final : public IEnumerator<OverrideT<ForcedResult, PointedT<TIter>>> {
-		const TIter end;
-		TIter		curr;
+	template <class TBegin, class TEnd/* = TBegin*/, class ForcedResult/* = void*/>
+	class IteratorEnumerator final : public IEnumerator<OverrideT<ForcedResult, PointedT<TBegin>>> {
+		const TEnd	end;
+		TBegin		curr;
 		bool		active = false;
 
 	public:
 		using typename IteratorEnumerator::IEnumerator::TElem;
 
-		static_assert (!is_reference<ForcedResult>() || IsRefCompatible<ForcedResult, PointedT<TIter>>,
+		static_assert (!is_reference<ForcedResult>() || IsRefCompatible<ForcedResult, PointedT<TBegin>>,
 					   "The explicitly requested type is not reference-compatible with elements - could return reference to a temporary.");
 
 		bool	FetchNext() override
@@ -545,13 +538,13 @@ namespace Def {
 
 		TElem	Current() override
 		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (active, curr == end ? DepletedError : MissedFetchError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (active, curr != end ? MissedFetchError : DepletedError);
 			return *curr;
 		}
 
 		SizeInfo  Measure() const override	{ return TryGetIterDistance(curr, end); }
 
-		IteratorEnumerator(const TIter& beg, const TIter& end) : curr { beg },	end { end }  {}
+		IteratorEnumerator(const TBegin& beg, const TEnd& end) : curr { beg }, end { end }  {}
 	};
 
 
@@ -1362,7 +1355,7 @@ namespace Def {
 
 
 	template <class ForcedResult = void, class C, IfTrySizeIterators<C&> = 0>
-	auto CreateEnumeratorFor(C& container) -> IteratorEnumerator<IteratorT<C&>, ForcedResult>
+	auto CreateEnumeratorFor(C& container) -> IteratorEnumerator<IteratorT<C&>, EndIteratorT<C&>, ForcedResult>
 	{
 		return { AdlBegin(container), AdlEnd(container) };
 	}

@@ -30,6 +30,8 @@ namespace EnumerableTests {
 	void TestArithmetics();
 	void TestMisc();
 
+	void TestFeatures17();
+
 
 
 	inline void RunAll(const char myPath[])
@@ -45,6 +47,7 @@ namespace EnumerableTests {
 		TestLambdaUsage();
 		TestArithmetics();
 		TestMisc();
+		TestFeatures17();
 
 		NewPerfTests();
 	 // LegacyPerfTests();
