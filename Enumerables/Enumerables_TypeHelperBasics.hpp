@@ -46,6 +46,7 @@ namespace TypeHelpers {
 	// Required for complete ADL
 	using std::begin;
 	using std::end;
+	using std::size;
 
 
 	/// Enforce ADL - even inside Enumerable, which has its own begin/end members.
@@ -59,6 +60,13 @@ namespace TypeHelpers {
 	auto AdlEnd(C&& cont) -> decltype(end(forward<C>(cont)))
 	{
 		return end(forward<C>(cont));
+	}
+
+	/// Obtain size if container supports std::size or has its own ADL overload.
+	template <class C>
+	auto AdlSize(const C& cont) -> decltype(size(cont))
+	{
+		return size(cont);
 	}
 
 

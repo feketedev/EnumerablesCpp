@@ -37,6 +37,8 @@
 	 *  ----------------------------------------------------------------------------  */
 
 
+#include "Enumerables_TypeHelperBasics.hpp"
+
 
 namespace Enumerables {
 	enum class StopReason : char;
@@ -192,9 +194,6 @@ namespace StlBinding {
 		static void			Clear(Container<V>& l)				{ l.clear();	/* keep capacity! */   }
 
 		template <class V>
-		static size_t		GetSize(const Container<V>& l)		{ return l.size(); }
-
-		template <class V>
 		static V&			Access(Container<V>& l, size_t i)	{ return l[i];}
 	};
 
@@ -215,9 +214,6 @@ namespace StlBinding {
 			s.reserve(capacity);
 			return s;
 		}
-
-		template <class V>
-		static size_t		GetSize(const Container<V>& s)					{ return s.size(); }
 
 		template <class V>
 		static bool			Contains(const Container<V>& s, const V& elem)	{ return s.find(elem) != s.end(); }
@@ -243,9 +239,6 @@ namespace StlBinding {
 			d.reserve(capacity);
 			return d;
 		}
-
-		template <class K, class V>
-		static size_t	GetSize(const Container<K, V>& d)					{ return d.size(); }
 
 		template <class K, class V>
 		static bool		Contains(const Container<K, V>& d, const K& key)	{ return d.find(key) != d.end(); }
@@ -322,9 +315,6 @@ namespace Enumerables {
 			template <class V, size_t N>
 			static Container<V, N>	Init(size_t capacity = N)		{ return ListOperations::Init<V>(capacity); }
 
-			template <class V, size_t N = 0>
-			static size_t	GetSize(const Container<V, N>& l)		{ return ListOperations::GetSize(l); }
-
 			template <class V, size_t N = 0, class Vin>
 			static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
 
@@ -366,20 +356,25 @@ namespace Enumerables {
 	template <class K, class V>		using DictionaryType = typename DictOperations::Container<K, V>;
 	template <class V>				using Optional		 = typename OptionalOperations::Container<V>;
 
-	// "Import" GetSize's + HasValue defined in binding
-	template <class V>				size_t GetSize(const ListType<V>& l)			{ return ListOperations::GetSize<V>(l);			}
-	template <class V>				size_t GetSize(const SetType<V>&  s)			{ return SetOperations::GetSize<V>(s);			}
-	template <class V, size_t N>	size_t GetSize(const SmallListType<V, N>& l)	{ return SmallListOperations::GetSize<V, N>(l); }
-	template <class K, class V>		size_t GetSize(const DictionaryType<K, V>& d)	{ return DictOperations::GetSize<K, V>(d);		}
+	// Since C++17, default GetSize is defined in terms of std::size (or its ADL overload).
+	// Custom Enumerables::GetSize overloads still can be defined by client code if needed.
+	// (Binidng operations need no contain GetSize anymore.)
+	template <class Container>		
+	auto GetSize(const Container& c) -> decltype(static_cast<size_t>(TypeHelpers::AdlSize(c)))
+	{ 
+		return TypeHelpers::AdlSize(c);	 
+	}
 
-	template <class T>				bool HasValue(const Optional<T>& o)				{ return OptionalOperations::HasValue<T>(o);	}
+	// NOTE: To improve performance ensure that size hints are enabled for used container types in either form!
+	
 
-
-	// NOTE: To improve performance by enabling size hints,
-	//		 GetSize for further containers can be introduced by client code to namespace Enumerables.
-	//		 Just like HasValue, to enable the .ValuesOnly() shorthand for multiple types. (Requires an operator* too.)
-	// TODO 17: std::size
-
+	// HasValue in OptionalOperations is still required.
+	// Further overlaods can be defined to enable the .ValuesOnly() shorthand for more types. (Requires an operator* too.)
+	template <class T>		
+	bool HasValue(const Optional<T>& o)	
+	{
+		return OptionalOperations::HasValue<T>(o); 
+	}
 
 }	// namespace Enumerables
 
