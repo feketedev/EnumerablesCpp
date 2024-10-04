@@ -1157,9 +1157,8 @@ namespace Def {
 	template <class ForcedResult = void, class It>
 	auto Enumerate(It begin, It end)
 	{
-		using R = OverrideT<ForcedResult, PointedT<It>>;
 		return WrapFactory(
-			[begin, end]() { return IteratorEnumerator<It, R> { begin, end }; }
+			[b = move(begin), e = move(end)]() { return IteratorEnumerator<It, ForcedResult> { b, e }; }
 		);
 	}
 
@@ -1247,7 +1246,7 @@ namespace Def {
 	template <class ForcedResult = void, class T>
 	auto Enumerate(std::initializer_list<T>& cont)
 	{
-		using It = decltype(cont.begin());
+		using It = typename std::initializer_list<T>::iterator;
 		return WrapFactory(
 			[&cont]() { return IteratorEnumerator<It, ForcedResult> { cont.begin(), cont.end() }; }
 		);

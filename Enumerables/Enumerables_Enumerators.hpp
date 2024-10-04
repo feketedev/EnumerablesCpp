@@ -592,7 +592,7 @@ namespace Def {
 
 		TElem	Current() override
 		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (active, curr == end ? DepletedError : MissedFetchError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (active, curr != end ? MissedFetchError : DepletedError);
 			return *curr;
 		}
 

@@ -3,21 +3,25 @@
 This header-only library aims to bring the features of .Net's Linq library to C++14,
 to enable a more declarative / functional coding style.
 
-It follows a pragmatic approach with the core objectives of:
+> &#9888; *The **master** branch preserves **compatibility with C++14.**<br/>
+> &emsp;&ensp;&thinsp;Unless being constrained by an old compiler, the recommended branch is clean17!*
+
+
+The library follows a pragmatic approach with the core objectives of:
  * provide as concise and fluently readable syntax as possible
  * by automatically deducing convenient defaults (for type parameters) wherever possible
- * but still have the ability to manually override those
- * prioritize convenience, but try to minimize overhead too (often by providing a way to opt-out)
+ * still, have the ability to override those manually
+ * prioritize convenience, but try to minimize overhead too (often by providing a way to opt out)
  * depend solely on STL (but allow configuration of algorithms to use custom container types)
 
 The pragmatism should take form in sensible **limitations** of the scope, not in a low level of attention to details.
 Particularly:
  * **volatile** elements are **not** supported
- * behaviour with **&&** elements is **unspecified**
+ * behaviour with **&& (r-value reference)** elements is **unspecified**
 	* very basic cases might work, possibly with unnecessary materialization (move/copy) of items
-	* but in general pr-values should represent expiring elements<br/>(which might not even use more moves in those simple cases due to RVO)
+	* but in general, expiring elements should be represented as pr-values<br/>(which might not even use more moves in those simple cases due to RVO)
  * automatic deductions and optimizations are often best-effort only
- * [In general the considered element types are non-exotic *object types* (arrays and member-pointers excluded) and l-value references to them]
+ * [In general, the considered element types are non-exotic *object types* (arrays and member-pointers excluded) and l-value references to them]
 
 
 
@@ -57,10 +61,10 @@ For that the main **entry-point** is the *Enumerate* function:
 
 ### Chainable operations
 
-Like in .Net, transformation steps can be layered ontop of sequences in a builder-style (utilizing move-semantics wherever possible).<br/>
+Like in .Net, transformation steps can be layered on top of sequences in a builder style (utilizing move-semantics wherever possible).<br/>
 For that to be readable it is fortunate to have a concise lambda syntax (like C#'s `x => f(x)`), but C++ lambdas do not excel in that.
 The closest thing I could come up with is a pair of macros for the most generic lambdas available in C++ (one for value-, one for ref-capture).
-These are controversial and optional to use, but I found them much more handy and readable than the expanded form.
+These are controversial, and optional to use, but I found them much more handy and readable than the expanded form.
 ```cpp
 std::vector<Person> persons = /*...*/;
 
@@ -92,11 +96,12 @@ std::vector<Measurement*> recordsByTime = Enumerate(measurements)
                                             .OrderBy   (&Measurement::time)
                                             .ToList    ();
 ```
-This example also demonstrates some optimization effort: since MinimumsBy and OrderBy needs a result cache (a vector) to work with,
-of the exact same type as what's requested by ToList in the end, that cache can be passed down as a whole to ultimately be the
+This example also demonstrates some optimization effort: since MinimumsBy and OrderBy need a result cache (a vector) to work with,
+of the exact same type as what's requested by ToList in the end, that cache can be passed down as a whole to ultimately become the
 requested result. (This is the fortunate case though.)
  
-[More complex operations, like Join, are not implemented yet. Scan/Aggregate is in an experimental-ish state.]
+> &#128712;&ensp;More complex operations, like Join, are not implemented yet.<br/>
+> &emsp;&thinsp;&thinsp;Scan/Aggregate is in an experimental-ish state.
 
 The implemented operations are found on the public interface of the *AutoEnumerable* class, located in [Enumerables_Interface.hpp](/Enumerables/Enumerables_Interface.hpp)
 
@@ -111,36 +116,36 @@ To have a detailed overview of the library's features, look at:
 * **Copy** the *Enumerables* folder as a whole to your project
 * Based on [Enumerables.hpp](/Tests/Enumerables.hpp) create **your own config file** (of the same name),<br/>
   which will ultimately include *Enumerables_Implementation.hpp* to instantiate the library
-	* usage of non-standard container types can be configured there via some macros and simple binding classes<br/>
-      [That affects outputs (like .ToList) and internal algorithm implementations - anything iterable can always serve as input]
-	* find available options in [Enumerables_ConfigDefaults.hpp](/Enumerables/Enumerables_ConfigDefaults.hpp)
+	* Usage of non-standard container types can be configured there via some macros and simple binding classes<br/>
+      [affects outputs (like *.ToList()*) and internal algorithm implementations - anything iterable can always serve as input]
+	* Find available options in [Enumerables_ConfigDefaults.hpp](/Enumerables/Enumerables_ConfigDefaults.hpp)
 * **Include** that *Enumerables.hpp* in client code
 * As an optimization extension-point *GetSize(cont)* function overloads for custom containers can be added to the *Enumerables* namespace.
 * Loading [Enumerables.natvis](/Enumerables/Enumerables.natvis) to Visual Studio can help debugging.
 
 ### Extensibility
 
-The builder-style composition have the drawback that it requires a monilith interface. Since C++ doesn't have extension methods, nor an accepted UFCS proposal
+The builder-style composition has the drawback that it requires a monolith interface. Since C++ doesn't have extension methods, nor an accepted UFCS proposal
 (like N4474), adding extra operations currently requires adding them directly to the *AutoEnumerable* class (while the algorithms themselves can be defined
 freely anywhere, in the form of *IEnumerator\<T\>* descendants).
 
 The theoretical benefit is that a good intellisense can provide method completion after each period hit, because deduction "flows" simply downwards
-(in contrast to a piping syntax). The real one does struggle though - but hopefully C++20 concepts will help on that, if utilized.
+(in contrast to a piping syntax). The real one does struggle though - but hopefully, C++20 concepts will help on that, if utilized.
 
 --
 
 As mentioned, the library can use any container for its List / Set types through a few macros and user-defined binding classes that consist of simple static methods for the necessary basic operations.
-This means that - while the library is not tied to STL -, in each compilation unit only 1 such binding-set can exist.<br/>
+This means that - while the library is not tied to STL -, in each module (.exe or .dll) only 1 such binding-set can exist, due to ODR.<br/>
 
-Alternative could be to use additional template parameters for those binding (or strategy) classes, but *Enumerable*s of the various bindings would still be incompatible, so I didn't see enough value in that added complexity so far.
+The alternative could be to use additional template parameters for those binding (or strategy) classes, but *Enumerable*s of the various bindings would still be incompatible, so I didn't see enough value in that added complexity so far.
 
 
 ## Maturity status
 
-The original (let's say 1.0, but rather 0.9) version was utilized in an old project (from which the C++14 requirement originated), where it was part of production code. So, the core concepts are battle-proven.
+The original (let's say 1.0, but rather 0.9) version was utilized in an old project (from which the C++14 requirement originated), where it was part of production code. Therefore, the core concepts are battle-proven.
 
-However, that version relied heavily on the usage of *std\:\:function*, which really added overhead for simplifying the code. I had many half-baked improvement ideas during that time (including fully templating the code to avoid *std\:\:function*), which were not polished enough to apply them in real code.
-Lately I finished and organized these to see them working together, and gave them a mostly consistent interface - hence this is version 2.0 (with one sole usage of *std\:\:function*, for type-erasure).
+However, that version relied heavily on the usage of *std\:\:function*, which really added overhead for simplifying the code. I collected many half-baked improvement ideas during that time (including fully templating the code to avoid *std\:\:function*), which were not polished enough to apply them in real code.
+Lately, I finished and organized these to see them working together, and gave them a mostly consistent interface - hence this is version 2.0 (with one sole usage of *std\:\:function*, for type-erasure).
 
 This version has much more complexity, yet is not actively used at the moment, the only coverage is what's provided by the uploaded tests!<br/>
 (Fortunately, most errors manifest in compilation errors, so large surprises should be unexpected. \:\) )
