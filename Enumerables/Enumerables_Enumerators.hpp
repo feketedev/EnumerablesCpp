@@ -49,7 +49,7 @@ namespace Enumerables::Def {
 
 	public:
 		using					SizeType = decltype(Check(declval<C>()));
-		static constexpr bool	value	 = !is_void<SizeType>::value;
+		static constexpr bool	value	 = !is_void_v<SizeType>;
 	};
 
 
@@ -65,7 +65,7 @@ namespace Enumerables::Def {
 
 	public:
 		using					DiffType = decltype(CalcDiff(declval<From>(), declval<To>()));
-		static constexpr bool	value	 = !is_void<DiffType>::value;
+		static constexpr bool	value	 = !is_void_v<DiffType>;
 	};
 
 
@@ -86,7 +86,7 @@ namespace Enumerables::Def {
 			auto diff = e - s;
 
 			static_assert (std::numeric_limits<decltype(diff)>::digits <= std::numeric_limits<size_t>::digits
-						   && std::is_integral<decltype(diff)>::value,
+						   && std::is_integral_v<decltype(diff)>,
 						   "Unsafe cast to size_t.");
 
 			// infrequent call, unknown types, rather make sure
@@ -373,8 +373,8 @@ namespace Enumerables::Def {
 	public:
 		using TCache = decltype(GetCache(declval<Enumerator>()));
 
-		static constexpr bool asWhole		= is_constructible<TrgContainer, TCache&&>::value;
-		static constexpr bool byElement		= is_constructible<TrgElem, EnumeratedT<Enumerator>>::value && !IsNone<TCache>;
+		static constexpr bool asWhole		= is_constructible_v<TrgContainer, TCache&&>;
+		static constexpr bool byElement		= is_constructible_v<TrgElem, EnumeratedT<Enumerator>> && !IsNone<TCache>;
 		static constexpr bool byElementOnly = !asWhole && byElement;
 	};
 
@@ -425,7 +425,7 @@ namespace Enumerables::Def {
 
 	// NOTE: SmallList<T, N> is not supported currently. Solve if any CachingEnumerator<T, SmallList> will exist.
 	template <class ContainerOps, class R, template <class> class ContTempl = ContainerOps::template Container>
-	auto ObtainCachedResults(InterfacedEnumerator<R>& etor, size_t hint, enable_if_t<!is_reference<R>::value>* = nullptr)
+	auto ObtainCachedResults(InterfacedEnumerator<R>& etor, size_t hint, enable_if_t<!is_reference_v<R>>* = nullptr)
 	{
 		using ET = CachingEnumerator<R, ContTempl>;
 		ET* caching = etor.template TryCast<ET>();
@@ -1131,7 +1131,7 @@ namespace Enumerables::Def {
 
 		// let narrowing through - it provides readable error in place
 		static_assert (IsConstructibleAnyway<TAcc, CombinedT<TAcc, InElem, Combiner>>
-					   || is_assignable<TAcc, CombinedT<TAcc, InElem, Combiner>>::value,
+					   || is_assignable_v<TAcc, CombinedT<TAcc, InElem, Combiner>>,
 					   "Accumulator type is neither constructible nor assignable from "
 					   "the result of the Aggregator function."						   );
 	
@@ -1197,13 +1197,13 @@ namespace Enumerables::Def {
 
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<IsNone<IM> && is_same<InElem, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<IsNone<IM> && is_same_v<InElem, TAcc>>* = nullptr)
 		{
 			this->accumulator.AssignCurrent(this->source);
 		}
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<IsNone<IM> && !is_same<InElem, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<IsNone<IM> && !is_same_v<InElem, TAcc>>* = nullptr)
 		{
 			static_assert(IsBraceConstructible<TAcc, InElem>::value,
 						  "Can't convert input element into TAcc. (Narrowing not supported.)"
@@ -1214,7 +1214,7 @@ namespace Enumerables::Def {
 
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<is_same_v<MappedT<InElem, IM>, TAcc>>* = nullptr)
 		{
 			this->accumulator.AcceptRvo([this]() -> decltype(auto) {
 				return initAccumulator(this->source.Current());
@@ -1222,7 +1222,7 @@ namespace Enumerables::Def {
 		}
 
 		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<!is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
+		void InitFromCurrent(enable_if_t<!is_same_v<MappedT<InElem, IM>, TAcc>>* = nullptr)
 		{
 			static_assert(IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
 						  "Can't convert input element into TAcc. (Narrowing not supported.)");
@@ -1382,7 +1382,7 @@ namespace Enumerables::Def {
 	template <class TElem, class ValOrMapper, class ForcedAcc = void>
 	class IsAccuInit {
 		template <class FA = ForcedAcc> static constexpr
-		enable_if_t<is_void<FA>::value || !IsConstructibleAnyway<FA, ValOrMapper>, bool>
+		enable_if_t<is_void_v<FA> || !IsConstructibleAnyway<FA, ValOrMapper>, bool>
 		IsMapper()
 		{
 			return IsCallable<ValOrMapper, TElem>::value;
@@ -1398,7 +1398,7 @@ namespace Enumerables::Def {
 
 	public:
 		static constexpr bool byMapping = IsMapper();
-		static constexpr bool byValue   = is_void<ForcedAcc>::value ? !IsMapper() : IsConstructibleAnyway<ForcedAcc, ValOrMapper>;
+		static constexpr bool byValue   = is_void_v<ForcedAcc> ? !IsMapper() : IsConstructibleAnyway<ForcedAcc, ValOrMapper>;
 
 		static_assert (byValue || byMapping, "Bad argument to initialize the accumulator. This algorithm requires either:\n"
 					   "  A) An initial Accumulator value [convertible to ForcedAcc type if that's specified]\n"
@@ -1479,9 +1479,9 @@ namespace Enumerables::Def {
 			//		 Desired: LambdaCreators could track their exact wrapped function types -> rendering possible to check if converted temporaries were needed!
 			using VElem	= BasePointedT<TElem>;
 			using VInit	= BasePointedT<Init>;
-			using TImplicit	= conditional_t< !HasConstValue<TNoExp>					// shouldn't have temporaries with normal design
-										  || IsRefCompatible<TNoExp, TElem>			// probably just ref/ptr conversion to ancestor
-										  || is_same<VInit, VElem>::value,			// can be a valid subobject selection, even if no ref-comp.
+			using TImplicit	= conditional_t< !HasConstValue<TNoExp>				// shouldn't have temporaries with normal design
+										  || IsRefCompatible<TNoExp, TElem>		// probably just ref/ptr conversion to ancestor
+										  || is_same_v<VInit, VElem>,			// can be a valid subobject selection, even if no ref-comp.
 											 TNoExp,
 											 decay_t<TNoExp> >;
 			using TProposed = OverrideT<ForcedAcc, TImplicit>;

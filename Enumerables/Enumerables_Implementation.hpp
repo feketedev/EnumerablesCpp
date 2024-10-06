@@ -400,7 +400,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class S, class Et, enable_if_t<std::is_floating_point<S>::value, int> = 0>
+	template <class S, class Et, enable_if_t<std::is_floating_point_v<S>, int> = 0>
 	S SumEnumerated(Et& etor)
 	{
 		S		sum {};
@@ -413,7 +413,7 @@ namespace Enumerables::Def {
 
 
 	template <class S, class Et,
-			  enable_if_t<!std::is_floating_point<S>::value && IsAddAssignable<S>::value, int> = 0>
+			  enable_if_t<!std::is_floating_point_v<S> && IsAddAssignable<S>::value, int> = 0>
 	S SumEnumerated(Et& etor)
 	{
 		S sum {};
@@ -644,7 +644,7 @@ namespace Enumerables::Def {
 
 	template <class T>
 	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible<V>::value>*)
+	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible_v<V>>*)
 	{
 		if (autoCall && (GetSize(Elements) > 0 || Status[0] == 'E'))
 			return;
@@ -675,7 +675,7 @@ namespace Enumerables::Def {
 
 	template <class T>
 	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible<V>::value>*)
+	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible_v<V>>*)
 	{
 		ENUMERABLES_INTERNAL_ASSERT (!isPure);
 		Status = "Not available for this type.";

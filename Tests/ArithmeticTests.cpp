@@ -529,7 +529,7 @@ namespace EnumerableTests {
 				ASSERT_ELEM_TYPE (int, nums.Scan<int>(numsArr[1], maxInt));		// decaying can be forced
 
 				// Some help is included to decay for incompatible references (but beware and use forced type when necessary)
-				using ExpectedAcc = std::conditional_t< std::is_same<size_t, unsigned>::value,
+				using ExpectedAcc = std::conditional_t< std::is_same_v<size_t, unsigned>,
 														const unsigned&,							// on 32 bit: types match (ref-compatible)
 														size_t >;									// on 64 bit: must decay (and convert)
 				ASSERT_ELEM_TYPE (ExpectedAcc, Enumerables::Empty<unsigned&>().Scan(init, maxSize));

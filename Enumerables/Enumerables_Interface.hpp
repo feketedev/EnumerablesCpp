@@ -120,9 +120,9 @@ namespace Enumerables::Def {
 		SmallListType<TDebugValue, 4>	Elements;
 
 		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible<V>::value>* = nullptr);
+		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible_v<V>>* = nullptr);
 		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible<V>::value>* = nullptr);
+		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible_v<V>>* = nullptr);
 	};
 
 #endif
@@ -233,7 +233,7 @@ namespace Enumerables::Def {
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
 		AutoEnumerable(TFactory&& factory, bool pureSource = true, bool stepToDebug = true) :
 			factory { move(factory) },
-			isPure  { pureSource && std::is_copy_constructible<TElem>::value }
+			isPure  { pureSource && std::is_copy_constructible<TElem>() }
 		{
 #		if ENUMERABLES_USE_RESULTSVIEW
 #			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
@@ -251,7 +251,7 @@ namespace Enumerables::Def {
 			class Container,
 			IfContainerLike<Container&, int> = 0,
 			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value, int> = 0
+						&& is_same_v<TEnumerator, InterfacedEnumerator<TElem>>, int> = 0
 		>
 		AutoEnumerable(Container& c) :
 			AutoEnumerable { [&c]() { 
@@ -268,8 +268,8 @@ namespace Enumerables::Def {
 			class Container,
 			IfContainerLike<const Container&, int> = 0,
 			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& !std::is_lvalue_reference<Container>::value
-						&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value, int> = 0
+						&& !is_lvalue_reference_v<Container>
+						&& is_same_v<TEnumerator, InterfacedEnumerator<TElem>>, int> = 0
 		>
 		AutoEnumerable(Container&& cont) :
 			AutoEnumerable { [c = move(cont)]() {
@@ -533,12 +533,12 @@ namespace Enumerables::Def {
 	// ----- Conversions -------------------------------------------------------------------------------------------------------------
 
 		// shortcut unnecessary conversions - convenient in templates
-		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr) const &	{ return *this; }
-		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr) &&		{ return move(*this); }
+		template <class R>	auto As(enable_if_t<is_same_v<R, TElem>>* = nullptr) const &	{ return *this; }
+		template <class R>	auto As(enable_if_t<is_same_v<R, TElem>>* = nullptr) &&			{ return move(*this); }
 
 		/// Apply an implicit conversion to type R for each element.
-		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr) const &	{ return   Chain<ConverterEnumerator, R>(); }
-		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr) &&		{ return MvChain<ConverterEnumerator, R>(); }
+		template <class R>	auto As(enable_if_t<!is_same_v<R, TElem>>* = nullptr) const &	{ return   Chain<ConverterEnumerator, R>(); }
+		template <class R>	auto As(enable_if_t<!is_same_v<R, TElem>>* = nullptr) &&		{ return MvChain<ConverterEnumerator, R>(); }
 
 		/// Same elements with const qualifier injected to top pointed or referenced type.
 		auto AsConst()		const &	{ return As<ConstValueT<TElem>>(); }
@@ -884,7 +884,7 @@ namespace Enumerables::Def {
 		///		for small types Enumerable<V> should be preferred on consumer side.
 		template <
 			class V = TElem,
-			class   = enable_if_t<is_same<V, TElem>::value && !is_reference<V>::value>
+			class   = enable_if_t<is_same_v<V, TElem> && !is_reference_v<V>>
 		>
 		operator Enumerable<const BaseT<V>&>() const
 		{
@@ -1146,7 +1146,7 @@ namespace Enumerables::Def {
 	template <
 		class ForcedResult = void,
 		class Container,
-		enable_if_t<!is_lvalue_reference<Container>::value
+		enable_if_t<!is_lvalue_reference_v<Container>
 				 && !IsSpeciallyTreatedContainer<Container>::value, int> = 0
 	>
 	auto Enumerate(Container&& cont)
@@ -1193,7 +1193,7 @@ namespace Enumerables::Def {
 		return Enumerate<R>(ListType<I>(init));
 	}
 
-	template <class R, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
+	template <class R, class V = remove_reference_t<R>, class = enable_if_t<is_reference_v<R>>>
 	auto InitEnumerable(std::initializer_list<V*>&& init)
 	{
 		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
@@ -1208,19 +1208,19 @@ namespace Enumerables::Def {
 	//	void Result type	 => initializer must be deducable -> pointer usage defaults to "capture-syntax"
 
 	template <class ForcedResult>
-	using IfInitRefs   = enable_if_t<is_reference<ForcedResult>::value, int>;
+	using IfInitRefs   = enable_if_t<is_reference_v<ForcedResult>, int>;
 	template <class ForcedResult>
-	using IfInitValues = enable_if_t<!is_reference<ForcedResult>::value && !is_void<ForcedResult>::value, int>;
+	using IfInitValues = enable_if_t<!is_reference_v<ForcedResult> && !is_void_v<ForcedResult>, int>;
 
 	template <class ForcedResult, class I>
-	using IfInitDeducedRefs   = enable_if_t< std::is_pointer<I>::value &&
-											(	is_void<ForcedResult>::value
-											||	is_reference<ForcedResult>::value &&
-												is_convertible<remove_pointer_t<I>&, ForcedResult>::value),
+	using IfInitDeducedRefs   = enable_if_t< std::is_pointer_v<I> &&
+											(	is_void_v<ForcedResult>
+											||	is_reference_v<ForcedResult> &&
+												is_convertible_v<remove_pointer_t<I>&, ForcedResult>),
 											int >;
 	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t< !std::is_pointer<I>::value &&
-											 (is_void<ForcedResult>::value || is_convertible<I, ForcedResult>::value),
+	using IfInitDeducedValues = enable_if_t< !std::is_pointer_v<I> &&
+											 (is_void_v<ForcedResult> || is_convertible_v<I, ForcedResult>),
 											 int >;
 
 
@@ -1296,7 +1296,7 @@ namespace Enumerables::Def {
 
 
 	template <class TForced>
-	using DefaultInitT = conditional_t<is_reference<TForced>::value, remove_reference_t<TForced>*, TForced>;
+	using DefaultInitT = conditional_t<is_reference_v<TForced>, remove_reference_t<TForced>*, TForced>;
 
 
 

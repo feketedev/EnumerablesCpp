@@ -31,7 +31,7 @@ namespace Enumerables::TypeHelpers {
 		T* /*const*/ ptr;
 
 	public:
-		template <class Ref, class = enable_if_t<is_same<const T, const remove_reference_t<Ref>>::value>>
+		template <class Ref, class = enable_if_t<is_same_v<const T, const remove_reference_t<Ref>>>>
 		RefHolder(Ref&& ref) : ptr { &ref }
 		{
 			static_assert (is_lvalue_reference<Ref>(), "Reference stored from rvalue soon becomes dangling!");
@@ -50,7 +50,7 @@ namespace Enumerables::TypeHelpers {
 	///	 	* prvalue	  -> temporary / mapped result, must be stored if needed later (T left as is, no overhead)
 	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the enumeration
 	template <class T>
-	using StorableT = conditional_t< is_lvalue_reference<T>::value,
+	using StorableT = conditional_t< is_lvalue_reference_v<T>,
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
 
@@ -180,7 +180,7 @@ namespace Enumerables::TypeHelpers {
 
 
 		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<is_same<S, Trg>::value>* = nullptr)
+		void InvokeFactory(Factory&& create, enable_if_t<is_same_v<S, Trg>>* = nullptr)
 		{
 			// Note: to allow conversions, use Construct! That will need a temporary anyway.
 			static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
@@ -190,7 +190,7 @@ namespace Enumerables::TypeHelpers {
 
 		// shortcut for S = RefHolder<T>
 		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<!is_same<S, Trg>::value>* = nullptr)
+		void InvokeFactory(Factory&& create, enable_if_t<!is_same_v<S, Trg>>* = nullptr)
 		{
 			static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
 			new (&val) S { create() };

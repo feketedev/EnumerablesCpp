@@ -317,8 +317,7 @@ namespace Enumerables::Def {
 	///		Using StorableT for & arguments is an opaque workaround for ArgStorage / ChainFactory decays all input expecting lambdas.
 	///		Constructed Enumerator must accept StorableT. Current usage is scarce.
 	template <class Src, class ToInit>
-	auto StoreAllowingRef(Src& x) -> std::conditional_t< std::is_same<std::decay_t<Src>, std::decay_t<ToInit>>::value
-														 && !std::is_reference<ToInit>::value,
+	auto StoreAllowingRef(Src& x) -> std::conditional_t< std::is_same_v<std::decay_t<Src>, std::decay_t<ToInit>> && !std::is_reference_v<ToInit>,
 														 Src&&,
 														 TypeHelpers::StorableT<ToInit> >
 	{

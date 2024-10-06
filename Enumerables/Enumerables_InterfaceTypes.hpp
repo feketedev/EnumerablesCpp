@@ -122,17 +122,17 @@ namespace Enumerables {
 		using TDecayed		= std::decay_t<T>;
 
 		template <class F>
-		using IfFallbackFun	= std::enable_if_t<std::is_same<TypeHelpers::InvokeResultT<F>, OptResult>::value>;
+		using IfFallbackFun	= std::enable_if_t<std::is_same_v<TypeHelpers::InvokeResultT<F>, OptResult>>;
 
 		template <class F>
-		using IfDefaultFun	= std::enable_if_t<std::is_convertible<TypeHelpers::InvokeResultT<F>, T>::value>;
+		using IfDefaultFun	= std::enable_if_t<std::is_convertible_v<TypeHelpers::InvokeResultT<F>, T>>;
 
 		template <class M, class TT = T>
 		using MapResult		= decltype(TypeHelpers::LambdaCreators::CustomMapper<TT>(std::declval<M&&>()).operator()(std::declval<TT>()));
 
 		// quickfix: this separate gate triggers substitution failure prior to static_asserts of CustomMapper - which would fire even in subsequently disqualified overloads
 		template <class M, class TT = T>
-		using IfMappable = std::enable_if_t<TypeHelpers::IsCallable<M&&, TT>::value || std::is_member_pointer<std::decay_t<M>>::value, int>;
+		using IfMappable = std::enable_if_t<TypeHelpers::IsCallable<M&&, TT>::value || std::is_member_pointer_v<std::decay_t<M>>, int>;
 
 
 
@@ -271,20 +271,20 @@ namespace Enumerables {
 
 		/// If this has no value, fallback to a guaranteed value.
 		/// [Value return - move/copy as appropriate.]
-		template <class TT = T, std::enable_if_t<!std::is_reference<TT>::value, int> = 0>
+		template <class TT = T, std::enable_if_t<!std::is_reference_v<TT>, int> = 0>
 		TDecayed			OrDefault(const TDecayed& def)		 && { return HasValue() ? std::move(*this).Value() : T { def }; }
 		TDecayed			OrDefault(TDecayed&& def)			 && { return HasValue() ? std::move(*this).Value() : std::move(def); }
 		TDecayed			OrDefault(TDecayed&& def)		const & { return HasValue() ? T { this->Value() }      : std::move(def); }
 
 		/// If this has no value, fallback to a guaranteed value.
 		/// [Choice made over payload references.]
-		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed&>::value, int> = 0>
+		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed&>, int> = 0>
 		T&					OrDefault(T& def)				const & { return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed>::value || std::is_same<TypeHelpers::ConstValueT<TT>, const TDecayed&>::value, int> = 0>
+		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed> || std::is_same_v<TypeHelpers::ConstValueT<TT>, const TDecayed&>, int> = 0>
 		const TDecayed&		OrDefault(const TDecayed& def)	const & { return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_same<TT, TDecayed>::value, int> = 0>
+		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed>, int> = 0>
 		TDecayed&			OrDefault(TDecayed& def)			  & { return HasValue() ? Value() : def; }
 
 

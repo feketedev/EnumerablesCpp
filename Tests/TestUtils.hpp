@@ -201,13 +201,13 @@ namespace EnumerableTests {
 
 
 	template <class A, class B>
-	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<std::is_floating_point<B>::value>
+	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<std::is_floating_point_v<B>>
 	{
 		PrintObj("\tDiff =      ",  b - a);
 	}
 
 	template <class A, class B>
-	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<!std::is_floating_point<B>::value>
+	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<!std::is_floating_point_v<B>>
 	{
 	}
 

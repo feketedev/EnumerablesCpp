@@ -22,21 +22,39 @@ namespace Enumerables::TypeHelpers {
 	using std::remove_pointer_t;
 	using std::remove_reference_t;
 	using std::is_abstract;
+	using std::is_abstract_v;
 	using std::is_assignable;
+	using std::is_assignable_v;
 	using std::is_const;
+	using std::is_const_v;
 	using std::is_constructible;
+	using std::is_constructible_v;
 	using std::is_convertible;
+	using std::is_convertible_v;
 	using std::is_void;
+	using std::is_void_v;
+	using std::is_void;
+	using std::is_void_v;
 	using std::is_reference;
+	using std::is_reference_v;
 	using std::is_lvalue_reference;
+	using std::is_lvalue_reference_v;
 	using std::is_rvalue_reference;
+	using std::is_rvalue_reference_v;
 	using std::is_member_object_pointer;
+	using std::is_member_object_pointer_v;
 	using std::is_member_pointer;
+	using std::is_member_pointer_v;
 	using std::is_member_function_pointer;
+	using std::is_member_function_pointer_v;
 	using std::is_pointer;
+	using std::is_pointer_v;
 	using std::is_same;
+	using std::is_same_v;
 	using std::is_scalar;
+	using std::is_scalar_v;
 	using std::is_class;
+	using std::is_class_v;
 
 
 
@@ -71,7 +89,7 @@ namespace Enumerables::TypeHelpers {
 
 	/// R if C seems like a generic container, candidate to be wrapped by an Enumerable.
 	template <class C, class R = C>
-	using IfContainerLike = enable_if_t<is_convertible<decltype(begin(declval<C> ()) != end(declval<C> ())), bool>::value, R>;
+	using IfContainerLike = enable_if_t<is_convertible_v<decltype(begin(declval<C> ()) != end(declval<C> ())), bool>, R>;
 
 
 
@@ -81,12 +99,12 @@ namespace Enumerables::TypeHelpers {
 	struct None {};
 
 	template <class T>
-	constexpr bool IsNone = is_same<T, None>::value;
+	constexpr bool IsNone = is_same_v<T, None>;
 
 
 	/// For optionally specified 1st type arguments: any non-void type overrides Default.
 	template <class Override, class Default>
-	using OverrideT = conditional_t<is_void<Override>::value || IsNone<Override>, Default, Override>;
+	using OverrideT = conditional_t<is_void_v<Override> || IsNone<Override>, Default, Override>;
 
 	/// Intentionally prevent implicit deduction of a function argument.
 	template <class T>
@@ -109,13 +127,13 @@ namespace Enumerables::TypeHelpers {
 	using BaseOrPointedT = BaseT<remove_pointer_t<T>>;
 
 	template <class T>
-	using RemoveRvalueRefT = conditional_t<is_rvalue_reference<T>::value, remove_reference_t<T>, T>;
+	using RemoveRvalueRefT = conditional_t<is_rvalue_reference_v<T>, remove_reference_t<T>, T>;
 
 	template <class T>
-	using RemovePtrRefT = conditional_t<is_pointer<remove_reference_t<T>>::value, remove_reference_t<T>, T>;
+	using RemovePtrRefT = conditional_t<is_pointer_v<remove_reference_t<T>>, remove_reference_t<T>, T>;
 
 	template <class T>
-	using RemoveScalarRefT = conditional_t< is_pointer<remove_reference_t<T>>::value || std::is_scalar<remove_reference_t<T>>::value,
+	using RemoveScalarRefT = conditional_t< is_pointer_v<remove_reference_t<T>> || std::is_scalar_v<remove_reference_t<T>>,
 										    BaseT<T>,
 										    T >;
 
@@ -146,20 +164,20 @@ namespace Enumerables::TypeHelpers {
 	/// Inject const inside first pointer/reference, or simply before value type. [Must succeed - No void, no mptrs]
 	template <class T>
 	using ConstValueT =
-		conditional_t< is_pointer<T>::value && !is_reference<T>::value,		const remove_pointer_t<remove_reference_t<T>>*,
-		conditional_t< is_lvalue_reference<T>::value,						const remove_reference_t<T>&,
-		conditional_t< is_rvalue_reference<T>::value,						const remove_reference_t<T>&&,
-																			const T										>>>;
+		conditional_t< is_pointer_v<T> && !is_reference_v<T>,	const remove_pointer_t<remove_reference_t<T>>*,
+		conditional_t< is_lvalue_reference_v<T>,				const remove_reference_t<T>&,
+		conditional_t< is_rvalue_reference_v<T>,				const remove_reference_t<T>&&,
+																const T										  >>>;
 
 	// [void -> false]
 	template <class T>
-	constexpr bool HasConstValue = is_same<ConstValueT<OverrideT<T, int>>, T>::value;
+	constexpr bool HasConstValue = is_same_v<ConstValueT<OverrideT<T, int>>, T>;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && std::is_assignable<Trg&, Src>::value;
+	constexpr bool IsHeadAssignable = !is_reference_v<Trg> && std::is_assignable_v<Trg&, Src>;
 
 	template <class Trg, class Src>
-	constexpr bool IsRefCompatible = is_convertible<remove_reference_t<Src>*, remove_reference_t<Trg>*>::value;
+	constexpr bool IsRefCompatible = is_convertible_v<remove_reference_t<Src>*, remove_reference_t<Trg>*>;
 
 	/// Innermost pointed/referenced type of Src is reference-compatible with Trg's innermost type - pointer depth ignored (!)
 	template <class Trg, class Src>
@@ -191,13 +209,13 @@ namespace Enumerables::TypeHelpers {
 	/// Proposable deduced result type to combine 2 presumed compatible sources - adhering to the first one in case a
 	/// value-conversion/copy is needed. [&+& and &&+&& yield the common &/&& type respectively; void if incompatible]
 	template <class Pri, class Sec>
-	using CompatResultT = conditional_t< is_lvalue_reference<Pri>::value && is_lvalue_reference<Sec>::value && HaveRefcompatibleRoots<Pri, Sec>,
+	using CompatResultT = conditional_t< is_lvalue_reference_v<Pri> && is_lvalue_reference_v<Sec> && HaveRefcompatibleRoots<Pri, Sec>,
 										 std::add_lvalue_reference_t<QualifiedCommonT<Pri, Sec>>,
-						  conditional_t< is_rvalue_reference<Pri>::value && is_rvalue_reference<Sec>::value && HaveRefcompatibleRoots<Pri, Sec>,
+						  conditional_t< is_rvalue_reference_v<Pri> && is_rvalue_reference_v<Sec> && HaveRefcompatibleRoots<Pri, Sec>,
 										 std::add_rvalue_reference_t<QualifiedCommonT<Pri, Sec>>,
-						  conditional_t< is_pointer<remove_reference_t<Pri>>::value && is_pointer<remove_reference_t<Sec>>::value,
+						  conditional_t< is_pointer_v<remove_reference_t<Pri>> && is_pointer_v<remove_reference_t<Sec>>,
 										 typename CommonOrVoid<Pri, Sec>::Type,
-						  conditional_t< is_convertible<Sec, BaseT<Pri>>::value,
+						  conditional_t< is_convertible_v<Sec, BaseT<Pri>>,
 										 BaseT<Pri>,
 						  void >>>>;
 
@@ -249,13 +267,13 @@ namespace Enumerables::TypeHelpers {
 	template <class T, class Mptr, class... Args>
 	struct IsCallableMember {
 
-		template <class Obj = T, enable_if_t<!is_pointer<remove_reference_t<Obj>>::value, int> = 0>
+		template <class Obj = T, enable_if_t<!is_pointer_v<remove_reference_t<Obj>>, int> = 0>
 		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<Mptr>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
-		template <class Obj = T, enable_if_t<is_pointer<remove_reference_t<Obj>>::value, int> = 0>
+		template <class Obj = T, enable_if_t<is_pointer_v<remove_reference_t<Obj>>, int> = 0>
 		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<Mptr>()) (declval<Args>()...))>*)
 		{
 			return true;
@@ -294,7 +312,7 @@ namespace Enumerables::TypeHelpers {
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
 	template <class T, class... Args>
 	constexpr bool IsConstructibleAnyway = IsBraceConstructible<T, Args...>::value
-										|| std::is_constructible<T, Args...>::value;
+										|| std::is_constructible_v<T, Args...>;
 
 
 
@@ -321,38 +339,35 @@ namespace Enumerables::TypeHelpers {
 	// ===== Enable_if shorthands =====================================================================================
 
 	template <class T>
-	using IfVoid = enable_if_t<is_void<T>::value>;
+	using IfVoid	= enable_if_t<is_void_v<T>>;
 
 	template <class T, class S = T>
-	using IfPRValue = std::enable_if_t<!std::is_reference<T>::value, S>;
+	using IfPRValue	  = enable_if_t<!is_reference_v<T>, S>;
 
 	template <class T, class S = T>
-	using IfReference = std::enable_if_t<std::is_reference<T>::value, S>;
+	using IfReference = enable_if_t<is_reference_v<T>, S>;
 
 	template <class T, class S = T>
-	using IfMutRVal = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value &&
-										(std::is_rvalue_reference<T>::value || !std::is_reference<T>::value),
-										S >;
+	using IfMutRVal	= enable_if_t< !is_const_v<remove_reference_t<T>> && (is_rvalue_reference_v<T> || !is_reference_v<T>),
+								   S >;
 
 	template <class T, class S = T>
-	using IfLVal = std::enable_if_t< std::is_lvalue_reference<T>::value, S>;
+	using IfLVal	= enable_if_t< is_lvalue_reference_v<T>, S>;
 
 	template <class T, class S = T>
-	using IfMutLVal = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value &&
-										std::is_lvalue_reference<T>::value,
-										S >;
+	using IfMutLVal	= enable_if_t< !is_const_v<remove_reference_t<T>> && is_lvalue_reference_v<T>,
+								   S >;
 
 
 	template <class T, class S = T>
-	using IfConst = std::enable_if_t<std::is_const<std::remove_reference_t<T>>::value, S>;
+	using IfConst	= enable_if_t<is_const_v<remove_reference_t<T>>, S>;
 
 	template <class T, class S = T>
-	using IfMutable = std::enable_if_t<!std::is_const<std::remove_reference_t<T>>::value, S>;
+	using IfMutable	= enable_if_t<!is_const_v<remove_reference_t<T>>, S>;
 
 	template <class T, class S = T>
-	using IfValueOrMutable = std::enable_if_t< !std::is_const<std::remove_reference_t<T>>::value
-											|| !std::is_reference<T>::value,
-											   S >;
+	using IfValueOrMutable = enable_if_t< !is_const_v<remove_reference_t<T>> || !is_reference_v<T>,
+										  S >;
 
 }		// namespace Enumerables::TypeHelpers
 

@@ -79,19 +79,19 @@ namespace Enumerables::TypeHelpers {
 
 		static constexpr bool toInterfaced = IsInterfacedEnumerator<ToEt>::value;
 		static constexpr bool promoting    = toInterfaced && !IsInterfacedEnumerator<FromEt>::value;
-		static constexpr bool converting   = !is_same<To, From>::value;
+		static constexpr bool converting   = !is_same_v<To, From>;
 
 	public:
 		static constexpr bool trivial = promoting && !converting;
 
 		static constexpr bool asConst =  toInterfaced
 									  && converting
-									  && is_same<To, ConstValueT<From>>::value;
+									  && is_same_v<To, ConstValueT<From>>;
 
 		static constexpr bool asDecayed =  toInterfaced
-										&& is_reference<From>::value
-										&& is_same<To, BaseT<From>>::value
-										&& !is_abstract<To>::value;
+										&& is_reference_v<From>
+										&& is_same_v<To, BaseT<From>>
+										&& !is_abstract_v<To>;
 
 		static constexpr bool any = trivial || asConst || asDecayed;
 	};
@@ -109,9 +109,9 @@ namespace Enumerables::TypeHelpers {
 	struct SeededEnumerationTypes {
 
 		/// Stored single-value type for the user-given universal reference.
-		using SeedStorage = conditional_t< is_lvalue_reference<UniversalInit>::value,
-											UniversalInit,
-											BaseT<UniversalInit> >;
+		using SeedStorage = conditional_t< is_lvalue_reference_v<UniversalInit>,
+										   UniversalInit,
+										   BaseT<UniversalInit> >;
 
 							// BaseT removes const for the Enumerable to stay moveable!
 
@@ -216,9 +216,9 @@ namespace Enumerables::TypeHelpers {
 
 		using T1 = BaseOrPointedT<Vote1>;
 		using T2 = BaseOrPointedT<Vote2>;
-		using CommonBaseVote = conditional_t< is_same<T1, T2>::value,			Vote1,
-							   conditional_t< is_convertible<T2*, T1*>::value,	Vote1,
-							   conditional_t< is_convertible<T1*, T2*>::value,	Vote2,
+		using CommonBaseVote = conditional_t< is_same_v<T1, T2>,			Vote1,
+							   conditional_t< is_convertible_v<T2*, T1*>,	Vote1,
+							   conditional_t< is_convertible_v<T1*, T2*>,	Vote2,
 							   void >>>;
 
 		static_assert (!is_void<CommonBaseVote>(),
@@ -250,16 +250,16 @@ namespace Enumerables::TypeHelpers {
 	namespace MemberPointerHelpers
 	{
 		template <class Ptr>
-		using IfMemberObject = enable_if_t<is_member_object_pointer<remove_reference_t<Ptr>>::value>;
+		using IfMemberObject = enable_if_t<is_member_object_pointer_v<remove_reference_t<Ptr>>>;
 
 		template <class Ptr>
-		using IfMemberFunction = enable_if_t<is_member_function_pointer<remove_reference_t<Ptr>>::value>;
+		using IfMemberFunction = enable_if_t<is_member_function_pointer_v<remove_reference_t<Ptr>>>;
 
 		// For references, need to enhance compiler behaviour (older clang does not propagate rvalueness at all!)
 		template <class T, class Selected>
 		decltype(auto) PropagateRval(Selected&& s)
 		{
-			using RvalPropagated = conditional_t<is_lvalue_reference<T>::value, Selected&, remove_reference_t<Selected>&&>;
+			using RvalPropagated = conditional_t<is_lvalue_reference_v<T>, Selected&, remove_reference_t<Selected>&&>;
 			return static_cast<RvalPropagated>(s);
 		}
 
@@ -334,9 +334,9 @@ namespace Enumerables::TypeHelpers {
 		using DT = decay_t<T>;
 
 		// qualified Object type - [const] & for [const] pointers
-		using O  = conditional_t< is_class<DT>::value,  T,
-				   conditional_t< is_pointer<DT>::value && is_class<remove_pointer_t<DT>>::value,  remove_pointer_t<DT>&,
-				   None>>;
+		using O  = conditional_t< is_class_v<DT>,  T,
+				   conditional_t< is_pointer_v<DT> && is_class_v<remove_pointer_t<DT>>,  remove_pointer_t<DT>&,
+				   None >>;
 
 		// Decayed object type
 		using OD = decay_t<O>;
@@ -423,7 +423,7 @@ namespace Enumerables::TypeHelpers {
 		// On a mutable object, either const-qualified or nonqualified overload can be called (no enable_if narrowing),
 		// but the nonqualified version should be selected. For that we utilize the language feature:
 		// non-template overloads (with better parameter match) can hide templated ones - and that is not an ambiguity!
-		using PreferredGetter = conditional_t< is_const<remove_reference_t<O>>::value,
+		using PreferredGetter = conditional_t< is_const_v<remove_reference_t<O>>,
 											   R (OD::*)() const,
 											   R (OD::*)()		 >;
 		constexpr
@@ -439,9 +439,9 @@ namespace Enumerables::TypeHelpers {
 
 		// ---- Ref-qualified overload selection - exact return type ----
 
-		using PreferredRefQualGetter = conditional_t<is_const<remove_reference_t<O>>::value, R (OD::*)() const &,
-									   conditional_t<is_lvalue_reference<O>::value,			 R (OD::*)() &,
-									   														 R (OD::*)() &&		>>;
+		using PreferredRefQualGetter = conditional_t<is_const_v<remove_reference_t<O>>,	R (OD::*)() const &,
+									   conditional_t<is_lvalue_reference_v<O>,			R (OD::*)() &,
+									   													R (OD::*)() &&		>>;
 		constexpr
 		OverloadResolver(PreferredRefQualGetter mptr)			  : OverloadResolver { mptr, nullptr } {}
 
@@ -503,7 +503,7 @@ namespace Enumerables::TypeHelpers {
 	///		- Free functions are often overloaded by type, but conventionally take either const& or decayed value depending on size.
 	///		This way the usual cases are covered for free.
 	template <class TDecayed>
-	using FreePredicatePtr = conditional_t< is_scalar<TDecayed>::value,
+	using FreePredicatePtr = conditional_t< is_scalar_v<TDecayed>,
 											bool (*)(TDecayed),
 											bool (*)(const TDecayed&) >;
 
@@ -516,20 +516,20 @@ namespace Enumerables::TypeHelpers {
 		// * don't copy prvalue to parameter
 		// * but consider it movable ("Map" is the final call on it)
 		template <class T>
-		using MapParamT = conditional_t< is_reference<T>::value || is_pointer<T>::value,
+		using MapParamT = conditional_t< is_reference_v<T> || is_pointer_v<T>,
 										 T,
 										 T&& >;
 
 		// helper to std::forward some MapParamT
 		template <class T>
-		using MapForwardT = conditional_t< is_rvalue_reference<MapParamT<T>>::value,
+		using MapForwardT = conditional_t< is_rvalue_reference_v<MapParamT<T>>,
 										   remove_reference_t<T>,
 										   T& >;
 
 		// * don't copy, don't move
 		// * const access only - even to pointee (for Predicates)
 		template <class T>
-		using ConstParamT = conditional_t< is_pointer<remove_reference_t<T>>::value,
+		using ConstParamT = conditional_t< is_pointer_v<remove_reference_t<T>>,
 										   const remove_pointer_t<remove_reference_t<T>>*,
 										   const remove_reference_t<T>& >;
 
@@ -540,11 +540,11 @@ namespace Enumerables::TypeHelpers {
 		// Avoid returning xvalues with automatic deduction -> materialize them as prvalues.
 		// NOTE: && can be forced explicitly, but general behaviour of Enumerable<T&&> is currently unspecified.
 		template <class T>
-		using NonExpiringT = conditional_t<is_rvalue_reference<T>::value, remove_reference_t<T>, T>;
+		using NonExpiringT = conditional_t<is_rvalue_reference_v<T>, remove_reference_t<T>, T>;
 
 		// correct targeted member type so that its lifetime is ensured after return
 		template <class O, class M>
-		using NonExpiringMemberT = conditional_t< is_lvalue_reference<O>::value || is_pointer<O>::value,
+		using NonExpiringMemberT = conditional_t< is_lvalue_reference_v<O> || is_pointer_v<O>,
 												  NonExpiringT<M>,
 												  BaseT<M> >;
 
@@ -554,17 +554,17 @@ namespace Enumerables::TypeHelpers {
 
 		// L is not any specially treated case (roughly)
 		template <class L>
-		using IfPotentialLambda = enable_if_t< !is_member_pointer<L>::value &&
-											   !is_pointer<L>::value &&
-											   !std::is_function<L>::value >;
+		using IfPotentialLambda = enable_if_t< !is_member_pointer_v<L> &&
+											   !is_pointer_v<L> &&
+											   !std::is_function_v<L> >;
 
 		// F is potentially a free function pointer
 		template <class F>
-		using IfPotentialFreeFunc = enable_if_t<is_pointer<F>::value || std::is_function<F>::value>;
+		using IfPotentialFreeFunc = enable_if_t<is_pointer_v<F> || std::is_function_v<F>>;
 
 		// M is a member object or function pointer
 		template <class M>
-		using IfMemberPointer = enable_if_t<is_member_pointer<M>::value>;
+		using IfMemberPointer = enable_if_t<is_member_pointer_v<M>>;
 
 
 
@@ -588,14 +588,14 @@ namespace Enumerables::TypeHelpers {
 
 
 		template <class DeducedRes, class Trg, class L>
-		auto&&	WrapIfConversionReqd(L&& lambda, enable_if_t<is_same<DeducedRes, Trg>::value>* = nullptr)
+		auto&&	WrapIfConversionReqd(L&& lambda, enable_if_t<is_same_v<DeducedRes, Trg>>* = nullptr)
 		{
 			return forward<L>(lambda);
 		}
 
 
 		template <class DeducedRes, class Trg, class L>
-		auto	WrapIfConversionReqd(L&& lambda, enable_if_t<!is_same<DeducedRes, Trg>::value>* = nullptr)
+		auto	WrapIfConversionReqd(L&& lambda, enable_if_t<!is_same_v<DeducedRes, Trg>>* = nullptr)
 		{
 			static_assert (!is_reference<Trg>() || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
 						   "Requested result type loses const qualifier.");
