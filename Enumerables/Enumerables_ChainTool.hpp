@@ -46,8 +46,7 @@
 #include "Enumerables_GenericStorage.hpp"		// for StorableT -> StoreAllowingRef
 
 
-namespace Enumerables {
-namespace Def {
+namespace Enumerables::Def {
 
 
 #pragma region Tuple-tools (internal)
@@ -334,7 +333,6 @@ namespace Def {
 #pragma endregion
 
 
-}		// namespace Def
-}		// namespace Enumerables
+}		// namespace Enumerables::Def
 
 #endif	// ENUMERABLES_CHAINTOOL_HPP

@@ -55,6 +55,8 @@
 
 
 
+#pragma region Fun
+
 // FUN macros: Getting as close as possible to simple arrow-lambda syntax.
 // If they're not welcome:  defining ENUMERABLES_NO_FUN before including the library should hide them.
 
@@ -82,13 +84,16 @@
 #define FUNV2(x, y, expression)		[=](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }
 #define FUNV3(x, y, z, expression)	[=](auto&& x, auto&& y, auto&& z)	-> decltype(auto)	{ return (expression); }
 
+#pragma endregion
 
 
+
+
+#pragma region Predeclaration + Technical
 
 // Def is an internal namespace of the library to be freely polluted by helper stuff -
 // Client code should use its subset exported to ::Enumerables.
-namespace Enumerables {
-namespace Def {
+namespace Enumerables::Def {
 
 	/// Generic wrapper for Enumerator factories  - to be used with 'auto' => no virtualization overhead.
 	template <class TFactory>
@@ -122,8 +127,10 @@ namespace Def {
 
 #endif
 
-}
-namespace TypeHelpers {
+}	// namespace Enumerables::Def
+
+
+namespace Enumerables::TypeHelpers {
 
 	/// This trait disambiguates between Enumerables and containers
 	template <class Fact>
@@ -139,7 +146,13 @@ namespace TypeHelpers {
 	};
 
 }
-namespace Def {
+
+#pragma endregion
+
+
+
+
+namespace Enumerables::Def {
 
 	using namespace Enumerables::TypeHelpers;
 
@@ -1439,47 +1452,50 @@ namespace Def {
 #pragma endregion
 
 
-}	// namespace Def
+}	// namespace Enumerables::Def
 
 
-// From here published to client code:
-
-// -- interfaced enumerable --
-using Def::Enumerable;
-using Def::IEnumerator;
-using Def::InterfacedEnumerator;
 
 
-// -- source constructors --
-// wrap collection
-using Def::Enumerate;
+namespace Enumerables {			
 
-// generators
-using Def::Empty;
-using Def::Once;
-using Def::Repeat;
-using Def::IndexRange;
-using Def::IndexRangeReversed;
-using Def::Range;
-using Def::RangeDown;
-using Def::RangeBetween;
-using Def::RangeDownBetween;
-using Def::Sequence;
+	// Published to client code:
 
-// -- free helpers --
-using Def::AreEqual;
+	// -- interfaced enumerable --
+	using Def::Enumerable;
+	using Def::IEnumerator;
+	using Def::InterfacedEnumerator;
 
-// -- shorthands --
-using Def::AllOf;
-using Def::AnyOf;
-using Def::Concat;
-using Def::Filter;
-using Def::Map;
-using Def::MapTo;
-using Def::FirstFrom;
-using Def::SingleFrom;
-using Def::SingleOrNoneFrom;
 
+	// -- source constructors --
+	// wrap collection
+	using Def::Enumerate;
+
+	// generators
+	using Def::Empty;
+	using Def::Once;
+	using Def::Repeat;
+	using Def::IndexRange;
+	using Def::IndexRangeReversed;
+	using Def::Range;
+	using Def::RangeDown;
+	using Def::RangeBetween;
+	using Def::RangeDownBetween;
+	using Def::Sequence;
+
+	// -- free helpers --
+	using Def::AreEqual;
+
+	// -- shorthands --
+	using Def::AllOf;
+	using Def::AnyOf;
+	using Def::Concat;
+	using Def::Filter;
+	using Def::Map;
+	using Def::MapTo;
+	using Def::FirstFrom;
+	using Def::SingleFrom;
+	using Def::SingleOrNoneFrom;
 
 }		// namespace Enumerables
 

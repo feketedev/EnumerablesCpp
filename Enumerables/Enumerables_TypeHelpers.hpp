@@ -12,8 +12,7 @@
 
 
 
-namespace Enumerables {
-namespace TypeHelpers {
+namespace Enumerables::TypeHelpers {
 
 
 #pragma region Enumerable conversion helpers
@@ -734,7 +733,7 @@ namespace TypeHelpers {
 				[p](ConstParamT<T> elem) { return (*p)(elem); }
 			);
 		}
-	}
+	}	// namespace LambdaCreators
 
 #pragma endregion
 
@@ -799,7 +798,7 @@ namespace TypeHelpers {
 				[p](MapParamT<T1> lhs, MapParamT<T2> rhs) -> decltype(auto) { return (*p)(forward<FW1>(lhs), forward<FW2>(rhs)); }
 			);
 		}
-	}
+	}	// namespace LambdaCreators
 
 
 	// CONSIDER: No overload resolution for binary ops yet.
@@ -961,7 +960,6 @@ namespace TypeHelpers {
 #pragma endregion
 
 
-}		// namespace TypeHelpers
-}		// namespace Enumerables
+}		// namespace Enumerables::TypeHelpers
 
 #endif	// ENUMERABLES_TYPEHELPERS_HPP

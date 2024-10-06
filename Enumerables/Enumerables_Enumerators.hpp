@@ -14,8 +14,7 @@
 
 
 
-namespace Enumerables {
-namespace Def {
+namespace Enumerables::Def {
 
 	using namespace TypeHelpers;
 
@@ -39,7 +38,7 @@ namespace Def {
 
 	#pragma region Iterator checks
 
-	/// Whether the container has a registered GetSize in our Enumerables namespace.
+	/// Whether the container has an available GetSize implementation.
 	template <class C>
 	class HasQueryableSize {
 
@@ -242,8 +241,10 @@ namespace Def {
 		}
 	};
 
-}	// namespace Def
-namespace TypeHelpers {
+}	// namespace Enumerables::Def
+
+
+namespace Enumerables::TypeHelpers {
 
 	template <class V>
 	struct IsInterfacedEnumerator<Def::InterfacedEnumerator<V>>
@@ -252,7 +253,9 @@ namespace TypeHelpers {
 	};
 
 }
-namespace Def {
+
+
+namespace Enumerables::Def {
 
 	
 	/// Represents the end() against any EnumeratorAdapter.
@@ -1526,7 +1529,6 @@ namespace Def {
 #pragma endregion
 
 
-}		// namespace Def
-}		// namespace Enumerables
+}		// namespace Enumerables::Def
 
 #endif	// ENUMERABLES_ENUMERATORS_HPP

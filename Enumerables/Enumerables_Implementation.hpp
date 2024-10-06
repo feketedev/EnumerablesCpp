@@ -111,8 +111,7 @@ namespace Enumerables {
 
 
 
-namespace Enumerables {
-namespace Def {
+namespace Enumerables::Def {
 
 
 #pragma region Free helpers
@@ -707,8 +706,7 @@ namespace Def {
 #endif	// ENUMERABLES_USE_RESULTSVIEW
 
 
-}	// namespace Def
-}	// namespace Enumerables
+}	// namespace Enumerables::Def
 
 
 

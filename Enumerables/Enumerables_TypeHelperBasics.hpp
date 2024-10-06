@@ -11,8 +11,7 @@
 
 
 
-namespace Enumerables {
-namespace TypeHelpers {
+namespace Enumerables::TypeHelpers {
 
 	using std::move;
 	using std::forward;
@@ -355,7 +354,6 @@ namespace TypeHelpers {
 											|| !std::is_reference<T>::value,
 											   S >;
 
-}		// namespace TypeHelpers
-}		// namespace Enumerables
+}		// namespace Enumerables::TypeHelpers
 
 #endif	// ENUMERABLES_TYPEHELPERBASICS_HPP

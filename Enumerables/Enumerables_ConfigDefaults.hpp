@@ -169,8 +169,7 @@ namespace Enumerables {
 
 
 
-namespace Enumerables {
-namespace StlBinding {
+namespace Enumerables::StlBinding {
 
 
 #ifndef ENUMERABLES_LIST_BINDING
@@ -269,8 +268,7 @@ namespace StlBinding {
 
 #endif
 
-}	// namespace StlBinding
-}	// namespace Enumerables
+}	// namespace Enumerables::StlBinding
 
 
 
@@ -285,49 +283,52 @@ namespace Enumerables {
 	using SetOperations  = ENUMERABLES_SET_BINDING;
 	using DictOperations = ENUMERABLES_DICTIONARY_BINDING;
 
-
-	namespace DefaultBinding {
-
-		// Recommended default for terminal operations of optional result.
-		struct OptionalOperations {
-			template <class T>	using Container = OptResult<T>;
-
-			template <class T, class Enumerator>
-			static Container<T>	FromCurrent(Enumerator& et)
-			{
-				return OptResult<T>::FromFactory([&]() -> decltype(auto) { return et.Current(); });
-			}
-
-			template <class T>
-			static Container<T>	NoValue(StopReason rs)	{ return rs; }
-
-			template <class T>
-			static bool HasValue(const Container<T>& o) { return o.HasValue(); }
-		};
+}
 
 
-		// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
-		// - hence only a ListOp. fallback is provided, but the below code presents the way to utilize such type from your favorite library.
-		struct FallbackSmallListOperations {
-			template <class V, size_t InlineCap>
-			using Container = ListOperations::Container<V>;
+namespace Enumerables::DefaultBinding {
 
-			template <class V, size_t N>
-			static Container<V, N>	Init(size_t capacity = N)		{ return ListOperations::Init<V>(capacity); }
+	// Recommended default for terminal operations of optional result.
+	struct OptionalOperations {
+		template <class T>	using Container = OptResult<T>;
 
-			template <class V, size_t N = 0, class Vin>
-			static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
+		template <class T, class Enumerator>
+		static Container<T>	FromCurrent(Enumerator& et)
+		{
+			return OptResult<T>::FromFactory([&]() -> decltype(auto) { return et.Current(); });
+		}
 
-			template <class V, size_t N = 0>
-			static void		Clear(Container<V, N>& l)				{ ListOperations:::Clear(l); }
+		template <class T>
+		static Container<T>	NoValue(StopReason rs)	{ return rs; }
 
-			template <class V, size_t N = 0>
-			static V&		Access(Container<V, N>& l, size_t i)	{ return ListOperations::Access(l, i); }
-		};
-
-	}	// namespace DefaultBinding
+		template <class T>
+		static bool HasValue(const Container<T>& o) { return o.HasValue(); }
+	};
 
 
+	// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
+	// - hence only a ListOp. fallback is provided, but the below code presents the way to utilize such type from your favorite library.
+	struct FallbackSmallListOperations {
+		template <class V, size_t InlineCap>
+		using Container = ListOperations::Container<V>;
+
+		template <class V, size_t N>
+		static Container<V, N>	Init(size_t capacity = N)		{ return ListOperations::Init<V>(capacity); }
+
+		template <class V, size_t N = 0, class Vin>
+		static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
+
+		template <class V, size_t N = 0>
+		static void		Clear(Container<V, N>& l)				{ ListOperations:::Clear(l); }
+
+		template <class V, size_t N = 0>
+		static V&		Access(Container<V, N>& l, size_t i)	{ return ListOperations::Access(l, i); }
+	};
+
+}	// namespace Enumerables::DefaultBinding
+
+
+namespace Enumerables {
 
 #ifdef ENUMERABLES_OPTIONAL_BINDING
 	using OptionalOperations = ENUMERABLES_OPTIONAL_BINDING;
@@ -348,17 +349,25 @@ namespace Enumerables {
 #endif
 
 
-
-	// Some shortcuts
+	// Establish container type aliases
 	template <class V>				using ListType		 = typename ListOperations::Container<V>;
 	template <class V, size_t N>	using SmallListType  = typename SmallListOperations::Container<V, N>;
 	template <class V>				using SetType		 = typename SetOperations::Container<V>;
 	template <class K, class V>		using DictionaryType = typename DictOperations::Container<K, V>;
 	template <class V>				using Optional		 = typename OptionalOperations::Container<V>;
 
+}	// namespace Enumerables
+
+
+
+
+// ==== Further extension points ============================================================================
+
+namespace Enumerables {
+
 	// Since C++17, default GetSize is defined in terms of std::size (or its ADL overload).
 	// Custom Enumerables::GetSize overloads still can be defined by client code if needed.
-	// (Binidng operations need no contain GetSize anymore.)
+	// (Binding operations need not contain a GetSize definition anymore.)
 	template <class Container>		
 	auto GetSize(const Container& c) -> decltype(static_cast<size_t>(TypeHelpers::AdlSize(c)))
 	{ 

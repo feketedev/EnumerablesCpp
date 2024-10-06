@@ -18,8 +18,7 @@
 
 
 
-namespace Enumerables {
-namespace TypeHelpers {
+namespace Enumerables::TypeHelpers {
 
 
 #pragma region StorableT
@@ -229,7 +228,6 @@ namespace TypeHelpers {
 #pragma endregion
 
 
-}		// namespace TypeHelpers
-}		// namespace Enumerables
+}		// namespace Enumerables::TypeHelpers
 
 #endif	// ENUMERABLES_GENERICSTORAGE_HPP
