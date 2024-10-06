@@ -192,14 +192,10 @@ namespace Enumerables::Def {
 
 			static_assert (alignof(Et) % alignof(Buff) == 0, "Alignment not power of 2?");
 
-			// size_t req = alignof(Et);
-			// size_t sat = alignof(Buff);
-			// size_t slack = req - sat;
-			// return slack + sizeof(Et) <= sizeof(Buff);
-
-			return (alignof(Buff) >= alignof(Et))
-				? (sizeof(Buff) >= sizeof(Et))
-				: (alignof(Et) - alignof(Buff) + sizeof(Et) <= sizeof(Buff));
+			size_t req = alignof(Et);
+			size_t sat = alignof(Buff);
+			size_t slack = (req <= sat) ? 0 : req - sat;
+			return slack + sizeof(Et) <= sizeof(Buff);
 		}
 #	else
 		bool					IsOnHeap() const	{ return true; }
@@ -229,15 +225,12 @@ namespace Enumerables::Def {
 
 
 		template <class NestedFactory>
-		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<SureFitsInline<InvokeResultT<NestedFactory>>()>* = nullptr)
-			: ptr { (new (fixBuffer) TypeHelpers::RvoEmplacer<NestedFactory> { fact })->GetPtr() }
+		InterfacedEnumerator(NestedFactory&& fact)
 		{
-		}
-
-		template <class NestedFactory>
-		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<!SureFitsInline<InvokeResultT<NestedFactory>>(), int> = 0)
-			: ptr { new InvokeResultT<NestedFactory> { fact() } }
-		{
+			if constexpr (SureFitsInline<InvokeResultT<NestedFactory>>())
+				ptr = (new (fixBuffer) TypeHelpers::RvoEmplacer<NestedFactory> { fact })->GetPtr();
+			else
+				ptr = new InvokeResultT<NestedFactory> { fact() };
 		}
 	};
 
@@ -383,41 +376,39 @@ namespace Enumerables::Def {
 	/// Obtain results in the desired container type - by the least copy/conversion possible, expecting a potential CachingEnumerator as Source.
 	/// @param  hint:	for manual hints (e.g. .ToList(n))
 	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::asWhole, Cont>* = nullptr)
+	template < class ContainerOps, class R, size_t... N,
+			   class Cont = typename ContainerOps::template Container<R, N...>,
+			   class Source >
+	Cont ObtainCachedResults(Source& etor, size_t hint)
 	{
-		// CachingEnumerator:  Direct convert / pass results if possible
-		return etor.CalcResults();
-	}
+		if constexpr (HasConvertibleCache<Source, Cont, R>::asWhole) {
+			// CachingEnumerator:  Direct convert / pass results if possible
+			return etor.CalcResults();
+		}
+		else if constexpr (HasConvertibleCache<Source, Cont, R>::byElementOnly) {
+			// CachingEnumerator:  Convert / pass by element if available cache is unconvertible
+			auto cached = etor.CalcResults();
+			size_t size = GetSize(cached);
 
+			Cont res = ContainerOps::template Init<R, N...>(size);
+			for (auto& e : cached)
+				ContainerOps::Add(res, PassRevived(e));		// StorableT!
 
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::byElementOnly, Cont>* = nullptr)
-	{
-		// CachingEnumerator:  Convert / pass by element if available cache is unconvertible
-		auto cached = etor.CalcResults();
-		size_t size = GetSize(cached);
+			return res;
+		}
+		else {
+			// Not a CachingEnumerator: enumerate to create new container
+			static_assert (!HasConvertibleCache<Source, Cont, R>::byElement, "HasConvertibleCache internal error.");
 
-		Cont res = ContainerOps::template Init<R, N...>(size);
-		for (auto& e : cached)
-			ContainerOps::Add(res, PassRevived(e));		// StorableT!
+			SizeInfo si  = etor.Measure();
+			size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
 
-		return res;
-	}
+			Cont res = ContainerOps::template Init<R, N...>(cap);
+			while (etor.FetchNext())
+				ContainerOps::Add(res, etor.Current());
 
-
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t hint, enable_if_t<!HasConvertibleCache<Source, Cont, R>::byElement, Cont>* = nullptr)
-	{
-		// Not CachingEnumerator: create new list by enumerating
-		SizeInfo si  = etor.Measure();
-		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
-
-		Cont res = ContainerOps::template Init<R, N...>(cap);
-		while (etor.FetchNext())
-			ContainerOps::Add(res, etor.Current());
-
-		return res;
+			return res;
+		}
 	}
 
 
@@ -1196,38 +1187,33 @@ namespace Enumerables::Def {
 		const InitAccMapper&	initAccumulator;
 
 
-		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<IsNone<IM> && is_same_v<InElem, TAcc>>* = nullptr)
+		void InitFromCurrent()
 		{
-			this->accumulator.AssignCurrent(this->source);
-		}
+			if constexpr (IsNone<InitAccMapper>) {
+				if constexpr (is_same_v<InElem, TAcc>) {
+					this->accumulator.AssignCurrent(this->source);
+				}
+				else {
+					static_assert(IsBraceConstructible<TAcc, InElem>::value,
+								  "Can't convert input element into TAcc. (Narrowing not supported.)"
+								  " Please specify an Initial Accumulator Mapper."				     );
 
-		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<IsNone<IM> && !is_same_v<InElem, TAcc>>* = nullptr)
-		{
-			static_assert(IsBraceConstructible<TAcc, InElem>::value,
-						  "Can't convert input element into TAcc. (Narrowing not supported.)"
-						  " Please specify an Initial Accumulator Mapper."				     );
+					this->accumulator = this->source.Current();
+				}
+			}
+			else {
+				if constexpr (is_same_v<MappedT<InElem, InitAccMapper>, TAcc>) {
+					this->accumulator.AcceptRvo([this]() -> decltype(auto) {
+						return initAccumulator(this->source.Current());
+					});
+				}
+				else {
+					static_assert(IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
+								  "Can't convert input element into TAcc. (Narrowing not supported.)");
 
-			this->accumulator = this->source.Current();
-		}
-
-
-		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<is_same_v<MappedT<InElem, IM>, TAcc>>* = nullptr)
-		{
-			this->accumulator.AcceptRvo([this]() -> decltype(auto) {
-				return initAccumulator(this->source.Current());
-			});
-		}
-
-		template <class IM = InitAccMapper>
-		void InitFromCurrent(enable_if_t<!is_same_v<MappedT<InElem, IM>, TAcc>>* = nullptr)
-		{
-			static_assert(IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
-						  "Can't convert input element into TAcc. (Narrowing not supported.)");
-
-			this->accumulator = initAccumulator(this->source.Current());
+					this->accumulator = initAccumulator(this->source.Current());
+				}
+			}
 		}
 
 	public:
@@ -1381,19 +1367,14 @@ namespace Enumerables::Def {
 	///		This class makes a light enable_if decision only, further checks should commence after the choice is made.
 	template <class TElem, class ValOrMapper, class ForcedAcc = void>
 	class IsAccuInit {
-		template <class FA = ForcedAcc> static constexpr
-		enable_if_t<is_void_v<FA> || !IsConstructibleAnyway<FA, ValOrMapper>, bool>
-		IsMapper()
+		
+		static constexpr bool IsMapper()
 		{
-			return IsCallable<ValOrMapper, TElem>::value;
-			// Shouldn't try to deduce (possibly running into Error) on the other branch!
-		}
-
-		template <class FA = ForcedAcc> static constexpr
-		enable_if_t<IsConstructibleAnyway<FA, ValOrMapper>, bool>
-		IsMapper()
-		{
-			return false;
+			if constexpr (is_void_v<ForcedAcc> || !IsConstructibleAnyway<ForcedAcc, ValOrMapper>)
+				return IsCallable<ValOrMapper, TElem>::value;
+				// Shouldn't try to deduce (possibly running into Error) on the other branch!
+			else
+				return false;
 		}
 
 	public:

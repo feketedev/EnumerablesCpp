@@ -179,21 +179,20 @@ namespace Enumerables::TypeHelpers {
 		}
 
 
-		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<is_same_v<S, Trg>>* = nullptr)
+		// Note: to allow conversions, use Construct! That will need a temporary anyway.
+		template <class Factory>
+		void InvokeFactory(Factory&& create)
 		{
-			// Note: to allow conversions, use Construct! That will need a temporary anyway.
-			static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
-			static_assert (is_same<typename RvoEmplacer<Factory>::R, S>(), "GenericStorage deduction error.");
-			new (&val) RvoEmplacer<Factory> { create };
-		}
-
-		// shortcut for S = RefHolder<T>
-		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<!is_same_v<S, Trg>>* = nullptr)
-		{
-			static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
-			new (&val) S { create() };
+			if constexpr (is_same_v<S, T>) {
+				static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
+				static_assert (is_same<typename RvoEmplacer<Factory>::R, S>(), "GenericStorage deduction error.");
+				new (&val) RvoEmplacer<Factory> { create };
+			}
+			else {
+				// shortcut branch for S = RefHolder<T>
+				static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
+				new (&val) S { create() };
+			}
 		}
 
 
@@ -204,24 +203,22 @@ namespace Enumerables::TypeHelpers {
 
 
 		/// only if already initialized!
-		template <class Src, class Trg = T>
-		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<Trg, Src>>* = nullptr)
+		template <class Src>
+		T& Reassign(Src&& src)
 		{
-			if (IsNotSelf(src)) {
-				Destroy();
-				Construct(forward<Src>(src));
+			if constexpr (IsHeadAssignable<T, Src>) {
+				static_assert (!is_reference<T>(), "GenericStorage Internal error.");
+				T& v = Value();
+				v    = forward<Src>(src);
+				return v;
 			}
-			return Value();
-		}
-
-		/// only if already initialized!
-		template <class Src, class Trg = T>
-		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<Trg, Src>>* = nullptr)
-		{
-			static_assert (!is_reference<T>(), "GenericStorage Internal error.");
-			T& v = Value();
-			v    = forward<Src>(src);
-			return v;
+			else {
+				if (IsNotSelf(src)) {
+					Destroy();
+					Construct(forward<Src>(src));
+				}
+				return Value();
+			}
 		}
 	};
 

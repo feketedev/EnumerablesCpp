@@ -119,10 +119,8 @@ namespace Enumerables::Def {
 
 		SmallListType<TDebugValue, 4>	Elements;
 
-		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible_v<V>>* = nullptr);
-		template <class V = TDebugValue, class Factory>
-		void Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible_v<V>>* = nullptr);
+		template <class Factory>
+		void Fill(Factory& getEnumerator, bool isPure, bool autoCall);
 	};
 
 #endif
@@ -532,13 +530,17 @@ namespace Enumerables::Def {
 
 	// ----- Conversions -------------------------------------------------------------------------------------------------------------
 
-		// shortcut unnecessary conversions - convenient in templates
-		template <class R>	auto As(enable_if_t<is_same_v<R, TElem>>* = nullptr) const &	{ return *this; }
-		template <class R>	auto As(enable_if_t<is_same_v<R, TElem>>* = nullptr) &&			{ return move(*this); }
-
 		/// Apply an implicit conversion to type R for each element.
-		template <class R>	auto As(enable_if_t<!is_same_v<R, TElem>>* = nullptr) const &	{ return   Chain<ConverterEnumerator, R>(); }
-		template <class R>	auto As(enable_if_t<!is_same_v<R, TElem>>* = nullptr) &&		{ return MvChain<ConverterEnumerator, R>(); }
+		template <class R>	auto As() const &	
+		{ 
+			if constexpr (is_same_v<R, TElem>)	return *this;
+			else								return Chain<ConverterEnumerator, R>();
+		}
+		template <class R>	auto As() &&		
+		{ 
+			if constexpr (is_same_v<R, TElem>)	return Move();
+			else								return MvChain<ConverterEnumerator, R>();
+		}
 
 		/// Same elements with const qualifier injected to top pointed or referenced type.
 		auto AsConst()		const &	{ return As<ConstValueT<TElem>>(); }
@@ -1182,23 +1184,20 @@ namespace Enumerables::Def {
 
 	#pragma region Initializer support
 
-	// These 2 overloads could work publicly IF enumerated type was always provided explicitly.
-	// They provide the  R* -> R&  "capture-syntax".
-	template <class R, class I, class = R*>
+	// Helper: provides the  R* -> R&  "capture-syntax" on request.
+	// Could work publicly IF enumerated type was always provided explicitly.
+	template <class R, class I>
 	auto InitEnumerable(std::initializer_list<I>&& init)
 	{
-		static_assert (!is_reference<R>(), "Enumerables internal error.");
-
+		static_assert (!is_reference<R>() || is_pointer<I>(), "Supply pointers to output references.");
+		
 		// NOTE: List-init support is assumed only here for ListType! Is it expectable?
-		return Enumerate<R>(ListType<I>(init));
+		if constexpr (is_reference<R>())
+			return Enumerate<remove_reference_t<R>*>(ListType<I>(init)).Dereference();
+		else
+			return Enumerate<R>(ListType<I>(init));
 	}
 
-	template <class R, class V = remove_reference_t<R>, class = enable_if_t<is_reference_v<R>>>
-	auto InitEnumerable(std::initializer_list<V*>&& init)
-	{
-		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
-		return Enumerate<RB*>(ListType<V*>(init)).Dereference();
-	}
 
 
 	// Implicit type deduction is achieved by 4 additional, public wrappers.
@@ -1244,7 +1243,7 @@ namespace Enumerables::Def {
 	template <class ForcedResult = void, class T, IfInitDeducedValues<ForcedResult, T> = 0>
 	auto Enumerate(std::initializer_list<T>&& init)
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init));
+			return InitEnumerable<OverrideT<ForcedResult, T>>(move(init));
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".

@@ -400,41 +400,32 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class S, class Et, enable_if_t<std::is_floating_point_v<S>, int> = 0>
+	template <class S, class Et>
 	S SumEnumerated(Et& etor)
 	{
-		S		sum {};
-		S		err {};
-		while (etor.FetchNext())
-			NeumaierSum2(sum, etor.Current(), err);
+		if constexpr (std::is_floating_point_v<S>) {
+			S		sum {};
+			S		err {};
+			while (etor.FetchNext())
+				NeumaierSum2(sum, etor.Current(), err);
 
-		return sum + err;
-	}
+			return sum + err;
+		}
+		else if constexpr (IsAddAssignable<S>::value) {
+			S sum {};
+			while (etor.FetchNext())
+				sum += etor.Current();
 
+			return sum;
+		}
+		else {
+			Reassignable<S> sum = S {};
+			while (etor.FetchNext())
+				sum = *sum + etor.Current();
 
-	template <class S, class Et,
-			  enable_if_t<!std::is_floating_point_v<S> && IsAddAssignable<S>::value, int> = 0>
-	S SumEnumerated(Et& etor)
-	{
-		S sum {};
-		while (etor.FetchNext())
-			sum += etor.Current();
-
-		return sum;
-	}
-
-
-	// fallback method of summation for immutable types
-	template <class S, class Et, enable_if_t<!IsAddAssignable<S>::value, int> = 0>
-	S SumEnumerated(Et& etor)
-	{
-		Reassignable<S> sum = S {};
-		while (etor.FetchNext())
-			sum = *sum + etor.Current();
-
-		return *move(sum);	
-		
-		// CONSIDER: has no RVO. Tail-recursion maybe? - Then also for anything else consistently?
+			// CONSIDER: has no RVO. Tail-recursion maybe? - Then also for anything else consistently?
+			return *move(sum);	
+		}
 	}
 
 
@@ -642,11 +633,11 @@ namespace Enumerables::Def {
 
 #if ENUMERABLES_USE_RESULTSVIEW
 
-	template <class T>
-	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<std::is_copy_constructible_v<V>>*)
+	template <class Factory, class T>
+	void FillEligibleResultBuffer(Factory& getEnumerator, bool isPure, bool autoCall,
+								  SmallListType<T, 4>& elements, const char*& status)
 	{
-		if (autoCall && (GetSize(Elements) > 0 || Status[0] == 'E'))
+		if (autoCall && (GetSize(elements) > 0 || status[0] == 'E'))
 			return;
 
 		if (isPure) {
@@ -654,33 +645,38 @@ namespace Enumerables::Def {
 			SizeInfo si  = et.Measure();
 			size_t	 cap = si.IsExact() ? si.value : 0u;
 
-			Elements = SmallListOperations::template Init<TDebugValue, 4>(cap);
+			elements = SmallListOperations::template Init<T, 4>(cap);
 
 			size_t count = 0;
 			while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
-				SmallListOperations::Add(Elements, et.Current());
+				SmallListOperations::Add(elements, et.Current());
 				++count;
 			}
-			Status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
+			status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
 				? "Evaluation successful."
 				: "Showing first" ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) "elements.";
 		}
 		else {
-			Status = "Not available - enumeration is marked as having side-effects.";
+			status = "Not available - enumeration is marked as having side-effects.";
 			if (!autoCall)
 				ENUMERABLES_CLIENT_BREAK ("Disabled for having side-effects - cannot build debug buffer.");
 		}
-
 	}
 
+
 	template <class T>
-	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!std::is_copy_constructible_v<V>>*)
+	template <class Factory>
+	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall)
 	{
-		ENUMERABLES_INTERNAL_ASSERT (!isPure);
-		Status = "Not available for this type.";
-		if (!autoCall)
-			ENUMERABLES_CLIENT_BREAK ("Unsupported type - cannot build debug buffer.");
+		if constexpr (!std::is_copy_constructible_v<TDebugValue>) {
+			ENUMERABLES_INTERNAL_ASSERT (!isPure);
+			Status = "Not available for this type.";
+			if (!autoCall)
+				ENUMERABLES_CLIENT_BREAK ("Unsupported type - cannot build debug buffer.");
+		}
+		else {
+			FillEligibleResultBuffer(getEnumerator, isPure, autoCall, Elements, Status);
+		}
 	}
 
 
