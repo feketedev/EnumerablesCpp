@@ -606,7 +606,7 @@ namespace Enumerables::TypeHelpers {
 			static_assert (is_reference<DeducedRes>() && !is_rvalue_reference<DeducedRes>() || !is_reference<Trg>(),
 						   "Function returns r-value, expected reference would become dangling!");
 
-			return ReturnConverter<std::decay_t<L>, Trg> { forward<L>(lambda) };
+			return ReturnConverter<decay_t<L>, Trg> { forward<L>(lambda) };
 		}
 
 
@@ -617,7 +617,7 @@ namespace Enumerables::TypeHelpers {
 		decltype(auto) CustomMapper(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
 			// will call a copy inside an Enumerator ==> should not find "&&" overload; but no constness required
-			using AppliedL = std::decay_t<L>;
+			using AppliedL = decay_t<L>;
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary mapper function or selector for: TElem -> TMapped."
 														   " Check lambda's parameter type including constness!"						   );
 
@@ -655,7 +655,7 @@ namespace Enumerables::TypeHelpers {
 		template <class T, class R = void, class L>
 		decltype(auto) Selector(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			using AppliedL = std::decay_t<L>;
+			using AppliedL = decay_t<L>;
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary projection function or selector for: TElem -> TSubobj."
 														   " Check lambda's parameter type including constness!"							   );
 
@@ -703,7 +703,7 @@ namespace Enumerables::TypeHelpers {
 		decltype(auto) Predicate(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
 			// will call a copy inside an Enumerator ==> should not find && overload; but no constness required
-			using AppliedL = std::decay_t<L>;
+			using AppliedL = decay_t<L>;
 
 			// CONSIDER: Enforce constness of T? Currently idempotence of lambda is user responsibility.
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary predicate function or selector for: TElem -> bool."
@@ -764,7 +764,7 @@ namespace Enumerables::TypeHelpers {
 		template <class T1, class T2, class R = void, class L>
 		decltype(auto) BinaryMapper(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			using AppliedL = std::decay_t<L>;
+			using AppliedL = decay_t<L>;
 			static_assert (IsCallable<AppliedL, T1, T2>::value, "This method expects a binary operation: (TValue1, TValue2) -> TMapped."
 																" Check lambda's parameter type including constness!"					);
 
@@ -835,7 +835,7 @@ namespace Enumerables::TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)					{ return this->Reassign(std::forward<S>(src)); }
+		T& operator =(S&& src)					{ return this->Reassign(forward<S>(src));  }
 
 		T& operator =(Reassignable&& src)		{ return this->operator=(src.PassValue()); }
 		T& operator =(const Reassignable& src)	{ return this->operator=(src.Value());	   }
@@ -852,7 +852,7 @@ namespace Enumerables::TypeHelpers {
 		void Reconstruct(Args&&... args)
 		{
 			this->Destroy();
-			this->Construct(std::forward<Args>(args)...);
+			this->Construct(forward<Args>(args)...);
 		}
 
 
@@ -912,8 +912,8 @@ namespace Enumerables::TypeHelpers {
 		template <class S>
 		T& operator =(S&& src)
 		{
-			if (initialized)	this->Reassign(std::forward<S>(src));
-			else				this->Construct(std::forward<S>(src));
+			if (initialized)	this->Reassign(forward<S>(src));
+			else				this->Construct(forward<S>(src));
 
 			initialized = true;
 			return Value();
@@ -936,7 +936,7 @@ namespace Enumerables::TypeHelpers {
 		{
 			if (initialized)	this->Destroy();
 
-			this->Construct(std::forward<Args>(args)...);
+			this->Construct(forward<Args>(args)...);
 			initialized = true;
 		}
 

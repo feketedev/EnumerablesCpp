@@ -29,6 +29,8 @@ namespace Enumerables::TypeHelpers {
 	using std::is_const_v;
 	using std::is_constructible;
 	using std::is_constructible_v;
+	using std::is_copy_constructible;
+	using std::is_copy_constructible_v;
 	using std::is_convertible;
 	using std::is_convertible_v;
 	using std::is_void;
@@ -133,7 +135,7 @@ namespace Enumerables::TypeHelpers {
 	using RemovePtrRefT = conditional_t<is_pointer_v<remove_reference_t<T>>, remove_reference_t<T>, T>;
 
 	template <class T>
-	using RemoveScalarRefT = conditional_t< is_pointer_v<remove_reference_t<T>> || std::is_scalar_v<remove_reference_t<T>>,
+	using RemoveScalarRefT = conditional_t< is_pointer_v<remove_reference_t<T>> || is_scalar_v<remove_reference_t<T>>,
 										    BaseT<T>,
 										    T >;
 
@@ -174,7 +176,7 @@ namespace Enumerables::TypeHelpers {
 	constexpr bool HasConstValue = is_same_v<ConstValueT<OverrideT<T, int>>, T>;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference_v<Trg> && std::is_assignable_v<Trg&, Src>;
+	constexpr bool IsHeadAssignable = !is_reference_v<Trg> && is_assignable_v<Trg&, Src>;
 
 	template <class Trg, class Src>
 	constexpr bool IsRefCompatible = is_convertible_v<remove_reference_t<Src>*, remove_reference_t<Trg>*>;
@@ -312,7 +314,7 @@ namespace Enumerables::TypeHelpers {
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
 	template <class T, class... Args>
 	constexpr bool IsConstructibleAnyway = IsBraceConstructible<T, Args...>::value
-										|| std::is_constructible_v<T, Args...>;
+										|| is_constructible_v<T, Args...>;
 
 
 

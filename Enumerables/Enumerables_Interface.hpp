@@ -233,7 +233,7 @@ namespace Enumerables::Def {
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
 		AutoEnumerable(TFactory&& factory, bool pureSource = true, bool stepToDebug = true) :
 			factory { move(factory) },
-			isPure  { pureSource && std::is_copy_constructible<TElem>() }
+			isPure  { pureSource && is_copy_constructible<TElem>() }
 		{
 #		if ENUMERABLES_USE_RESULTSVIEW
 #			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
@@ -351,7 +351,7 @@ namespace Enumerables::Def {
 		static auto	ComparatorForProperty(Mapper& getProperty)
 		{
 			using CP = TElemConstParam;
-			return [prop = LambdaCreators::CustomMapper<CP, TPropOvrd>(std::forward<Mapper>(getProperty))](CP l, CP r) -> bool
+			return [prop = LambdaCreators::CustomMapper<CP, TPropOvrd>(forward<Mapper>(getProperty))](CP l, CP r) -> bool
 			{
 				return prop(l) < prop(r);
 			};
@@ -396,7 +396,7 @@ namespace Enumerables::Def {
 		template <class BinOp>
 		static auto SwappedBinop(BinOp&& opp)
 		{
-			return [op = std::forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
+			return [op = forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
 		}
 
 
@@ -962,7 +962,7 @@ namespace Enumerables::Def {
 	template <class V = void, class Vin>
 	auto Once(Vin&& val)
 	{
-		return Repeat<V>(std::forward<Vin>(val), 1u);
+		return Repeat<V>(forward<Vin>(val), 1u);
 	}
 
 

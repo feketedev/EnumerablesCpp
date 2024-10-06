@@ -484,15 +484,12 @@ namespace EnumerableTests {
 
 			std::unordered_set<double> rootVec = roots.ToHashSet();
 
-#		if   !defined(__clang__) && !defined(_DEBUG)
-			allocations.AssertFreshCount(setAllocs);
-			UNUSED (setMoveAllocs);
-#		elif !defined(__clang__)
+#		if defined(_DEBUG) && !defined(__clang__)
 			// MSVC doesn't apply NRVO in debug + its move ctor does allocate!
 			allocations.AssertFreshCount(2 * setMoveAllocs + setAllocs);
 #		else
-			// Somehow clang consistently optimizes 1 out of 2 (??)
-			allocations.AssertFreshCount(setMoveAllocs + setAllocs);
+			allocations.AssertFreshCount(setAllocs);
+			UNUSED (setMoveAllocs);
 #		endif
 		}
 	}

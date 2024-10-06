@@ -67,7 +67,7 @@ namespace Enumerables::TypeHelpers {
 
 	/// Get final access to the stored entity, if possible as an rvalue
 	template <class V>	V&			PassRevived(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&&			PassRevived(V& stored)					{ return std::move(stored); }
+	template <class V>	V&&			PassRevived(V& stored)					{ return move(stored); }
 
 #pragma endregion
 
@@ -209,7 +209,7 @@ namespace Enumerables::TypeHelpers {
 		{
 			if (IsNotSelf(src)) {
 				Destroy();
-				Construct(std::forward<Src>(src));
+				Construct(forward<Src>(src));
 			}
 			return Value();
 		}
@@ -220,7 +220,7 @@ namespace Enumerables::TypeHelpers {
 		{
 			static_assert (!is_reference<T>(), "GenericStorage Internal error.");
 			T& v = Value();
-			v    = std::forward<Src>(src);
+			v    = forward<Src>(src);
 			return v;
 		}
 	};

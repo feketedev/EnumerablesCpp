@@ -384,7 +384,7 @@ namespace Enumerables::Def {
 	/// @param  hint:	for manual hints (e.g. .ToList(n))
 	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
 	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	auto ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::asWhole, Cont>* = nullptr)
+	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::asWhole, Cont>* = nullptr)
 	{
 		// CachingEnumerator:  Direct convert / pass results if possible
 		return etor.CalcResults();
@@ -392,7 +392,7 @@ namespace Enumerables::Def {
 
 
 	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	auto ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::byElementOnly, Cont>* = nullptr)
+	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::byElementOnly, Cont>* = nullptr)
 	{
 		// CachingEnumerator:  Convert / pass by element if available cache is unconvertible
 		auto cached = etor.CalcResults();
@@ -407,7 +407,7 @@ namespace Enumerables::Def {
 
 
 	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	auto ObtainCachedResults(Source& etor, size_t hint, enable_if_t<!HasConvertibleCache<Source, Cont, R>::byElement, Cont>* = nullptr)
+	Cont ObtainCachedResults(Source& etor, size_t hint, enable_if_t<!HasConvertibleCache<Source, Cont, R>::byElement, Cont>* = nullptr)
 	{
 		// Not CachingEnumerator: create new list by enumerating
 		SizeInfo si  = etor.Measure();
@@ -425,7 +425,7 @@ namespace Enumerables::Def {
 
 	// NOTE: SmallList<T, N> is not supported currently. Solve if any CachingEnumerator<T, SmallList> will exist.
 	template <class ContainerOps, class R, template <class> class ContTempl = ContainerOps::template Container>
-	auto ObtainCachedResults(InterfacedEnumerator<R>& etor, size_t hint, enable_if_t<!is_reference_v<R>>* = nullptr)
+	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<IfPRValue<R>>& etor, size_t hint)
 	{
 		using ET = CachingEnumerator<R, ContTempl>;
 		ET* caching = etor.template TryCast<ET>();
