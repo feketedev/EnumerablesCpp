@@ -329,7 +329,7 @@ namespace Enumerables {
 			static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
 
 			template <class V, size_t N = 0>
-			static void		Clear(Container<V, N>& l)				{ ListOperations:::Clear(l); }
+			static void		Clear(Container<V, N>& l)				{ ListOperations::Clear(l); }
 
 			template <class V, size_t N = 0>
 			static V&		Access(Container<V, N>& l, size_t i)	{ return ListOperations::Access(l, i); }

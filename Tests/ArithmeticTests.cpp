@@ -6,11 +6,9 @@
 #include <string>
 #include <memory>
 
-
 #ifdef __clang__
-#	pragma clang diagnostic ignored "-Wfloat-equal"
+#	pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
-
 
 
 namespace EnumerableTests {

@@ -8,15 +8,9 @@
 #	define _ITERATOR_DEBUG_LEVEL 0
 #endif
 
-// just test conveniences
-#ifdef __clang__
-#	pragma clang diagnostic ignored "-Wmissing-field-initializers"
-#	pragma clang diagnostic ignored "-Wclass-varargs"
-#endif
-
-
 #include <iostream>
 #include <utility>
+
 
 
 #define ASSERT_TYPE(T, expr)		static_assert (std::is_same<T, decltype(expr)>(), "Type assertion failed.")
@@ -39,21 +33,6 @@
 								}														\
 								catch (const Ex&) {}									\
 								(void)0
-
-
-
-
-namespace std {
-	template <class F, class S>
-	struct std::hash<std::pair<F, S>> {
-		size_t operator ()(const pair<F, S>& p) const
-		{
-			std::hash<F> h1;
-			std::hash<S> h2;
-			return 5 * h1(p.first) + h2(p.second);
-		}
-	};
-}
 
 
 
@@ -88,29 +67,14 @@ namespace EnumerableTests {
 		size_t						myStart;
 
 	public:
-
-		
 		AllocationCounter();
 
-
-		size_t Count() const
-		{
-			return globalCount - myStart;
-		}
-
-		void Reset()
-		{
-			myStart = globalCount;
-		}	
+		size_t Count() const		{ return globalCount - myStart; }
+		void   Reset()				{ myStart = globalCount;		}
 		
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
-							  long			line   = 0			  )
-		{
-			if (EnableAsserts)
-				AssertEq(expected, Count(), "Allocation count", file, line);
-			Reset();
-		}
+							  long			line   = 0			  );
 	};
 
 
@@ -231,11 +195,22 @@ namespace EnumerableTests {
 
 
 namespace std {
+	
+	template <class F, class S>
+	struct hash<pair<F, S>> {
+		size_t operator ()(const pair<F, S>& p) const
+		{
+			hash<F> h1;
+			hash<S> h2;
+			return 5 * h1(p.first) + h2(p.second);
+		}
+	};
+
 
 	template <class T>
 	struct hash<EnumerableTests::Vector2D<T>> {
-		size_t operator()(const EnumerableTests::Vector2D<T>& v) const {
-			std::hash<T> hash;
+		size_t operator ()(const EnumerableTests::Vector2D<T>& v) const {
+			hash<T> hash;
 			return (hash(v.x) << 6) + hash(v.y);
 		}
 	};

@@ -67,7 +67,7 @@
 
 /// General shorthand for lambda (similar to C# => arrow)
 /// - Only ref capture, be aware when returned!
-#define FUN(...)	ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUN3, FUN2, FUN1)(__VA_ARGS__))
+#define FUN(...)	ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUN3, FUN2, FUN1, 0)(__VA_ARGS__))
 
 #define FUN1(x, expression)			[&](auto&& x)						-> decltype(auto)	{ return (expression); }
 #define FUN2(x, y, expression)		[&](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }
@@ -76,7 +76,7 @@
 
 /// General shorthand for lambda (similar to C# => arrow)
 /// - Value capture for locals, ref for members [this].
-#define FUNV(...) ENUMERABLES_EXPAND_VARARGS (ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1) (__VA_ARGS__))
+#define FUNV(...) ENUMERABLES_EXPAND_VARARGS (ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1, 0)(__VA_ARGS__))
 
 #define FUNV1(x, expression)		[=](auto&& x)						-> decltype(auto)	{ return (expression); }
 #define FUNV2(x, y, expression)		[=](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }

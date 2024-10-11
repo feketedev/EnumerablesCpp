@@ -7,6 +7,10 @@
 #include <iomanip>
 #include <string>
 
+#ifdef __clang__
+#	pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+
 
 
 namespace EnumerableTests {
