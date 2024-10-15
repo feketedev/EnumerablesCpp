@@ -92,26 +92,47 @@ namespace TypeHelpers {
 
 	/// Function of std::decay without conversions: just strip qualifiers and &
 	template <class T>
-	using BaseT = std::remove_cv_t<remove_reference_t<T>>;
+	using BaseT			 = std::remove_cv_t<remove_reference_t<T>>;
 
-	/// Pointed or referenced type. [T& / T* / T*& --> T;	T** --> T*]
+	/// Pointed or referenced type, unqualified.  [cv T&|T*|T*& --> T;  cv T** --> cv T*]
 	template <class T>
-	using BasePointedT = BaseT<remove_pointer_t<remove_reference_t<T>>>;
+	using BasePointedT	 = std::remove_cv_t<remove_pointer_t<remove_reference_t<T>>>;
 
-	/// First level pointed or referenced type. [T* --> T;  T*& --> T*]
+	/// Top-level pointed or referenced type, unqualified.  [cv T*|T& --> T;  T*& --> T*]
 	template <class T>
-	using BaseOrPointedT = BaseT<remove_pointer_t<T>>;
+	using PointedOrRefdBaseT = BaseT<remove_pointer_t<T>>;
+
+	/// Top-level pointed or referenced type.  [T*|T& --> T;  T*& --> T*]
+	template <class T>
+	using PointedOrRefdT	 = remove_reference_t<remove_pointer_t<T>>;
+
+
+	/// Helper to consume T* and T& in a uniform way.
+	template <class>
+	struct PointerOrRef;
+
+	template <class T>
+	struct PointerOrRef<T*> {
+		static T*	Translate(T* ptr)	{ return ptr;  }
+		static T*	Translate(T& ref)	{ return &ref; }
+	};
+	template <class T>
+	struct PointerOrRef<T&> {
+		static T&	Translate(T* ptr)	{ return *ptr; }
+		static T&	Translate(T& ref)	{ return ref;  }
+	};
+
 
 	template <class T>
 	using RemoveRvalueRefT = conditional_t<is_rvalue_reference<T>::value, remove_reference_t<T>, T>;
 
+	/// Drop ref if pointer underlies.  [T*& --> T*;   T& --> T&]
 	template <class T>
-	using RemovePtrRefT = conditional_t<is_pointer<remove_reference_t<T>>::value, remove_reference_t<T>, T>;
+	using RemovePtrRefT	   = conditional_t<is_pointer<remove_reference_t<T>>::value, remove_reference_t<T>, T>;
 
+	/// Remove references and cv from scalars.
 	template <class T>
-	using RemoveScalarRefT = conditional_t< is_pointer<remove_reference_t<T>>::value || is_scalar<remove_reference_t<T>>::value,
-										    BaseT<T>,
-										    T >;
+	using DecayIfScalarT   = conditional_t<is_scalar<remove_reference_t<T>>::value, BaseT<T>, T>;
 
 
 	/// Finds the innermost pointed/referenced type (arrays left in place), qualifiers included.
@@ -147,13 +168,17 @@ namespace TypeHelpers {
 
 	// [void -> false]
 	template <class T>
-	constexpr bool HasConstValue = is_same<ConstValueT<OverrideT<T, int>>, T>::value;
+	constexpr bool HasConstValue	= is_same<ConstValueT<OverrideT<T, int>>, T>::value;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference<Trg>::value && is_assignable<Trg&, Src>::value;
+	constexpr bool IsHeadAssignable	= !is_reference<Trg>::value && is_assignable<Trg&, Src>::value;
 
 	template <class Trg, class Src>
-	constexpr bool IsRefCompatible = is_convertible<remove_reference_t<Src>*, remove_reference_t<Trg>*>::value;
+	constexpr bool IsRefCompatible	= is_convertible<remove_reference_t<Src>*, remove_reference_t<Trg>*>::value;
+
+	template <class T1, class T2>
+	constexpr bool AreRefCompatible	= IsRefCompatible<T1, T2> || IsRefCompatible<T2, T1>;
+
 
 	/// Innermost pointed/referenced type of Src is reference-compatible with Trg's innermost type - pointer depth ignored (!)
 	template <class Trg, class Src>

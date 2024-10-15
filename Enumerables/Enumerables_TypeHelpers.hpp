@@ -215,8 +215,8 @@ namespace TypeHelpers {
 		static_assert (is_reference<Vote1>::value || is_pointer<Vote1>::value && is_pointer<Vote2>::value || is_same<const Vote1, const Vote2>::value,
 					   "Concatenation requires element value conversion (if possible). Specify forced element type for clarity!");
 
-		using T1 = BaseOrPointedT<Vote1>;
-		using T2 = BaseOrPointedT<Vote2>;
+		using T1 = PointedOrRefdBaseT<Vote1>;
+		using T2 = PointedOrRefdBaseT<Vote2>;
 		using CommonBaseVote = conditional_t< is_same<T1, T2>::value,			Vote1,
 							   conditional_t< is_convertible<T2*, T1*>::value,	Vote1,
 							   conditional_t< is_convertible<T1*, T2*>::value,	Vote2,

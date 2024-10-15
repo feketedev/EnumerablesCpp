@@ -43,6 +43,40 @@ namespace EnumerableTests {
 			Enumerable<size_t>  RangeIface() const { return Enumerables::Range<size_t>(1, count); }
 		};
 
+
+		// ----------------------------------------------------------------------------------------
+
+
+		struct Base1 {
+			int  i;
+		
+			Base1(int i) : i { i }  {}
+			virtual ~Base1() = default;
+		};
+
+		struct Base2 {
+			char c;
+
+			explicit Base2(char c) : c { c }  {}
+			virtual ~Base2() = default;
+		};
+
+		struct Derived1 : public Base1 {
+			unsigned u;
+
+			Derived1(int ib, unsigned u) : Base1 { ib }, u { u }  {}
+		};
+
+		struct Derived2 : public Base2 {
+			int i2;
+
+			Derived2(char cb, int i2) : Base2 { cb }, i2 { i2 }  {}
+		};
+
+		struct Derived12 : public Base1, public Base2 {
+			Derived12(int ib, char cb) : Base1 { ib }, Base2 { cb }  {}
+		};
+
 	}
 
 
@@ -196,6 +230,158 @@ namespace EnumerableTests {
 
 
 
+	static void CastConvertElements()
+	{
+		auto integers = Enumerables::Range<int>(5);
+
+		// Implicit conversion and static_cast operations are no-op for exactly matching type:
+		{
+			auto shortcut1 = integers.As<int>();
+			auto shortcut2 = integers.Cast<int>();
+
+			static_assert (std::is_same<decltype(integers), decltype(shortcut1)>::value, "Unnecessary conversion!");
+			static_assert (std::is_same<decltype(integers), decltype(shortcut2)>::value, "Unnecessary conversion!");
+
+			ASSERT (AreEqual(integers, shortcut1));
+			ASSERT (AreEqual(integers, shortcut2));
+		}
+
+		// These have similar effect, as the language provides:
+		{
+			auto ushorts1 = integers.As<unsigned short>();				// works, but narrowing warning
+			auto ushorts2 = integers.Cast<unsigned short>();			// silent
+
+			ASSERT_ELEM_TYPE (unsigned short, ushorts1);
+			ASSERT_ELEM_TYPE (unsigned short, ushorts2);
+			ASSERT			 (AreEqual(integers, ushorts1));
+			ASSERT			 (AreEqual(integers, ushorts2));
+		
+			auto convertedObjs1 = integers.As<Base1>();					// using conversion ctor
+			auto convertedObjs2 = integers.Cast<Base1>();				//
+			
+			ASSERT (AreEqual(integers, convertedObjs1.Select(&Base1::i)));
+			ASSERT (AreEqual(integers, convertedObjs2.Select(&Base1::i)));
+
+			auto letters = Enumerables::Range('a', 5);
+
+		 //	auto explicitObjs1 = letters.As<Base2>();					// CTE: explicit ctor!
+			auto explicitObjs2 = letters.Cast<Base2>();
+			
+			ASSERT    (AreEqual(letters, explicitObjs2.Select(&Base2::c)));
+			ASSERT_EQ ('e', explicitObjs2.Last().c);
+		}
+
+		// Avoiding temporaries
+		{
+		 /*	int	 arr[] = { 1, 2, 3 };
+			auto intRefs = Enumerate(arr);
+
+			// Without explicit checks, these would compile with warnings.
+			// Keep them CTE!
+		 	auto shorts1 = intRefs.As<const short&>();
+		 	auto shorts2 = intRefs.Cast<const short&>(); */
+		}
+	}
+
+
+
+	static void CastRelatedElements()
+	{
+		Derived1	objs1[]	 = { { -1, 1u }, { -5, 2u } };
+		Derived2	objs2[]	 = { { 'a', 1 }, { 'c', 2 } };
+		Derived12	objs12[] = { { 8, 'e' }, { 9, 'f' } };
+
+		auto ofBase1 = Enumerables::Concat<Base1&>(objs1, objs12);
+		auto ofBase2 = Enumerables::Concat<Base2&>(objs2, objs12);
+
+		auto ptrs1  = Enumerate(objs1).Addresses();
+		auto ptrs2  = Enumerate(objs2).Addresses();
+		auto ptrs12 = Enumerate(objs12).Addresses();
+
+		// static upcast / reference conversion
+		{
+			auto bases1 = Enumerate(objs1).As<Base1&>();
+			auto bases2 = Enumerate(objs2).Cast<Base2&>();
+
+			ASSERT_ELEM_TYPE (Base1&, bases1);
+			ASSERT_ELEM_TYPE (Base2&, bases2);
+
+			AssertEndsLength(bases1.Select(&Base1::i), -1,  -5,  2);
+			AssertEndsLength(bases2.Select(&Base2::c), 'a', 'c', 2);
+			
+			auto basePtrs1 = Enumerate(objs1).Addresses().As<Base1*>();
+			auto basePtrs2 = Enumerate(objs2).Addresses().Cast<Base2*>();
+
+			ASSERT_ELEM_TYPE (Base1*, basePtrs1);
+			ASSERT_ELEM_TYPE (Base2*, basePtrs2);
+
+			ASSERT (AreEqual(ptrs1, basePtrs1));
+			ASSERT (AreEqual(ptrs2, basePtrs2));
+		}
+
+		// assured downcast (static/dynamic)
+		{
+			auto bases    = Enumerate<Base1&>(objs1);
+			auto basePtrs = bases.Addresses();
+
+			ASSERT_ELEM_TYPE (Base1&, bases);
+			ASSERT_ELEM_TYPE (Base1*, basePtrs);
+
+			auto derivedsA = bases.Cast<Derived1&>();
+			auto derivedsB = bases.DynamicCast<Derived1&>();
+		
+			ASSERT_ELEM_TYPE (Derived1&, derivedsA);
+			ASSERT_ELEM_TYPE (Derived1&, derivedsB);
+			ASSERT (AreEqual(ptrs1, derivedsA.Addresses()));
+			ASSERT (AreEqual(ptrs1, derivedsB.Addresses()));
+		}
+
+		// uninformed/filtered dynamic downcast
+		{
+			auto asDerived1 = ofBase1.Addresses().DynamicCast<Derived1*>();
+
+			ASSERT (AreEqual(ptrs1, asDerived1.NonNulls()));
+			ASSERT_EQ (ptrs1.Count() + ptrs12.Count(),	asDerived1.Count());
+			ASSERT_EQ (ptrs12.Count(),					asDerived1.Count((Derived1*)nullptr));		// TODO: ref/ptr conversions should work!
+			
+			auto onlyDerived1 = ofBase1.OfType<Derived1&>();
+			auto onlyDerived2 = ofBase1.OfType<Derived2&>();
+
+			ASSERT (AreEqual(ptrs1, onlyDerived1.Addresses()));
+			ASSERT (!onlyDerived2.Any());
+
+			auto ptrsBase1 = ofBase1.Addresses();
+			ASSERT_ELEM_TYPE (Base1*, ptrsBase1);
+
+			auto ptrsOnlyDerived1 = ptrsBase1.OfType<Derived1*>();
+			auto ptrsOnlyDerived2 = ptrsBase1.OfType<Derived2*>();
+			
+			ASSERT (AreEqual(ptrs1, ptrsOnlyDerived1));
+			ASSERT (!ptrsOnlyDerived2.Any());
+		}
+
+		// cross cast
+		{
+			auto someBase1 = Enumerate<Base1&>(objs12);
+			auto asBase2   = someBase1.DynamicCast<Base2&>();
+
+			ASSERT_ELEM_TYPE (Base2&, asBase2);
+			ASSERT (AreEqual(ptrs12, asBase2.Addresses()));
+
+			auto mixedAsBase2 = ofBase1.Addresses().DynamicCast<Base2*>();
+			auto onlyBase2	  = ofBase1.OfType<Base2&>();
+
+			ASSERT_ELEM_TYPE (Base2*, mixedAsBase2);
+			ASSERT_ELEM_TYPE (Base2&, onlyBase2);
+
+			ASSERT (AreEqual(ptrs12, mixedAsBase2.NonNulls()));
+			ASSERT_EQ (ptrs1.Count() + ptrs12.Count(),	mixedAsBase2.Count());
+			ASSERT_EQ (ptrs12.Count(),					mixedAsBase2.Count((Base2*)nullptr));
+		}
+	}
+
+
+
 	void TestMisc()
 	{
 		Greet("Misc");
@@ -204,6 +390,8 @@ namespace EnumerableTests {
 		ClosingWithFirsts();
 		Rotate();
 		ElemAccess();
+		CastConvertElements();
+		CastRelatedElements();
 	}
 
 }	// namespace EnumerableTests

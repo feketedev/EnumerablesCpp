@@ -575,8 +575,8 @@ namespace EnumerableTests {
 				ASSERT (AreEqual({ "0", "0b", "0bc", "0bcd" },	bcd));
 				ASSERT (AreEqual({ "e", "ek", "ekf", "ekfg" },	ekfg));
 				ASSERT (AreEqual({ 'e', 'k', 'k', 'k' },		maxProj2));
-				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj1.MapTo<size_t>(FUN(x,  &x - projChars))));
-				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj3.MapTo<size_t>(FUN(x,  &x - projChars))));
+				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj1.MapTo<ptrdiff_t>(FUN(x,  &x - projChars))));
+				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj3.MapTo<ptrdiff_t>(FUN(x,  &x - projChars))));
 
 				// Short inputs:
 				ASSERT_EQ (false,	Enumerables::Empty<int>().Scan(FUN(x,		std::to_string(x)),

@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *										  Enumerables for C++ 	v2.0a										  *
+	 *										 Enumerables for C++   v2.0.1a										  *
 	 *																											  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
@@ -520,12 +520,29 @@ namespace Def {
 	// ----- Conversions -------------------------------------------------------------------------------------------------------------
 
 		// shortcut unnecessary conversions - convenient in templates
-		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr) const &	{ return *this; }
-		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr) &&		{ return move(*this); }
+		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr)	const &		{ return *this; }
+		template <class R>	auto As(enable_if_t<is_same<R, TElem>::value>* = nullptr)	&&			{ return move(*this); }
+
+		template <class R>	auto Cast(enable_if_t<is_same<R, TElem>::value>* = nullptr)	const &		{ return *this; }
+		template <class R>	auto Cast(enable_if_t<is_same<R, TElem>::value>* = nullptr)	&&			{ return move(*this); }
+
 
 		/// Apply an implicit conversion to type R for each element.
-		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr) const &	{ return   Chain<ConverterEnumerator, R>(); }
-		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr) &&		{ return MvChain<ConverterEnumerator, R>(); }
+		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr)	 const &	{ return   Chain<ConverterEnumerator, R>(); }
+		template <class R>	auto As(enable_if_t<!is_same<R, TElem>::value>* = nullptr)	 &&			{ return MvChain<ConverterEnumerator, R>(); }
+
+		/// Apply static_cast to type R for each element.
+		template <class R>	auto Cast(enable_if_t<!is_same<R, TElem>::value>* = nullptr) const &	{ return   Chain<CastingEnumerator, R>(); }
+		template <class R>	auto Cast(enable_if_t<!is_same<R, TElem>::value>* = nullptr) &&			{ return MvChain<CastingEnumerator, R>(); }
+
+		/// Apply dynamic_cast to type R for each element.
+		template <class R>	auto DynamicCast()											 const &	{ return   Chain<DynCastingEnumerator, R>(); }
+		template <class R>	auto DynamicCast()											 &&			{ return MvChain<DynCastingEnumerator, R>(); }
+
+		/// Filter and dynamic_cast to type R. (Use exact * or & type.)
+		template <class R>	auto OfType()												 const &	{ return   Chain<TypeFilterEnumerator, R>(); }
+		template <class R>	auto OfType()												 &&			{ return MvChain<TypeFilterEnumerator, R>(); }
+
 
 		/// Same elements with const qualifier injected to top pointed or referenced type.
 		auto AsConst()		const &	{ return As<ConstValueT<TElem>>(); }

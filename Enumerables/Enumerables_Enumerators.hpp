@@ -792,7 +792,7 @@ namespace Def {
 	template <class Source, class OpSource>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 
-		using S = StorableT<RemoveScalarRefT<EnumeratedT<OpSource>>>;
+		using S = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
 
 		Source			source;
 		SetType<S>		operand;
@@ -905,6 +905,47 @@ namespace Def {
 		CounterEnumerator(CounterEnumerator&&) = default;
 	};
 
+
+
+	template <class Source, class TWanted>
+	class TypeFilterEnumerator final : public IEnumerator<TWanted> {
+		using E = PointedOrRefdT<typename Source::TElem>;
+		using W = PointedOrRefdT<TWanted>;
+
+		Source	source;
+		W*		current = nullptr;
+
+	public:
+		static_assert (is_pointer<typename Source::TElem>::value || is_reference<typename Source::TElem>::value,
+					   "Only pointer or reference elements can hide a different dynamic type!"				   );
+		
+		static_assert (is_pointer<TWanted>::value || is_reference<TWanted>::value,
+					   "Please specify the desired pointer or reference type exactly for readability.");
+
+		bool	FetchNext()	override
+		{ 
+			current = nullptr;
+			while (current == nullptr && source.FetchNext()) {
+				E* elem = PointerOrRef<E*>::Translate(source.Current());
+				current = dynamic_cast<W*>(elem);
+			}
+			return current != nullptr;
+		}
+
+		TWanted	Current()	override
+		{
+			ENUMERABLES_ETOR_USAGE_ASSERT (current != nullptr, NotFetchedError);
+			return PointerOrRef<TWanted>::Translate(current);
+		}
+
+		SizeInfo				Measure()   const override	{ return source.Measure().Filtered(); }
+		IEnumerator<TWanted>*	MoveTo(void* mem) override	{ return new (mem) TypeFilterEnumerator { std::move(*this) }; }
+
+		template <class Factory>
+		TypeFilterEnumerator(Factory&& getSource) : source { getSource() }  {}
+		TypeFilterEnumerator(TypeFilterEnumerator&&) = default;
+	};
+
 	#pragma endregion
 
 
@@ -913,24 +954,56 @@ namespace Def {
 
 	// NOTE: Mapper could be used equivalently, but is 8 bytes larger and .As is a frequent implicit operation, so keep this!
 	template <class Source, class TConverted>
-	class ConverterEnumerator final : public IEnumerator<TConverted> {
+	class ConverterEnumeratorBase : public IEnumerator<TConverted> {
+	protected:
 		Source source;
 
 	public:
 		static_assert (!is_reference<TConverted>::value || is_reference<typename Source::TElem>::value,
-					   "Source elements are prvalues, requested references would become dangling!");
+					   "Source elements are prvalues, requested references would become dangling!"	  );
 
-		static_assert (!is_reference<TConverted>::value || IsRefCompatible<TConverted, typename Source::TElem>,
-					   "Requested type is not reference-compatible with source element - could return reference to a temporary.");
-
-		bool						FetchNext()		  override	{ return source.FetchNext(); }
-		TConverted					Current()		  override	{ return source.Current();   }
-		SizeInfo					Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TConverted>*	MoveTo(void* mem) override	{ return new (mem) ConverterEnumerator { std::move(*this) }; }
+		bool		FetchNext()		  override final	{ return source.FetchNext(); }
+		SizeInfo	Measure()   const override final	{ return source.Measure(); }
 
 		template <class Factory>
-		ConverterEnumerator(Factory&& getSource) : source { getSource() }  {}
-		ConverterEnumerator(ConverterEnumerator&&) = default;
+		ConverterEnumeratorBase(Factory&& getSource) : source { getSource() }  {}
+		ConverterEnumeratorBase(ConverterEnumeratorBase&&) = default;
+	};
+
+
+	template <class Source, class TResult>
+	class ConverterEnumerator final : public ConverterEnumeratorBase<Source, TResult> {
+	public:
+		using ConverterEnumeratorBase<Source, TResult>::ConverterEnumeratorBase;
+
+		static_assert (!is_reference<TResult>::value || IsRefCompatible<TResult, typename Source::TElem>,
+					   "Requested type is not reference-compatible with source element - could return reference to a temporary.");
+
+		TResult					Current()		  override	{ return this->source.Current(); }
+		IEnumerator<TResult>*	MoveTo(void* mem) override	{ return new (mem) ConverterEnumerator { std::move(*this) }; }
+	};
+
+
+	template <class Source, class TCasted>
+	class CastingEnumerator final : public ConverterEnumeratorBase<Source, TCasted> {
+	public:
+		using ConverterEnumeratorBase<Source, TCasted>::ConverterEnumeratorBase;
+
+		static_assert (!is_reference<TCasted>::value || AreRefCompatible<TCasted, typename Source::TElem>,
+					   "No reference-compatibility between source and target type - could return reference to a temporary.");
+
+		TCasted					Current()		  override	{ return static_cast<TCasted>(this->source.Current()); }
+		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return new (mem) CastingEnumerator { std::move(*this) }; }
+	};
+
+
+	template <class Source, class TCasted>
+	class DynCastingEnumerator final : public ConverterEnumeratorBase<Source, TCasted> {
+	public:
+		using ConverterEnumeratorBase<Source, TCasted>::ConverterEnumeratorBase;
+
+		TCasted					Current()		  override	{ return dynamic_cast<TCasted>(this->source.Current()); }
+		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return new (mem) DynCastingEnumerator { std::move(*this) }; }
 	};
 
 
