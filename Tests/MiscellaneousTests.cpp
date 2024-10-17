@@ -292,7 +292,6 @@ namespace EnumerableTests {
 		Derived12	objs12[] = { { 8, 'e' }, { 9, 'f' } };
 
 		auto ofBase1 = Enumerables::Concat<Base1&>(objs1, objs12);
-		auto ofBase2 = Enumerables::Concat<Base2&>(objs2, objs12);
 
 		auto ptrs1  = Enumerate(objs1).Addresses();
 		auto ptrs2  = Enumerate(objs2).Addresses();
@@ -342,7 +341,7 @@ namespace EnumerableTests {
 
 			ASSERT (AreEqual(ptrs1, asDerived1.NonNulls()));
 			ASSERT_EQ (ptrs1.Count() + ptrs12.Count(),	asDerived1.Count());
-			ASSERT_EQ (ptrs12.Count(),					asDerived1.Count((Derived1*)nullptr));		// TODO: ref/ptr conversions should work!
+			ASSERT_EQ (ptrs12.Count(),					asDerived1.Count(nullptr));
 			
 			auto onlyDerived1 = ofBase1.OfType<Derived1&>();
 			auto onlyDerived2 = ofBase1.OfType<Derived2&>();
@@ -376,7 +375,7 @@ namespace EnumerableTests {
 
 			ASSERT (AreEqual(ptrs12, mixedAsBase2.NonNulls()));
 			ASSERT_EQ (ptrs1.Count() + ptrs12.Count(),	mixedAsBase2.Count());
-			ASSERT_EQ (ptrs12.Count(),					mixedAsBase2.Count((Base2*)nullptr));
+			ASSERT_EQ (ptrs12.Count(),					mixedAsBase2.Count(nullptr));
 		}
 	}
 

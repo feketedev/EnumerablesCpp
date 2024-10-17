@@ -53,7 +53,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (numsArr + 4,  &maxCoss.Last());
 
 			// take function pointer directly when an exact overload exists:
-			auto minFltCos = Enumerables::Range<float>(1.0, 5).As<float>().MinimumsBy(&cosf);
+			auto minFltCos = Enumerables::Range<float>(1.0, 5).MinimumsBy(&cosf);
 
 			// template function: needs OverloadResolver => explicit result
 			auto minDblCos = Enumerables::Range(1.0, 5).MinimumsBy<double>(&cos);

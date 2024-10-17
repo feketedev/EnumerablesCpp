@@ -169,7 +169,7 @@ namespace Def {
 		using TEnumerator	  = decltype(factory());
 		using TElem			  = EnumeratedT<TEnumerator>;
 		using TElemDecayed	  = std::decay_t<TElem>;
-		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// "deeper" const for predicates
+		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// deep-const for predicates
 
 
 		static_assert(!is_reference<TFactory>::value,	"AutoEnumerable construction error");
@@ -326,10 +326,10 @@ namespace Def {
 		}
 
 		template <class Pred>
-		static decltype(auto) Predicate(Pred& p)		{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
+		static decltype(auto) Predicate(Pred& p)	{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
 
 		template <class Pred>
-		static decltype(auto) BinPred(Pred& p)			{ return LambdaCreators::BinaryMapper<ConstValueT<TElem>, ConstValueT<TElem>, bool>(forward<Pred>(p)); }
+		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryMapper<TElemConstParam, TElemConstParam, bool>(forward<Pred>(p)); }
 
 
 
@@ -475,8 +475,8 @@ namespace Def {
 		// --- Shorthands for convenience ---
 
 		/// Elements not equal to nullptr
-		auto NonNulls() const &		{ return		Where(FUN(v, v != nullptr)); }
-		auto NonNulls() &&			{ return Move().Where(FUN(v, v != nullptr)); }
+		auto NonNulls() const &		{ return		Where(FUN(x, x != nullptr)); }
+		auto NonNulls() &&			{ return Move().Where(FUN(x, x != nullptr)); }
 
 		/// Unbox optional-like types where a value is available
 		auto ValuesOnly() const &	{ return		Where(FUN(x, Enumerables::HasValue(x))).Dereference(); }
@@ -685,19 +685,23 @@ namespace Def {
 		template <class Pred = PF>	bool			  All		  (const Pred& p) const;
 		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(p).Any();		   }
 		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(p).First();		   }
+		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
 		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(p).Single();	   }
 		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(p).FirstIfAny();   }
+		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(p).LastIfAny();    }
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
-		template <class Pred = PF>	size_t			  Count		  (const Pred& p) const   { return ToReferenced().Where(p).Count();		   }
-		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
+		
+		template <class Pred = PF, class = enable_if_t<!is_convertible<Pred, TElemConstParam>::value>>
+		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
 
 	// ----- Shorthands comparing to an element --------------------------------------------------------------------------------------
 
-		bool	AllEqual(const TElemDecayed& x) const   { return ToReferenced().All  (FUN(v, v == x)); }
-		bool	Contains(const TElemDecayed& x) const   { return ToReferenced().Any  (FUN(v, v == x)); }
-		size_t	Count	(const TElemDecayed& x) const   { return ToReferenced().Where(FUN(v, v == x)).Count(); }
+		template <class R = TElemDecayed>
+		bool	AllEqual(const R& rhs)		  const   { return ToReferenced().All  (FUN(x, x == rhs)); }
+		bool	Contains(TElemConstParam val) const   { return ToReferenced().Any  (FUN(x, x == val)); }
+		size_t	Count	(TElemConstParam val) const   { return ToReferenced().Where(FUN(x, x == val)).Count(); }
 
 
 	// ----- Aggregating operations --------------------------------------------------------------------------------------------------

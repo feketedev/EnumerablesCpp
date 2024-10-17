@@ -67,12 +67,10 @@ namespace EnumerableTests {
 
 
 
-	static_assert (sizeof(OverloadResolver<GetterTester, int>) == sizeof(void*) * 2, "Surprise");
-
-
-
 	static void TestOverloadResolver()
 	{
+		static_assert (sizeof(OverloadResolver<GetterTester, int>) == sizeof(void*) * 2, "Surprise");
+
 		{
 			GetterTester obj;
 
@@ -570,6 +568,20 @@ namespace EnumerableTests {
 		static_assert (is_same< int	const *,			CompatResultT<int const * &,		int const *	>>(), "Err");
 		static_assert (is_same< int	const *,			CompatResultT<int 		* &,		int const *	>>(), "Err");
 
+		static_assert (is_same< int		  &&,			CompatResultT<int 		&&,			int 	  &&	>>(), "Err");
+		static_assert (is_same< int	const &&,			CompatResultT<int const &&,			int 	  &&	>>(), "Err");
+		static_assert (is_same< int	const &&,			CompatResultT<int const &&,			int const &&	>>(), "Err");
+		static_assert (is_same< int	const &&,			CompatResultT<int 		&&,			int const &&	>>(), "Err");
+		static_assert (is_same< int		  *,			CompatResultT<int 		* &&,		int 	  *		>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int const * &&,		int 	  *		>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int const * &&,		int const *		>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int 		* &&,		int const *		>>(), "Err");
+		static_assert (is_same< int		  *,			CompatResultT<int 		*,			int 	  * &&	>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int const *,			int 	  * &&	>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int const *,			int const * &&	>>(), "Err");
+		static_assert (is_same< int	const *,			CompatResultT<int 		*,			int const * &&	>>(), "Err");
+		static_assert (is_same< int		  * &&,			CompatResultT<int 		* &&,		int 	  * &&	>>(), "Err");
+		static_assert (is_same< int	const * &&,			CompatResultT<int const * &&,		int const * &&	>>(), "Err");
 
 #if defined(_MSC_VER) && !defined(__clang__)
 		static_assert (is_same< int		  *&,			CompatResultT<int 		* &,		int 	  * & >>(), "Err");
@@ -582,6 +594,9 @@ namespace EnumerableTests {
 		static_assert (is_same< int	const * *,			CompatResultT<int const * *,		int const * * >>(), "Err");
 		static_assert (is_same< int	const * *,			CompatResultT<int 		* *,		int const * * >>(), "Err");
 
+		static_assert (is_same< int	const * &&,			CompatResultT<int const * &&,		int 	  * &&	>>(), "Err");
+		static_assert (is_same< int	const * &&,			CompatResultT<int 		* &&,		int const * &&	>>(), "Err");
+
 #else	// strange but standard behaviour of std::common_type:
 		// (Probably to prevent pointing an int* to a const int indirectly)
 		static_assert (is_same< int		  *&,			CompatResultT<int 		* &,		int 	  * & >>(), "Err");
@@ -593,6 +608,9 @@ namespace EnumerableTests {
 		static_assert (is_same< int	const * const *,	CompatResultT<int const * *,		int 	  * * >>(), "Err");
 		static_assert (is_same< int	const * *,			CompatResultT<int const * *,		int const * * >>(), "Err");
 		static_assert (is_same< int	const * const *,	CompatResultT<int 		* *,		int const * * >>(), "Err");
+
+		static_assert (is_same< int	const * const &&,	CompatResultT<int const * &&,		int 	  * &&	>>(), "Err");
+		static_assert (is_same< int	const * const &&,	CompatResultT<int 		* &&,		int const * &&	>>(), "Err");
 #endif
 
  		static_assert (is_same< int		  * const &,	CompatResultT<int 		*  const &,	int		  * &		>>(), "Err");
@@ -666,6 +684,98 @@ namespace EnumerableTests {
 		static_assert (is_same< int	Base::*,			CompatResultT<int	Base::*,	decltype(&Derived1::data) >>(), "Err");
 	}
 
+	
+	
+	namespace TestDeepConst {		// static test
+		
+		// Result is "Deep-only const", top-level is left intact, easy to qualify manually
+		static_assert (is_same< int,				DeepConstT<int>				  >(),	"Err");
+		static_assert (is_same< int	const,			DeepConstT<int const>		  >(),	"Err");
+		static_assert (is_same< int	const &,		DeepConstT<int 		 &>		  >(),	"Err");
+		static_assert (is_same< int	const &,		DeepConstT<int const &>		  >(),	"Err");
+		static_assert (is_same< int	const *,		DeepConstT<int 		 *>		  >(),	"Err");
+		static_assert (is_same< int	const *,		DeepConstT<int const *>		  >(),	"Err");
+		static_assert (is_same< int	const * const,	DeepConstT<int const * const> >(),	"Err");
+
+		static_assert (is_same< int volatile const *,					DeepConstT<int volatile 	  *>				>(),	"Err");
+		static_assert (is_same< int volatile const *,					DeepConstT<int volatile const *>				>(),	"Err");
+		static_assert (is_same< int volatile const * const,				DeepConstT<int volatile const * const>			>(),	"Err");
+		static_assert (is_same< int volatile const * volatile,			DeepConstT<int volatile 	  * volatile>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile,			DeepConstT<int volatile const * volatile>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const,	DeepConstT<int volatile const * volatile const>	>(),	"Err");
+
+		static_assert (is_same< int volatile const * const &,			DeepConstT<int volatile 	  * &>				>(),	"Err");
+		static_assert (is_same< int volatile const * const &,			DeepConstT<int volatile const * &>				>(),	"Err");
+		static_assert (is_same< int volatile const * const &,			DeepConstT<int volatile const * const &>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const &,	DeepConstT<int volatile 	  * volatile &>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const &,	DeepConstT<int volatile const * volatile &>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const &,	DeepConstT<int volatile const * volatile const&>>(),	"Err");
+
+		// implementation is the same for &&
+		static_assert (is_same< int	const &&,							DeepConstT<int 		 &&>						>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const &&,	DeepConstT<int volatile 	  * volatile &&>	>(),	"Err");
+
+
+		static_assert (is_same< int volatile const * const *,			DeepConstT<int volatile 	  * *>				>(),	"Err");
+		static_assert (is_same< int volatile const * const *,			DeepConstT<int volatile const * *>				>(),	"Err");
+		static_assert (is_same< int volatile const * const *,			DeepConstT<int volatile const * const *>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const *,	DeepConstT<int volatile 	  * volatile *>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const *,	DeepConstT<int volatile const * volatile *>		>(),	"Err");
+		static_assert (is_same< int volatile const * volatile const *,	DeepConstT<int volatile const * volatile const*>>(),	"Err");
+
+		static_assert (is_same< int volatile const * volatile const * volatile,	DeepConstT<int volatile const * volatile	   * volatile>>(), "Err");
+		static_assert (is_same< int volatile const * volatile const * const,	DeepConstT<int volatile		  * volatile const * const>	  >(), "Err");
+		static_assert (is_same< int const		   * volatile const *,			DeepConstT<int				  * volatile const *>		  >(), "Err");
+
+
+		static_assert (is_same< int	const	  [],		DeepConstT<int			 []>	 >(),	"Err");
+		static_assert (is_same< int	const (&) [],		DeepConstT<int (&)		 []	 >	 >(),	"Err");
+		static_assert (is_same< int	const (&) [],		DeepConstT<int const (&) []>	 >(),	"Err");
+		static_assert (is_same< int	const * const [],	DeepConstT<int 		 *		 []> >(),	"Err");
+		static_assert (is_same< int	const * const [],	DeepConstT<int const *		 []> >(),	"Err");
+		static_assert (is_same< int	const * const [],	DeepConstT<int const * const []> >(),	"Err");
+
+		static_assert (is_same< int	volatile const	   [],				DeepConstT<int volatile			  []>			   >(),	"Err");
+		static_assert (is_same< int	volatile const (&) [],				DeepConstT<int volatile (&)		  []>			   >(),	"Err");
+		static_assert (is_same< int	volatile const (&) [],				DeepConstT<int volatile const (&) []>			   >(),	"Err");
+		static_assert (is_same< int	volatile const * const [],			DeepConstT<int volatile 	  *		  []>		   >(),	"Err");
+		static_assert (is_same< int	volatile const * const [],			DeepConstT<int volatile const *		  []>		   >(),	"Err");
+		static_assert (is_same< int	volatile const * const [],			DeepConstT<int volatile const * const []>		   >(),	"Err");
+		static_assert (is_same< int	volatile const * volatile const [],	DeepConstT<int volatile 	  *	volatile 	   []> >(),	"Err");
+		static_assert (is_same< int	volatile const * volatile const [],	DeepConstT<int volatile const *	volatile 	   []> >(),	"Err");
+		static_assert (is_same< int	volatile const * volatile const [],	DeepConstT<int volatile const * volatile const []> >(),	"Err");
+
+		// not full coverage, quite exponential...
+		static_assert (is_same< int	const (*) [],							DeepConstT<int 		 (*)	   []>				     >(), "Err");
+		static_assert (is_same< int	const (*) [],							DeepConstT<int const (*)	   []>				     >(), "Err");
+		static_assert (is_same< int	const (* const) [],						DeepConstT<int const (* const) []>				     >(), "Err");
+		static_assert (is_same< int	volatile const (* volatile)		  [],	DeepConstT<int volatile 	  (* volatile)  	 []> >(), "Err");
+		static_assert (is_same< int	volatile const (* volatile)		  [],	DeepConstT<int volatile const (* volatile)  	 []> >(), "Err");
+		static_assert (is_same< int	volatile const (* volatile const) [],	DeepConstT<int volatile const (* volatile const) []> >(), "Err");
+
+		static_assert (is_same< int	const	  [4],		DeepConstT<int			 [4]>	 >(),	"Err");
+		static_assert (is_same< int	const (&) [4],		DeepConstT<int (&)		 [4]>	 >(),	"Err");
+		static_assert (is_same< int	const (&) [4],		DeepConstT<int const (&) [4]>	 >(),	"Err");
+		static_assert (is_same< int	const	  [][4],	DeepConstT<int			 [][4]>	 >(),	"Err");
+		static_assert (is_same< int	const (&) [][4],	DeepConstT<int (&)		 [][4]>	 >(),	"Err");
+		static_assert (is_same< int	const (&) [][4],	DeepConstT<int const (&) [][4]>	 >(),	"Err");
+		
+		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int			(*)	[4]>   >(),	"Err");
+		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int const	(*) [4]>   >(),	"Err");
+		static_assert (is_same< int	const volatile (*) [4],		DeepConstT<int volatile (*) [4]>   >(),	"Err");
+		static_assert (is_same< int	const		   (*) [][4],	DeepConstT<int			(*)	[][4]> >(),	"Err");
+		static_assert (is_same< int	const		   (*) [][4],	DeepConstT<int const	(*) [][4]> >(),	"Err");
+		static_assert (is_same< int	const volatile (*) [][4],	DeepConstT<int volatile (*) [][4]> >(),	"Err");
+
+		// function pointers are "just pointers"
+		static_assert (is_same< int	(*)(char),	DeepConstT<int (*)(char)> >(),	"Err");
+
+		// member-pointers should pass intact
+		static_assert (is_same< char	std::pair<int, char>::*,		DeepConstT<decltype(&std::pair<int, char>::second)> >(), "Err");
+		static_assert (is_same< size_t	(std::vector<int>::*) () const,	DeepConstT<decltype(&std::vector<int>::size)>		>(), "Err");
+		static_assert (is_same< void	(std::vector<int>::*) (),		DeepConstT<decltype(&std::vector<int>::clear)>		>(), "Err");
+	}
+
 
 
 	namespace TestCallabilityChecks {		// static test
@@ -715,6 +825,27 @@ namespace EnumerableTests {
 		static_assert(!IsCallableMember<const V2*,	Plus, int>::value,	"Error");
 		static_assert(!IsCallableMember<const V2&,	Plus, int>::value,	"Error");
 
+	}
+
+
+
+	namespace TestBasicTypeHelpers {		// static test
+
+		// somewhat exotic cases
+		static_assert(is_same<const void *,			ConstValueT<void *>>(),			 "Err");
+		static_assert(is_same<float (*)(float),		ConstValueT<decltype(&sinf)>>(), "Err");
+		static_assert(is_same<float (&)(float),		ConstValueT<decltype(sinf)&>>(), "Err");
+		static_assert(is_same<const int [],			ConstValueT<int []>>(),			 "Err");
+		static_assert(is_same<const int (&) [3],	ConstValueT<int (&)[3]>>(),		 "Err");
+		static_assert(is_same<const int (*) [3],	ConstValueT<int (*)[3]>>(),		 "Err");
+
+		// Member-pointers: consting is not planned, only follows the "default" branch.
+		//					But don't qualify the function itself!
+		using Pair = std::pair<int, char>;
+
+		static_assert(is_same<int   Pair::* const,			ConstValueT<decltype(&Pair::first)>>(),	"Err");
+		static_assert(is_same<void (Pair::* const)(Pair&),	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
+	
 	}
 
 

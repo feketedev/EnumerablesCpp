@@ -4,7 +4,8 @@
 	/*  Part of Enumerables for C++.					*
 	 *													*
 	 *  This file contains basic and generic utilities  *
-	 *  that extend the standard type traits.			*/
+	 *  that extend the standard type traits.			*
+	 *  Tools here should aim for the general case.		*/
 
 
 #include <type_traits>
@@ -65,7 +66,7 @@ namespace TypeHelpers {
 
 	/// R if C seems like a generic container, candidate to be wrapped by an Enumerable.
 	template <class C, class R = C>
-	using IfContainerLike = enable_if_t<is_convertible<decltype(begin(declval<C> ()) != end(declval<C> ())), bool>::value, R>;
+	using IfContainerLike = enable_if_t<is_convertible<decltype(begin(declval<C>()) != end(declval<C>())), bool>::value, R>;
 
 
 
@@ -92,11 +93,11 @@ namespace TypeHelpers {
 
 	/// Function of std::decay without conversions: just strip qualifiers and &
 	template <class T>
-	using BaseT			 = std::remove_cv_t<remove_reference_t<T>>;
+	using BaseT			= std::remove_cv_t<remove_reference_t<T>>;
 
 	/// Pointed or referenced type, unqualified.  [cv T&|T*|T*& --> T;  cv T** --> cv T*]
 	template <class T>
-	using BasePointedT	 = std::remove_cv_t<remove_pointer_t<remove_reference_t<T>>>;
+	using BasePointedT	= std::remove_cv_t<remove_pointer_t<remove_reference_t<T>>>;
 
 	/// Top-level pointed or referenced type, unqualified.  [cv T*|T& --> T;  T*& --> T*]
 	template <class T>
@@ -151,20 +152,51 @@ namespace TypeHelpers {
 	struct RootPointed<T* volatile>			{ using Type = typename RootPointed<T>::Type; };
 	template <class T>
 	struct RootPointed<T&>					{ using Type = typename RootPointed<T>::Type; };
-
+	template <class T>
+	struct RootPointed<T&&>					{ using Type = typename RootPointed<T>::Type; };
 
 	/// The innermost pointed/referenced type without qualifiers (arrays left in place).
 	template <class T>
 	using RootPointedBaseT = std::remove_cv_t<typename RootPointed<T>::Type>;
 
 
-	/// Inject const inside first pointer/reference, or simply before value type. [Must succeed - No void, no mptrs]
+	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
 	template <class T>
 	using ConstValueT =
-		conditional_t< is_pointer<T>::value && !is_reference<T>::value,		const remove_pointer_t<remove_reference_t<T>>*,
-		conditional_t< is_lvalue_reference<T>::value,						const remove_reference_t<T>&,
-		conditional_t< is_rvalue_reference<T>::value,						const remove_reference_t<T>&&,
-																			const T										>>>;
+		conditional_t< is_pointer<T>::value && !is_reference<T>::value,	std::add_const_t<remove_pointer_t<remove_reference_t<T>>>*,
+		conditional_t< is_lvalue_reference<T>::value,					std::add_const_t<remove_reference_t<T>>&,
+		conditional_t< is_rvalue_reference<T>::value,					std::add_const_t<remove_reference_t<T>>&&,
+																		std::add_const_t<T>										>>>;
+
+	/// Implementation of DeepConstT.
+	template <class T>
+	struct DeepConst {
+		using Type = T;
+		static_assert (!is_pointer<T>::value && !is_reference<T>::value && !std::is_array<T>::value, "Internal error.");
+	};
+	template <class T>
+	struct DeepConst<T*>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> *; };
+	template <class T>
+	struct DeepConst<T* const>			{ using Type = std::add_const_t<typename DeepConst<T>::Type> * const; };
+	template <class T>
+	struct DeepConst<T* const volatile>	{ using Type = std::add_const_t<typename DeepConst<T>::Type> * const volatile; };
+	template <class T>
+	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
+	template <class T>
+	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &; };
+	template <class T>		
+	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &&; };
+	template <class T>		
+	struct DeepConst<T[]>				{ using Type = typename DeepConst<T>::Type const []; };
+	template <class T, size_t N>		
+	struct DeepConst<T[N]>				{ using Type = typename DeepConst<T>::Type const [N]; };
+
+	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
+	/// @remarks
+	///		Any less const-qualified similar type should be convertible into the result.
+	template <class T>
+	using DeepConstT = typename DeepConst<T>::Type;
+
 
 	// [void -> false]
 	template <class T>
