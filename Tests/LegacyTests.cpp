@@ -2,11 +2,14 @@
 #include "Tests.hpp"
 #include "TestUtils.hpp"
 #include "Enumerables.hpp"
-
 #include <chrono>
 #include <fstream>
 #include <sstream>
 #include <memory>
+
+#ifdef __clang__
+#	pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
 
 
 

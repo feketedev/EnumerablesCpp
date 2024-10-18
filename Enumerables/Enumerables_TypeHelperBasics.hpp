@@ -4,7 +4,8 @@
 	/*  Part of Enumerables for C++.					*
 	 *													*
 	 *  This file contains basic and generic utilities  *
-	 *  that extend the standard type traits.			*/
+	 *  that extend the standard type traits.			*
+	 *  Tools here should aim for the general case.		*/
 
 
 #include <type_traits>
@@ -91,7 +92,7 @@ namespace Enumerables::TypeHelpers {
 
 	/// R if C seems like a generic container, candidate to be wrapped by an Enumerable.
 	template <class C, class R = C>
-	using IfContainerLike = enable_if_t<is_convertible_v<decltype(begin(declval<C> ()) != end(declval<C> ())), bool>, R>;
+	using IfContainerLike = enable_if_t<is_convertible_v<decltype(begin(declval<C>()) != end(declval<C>())), bool>, R>;
 
 
 
@@ -118,26 +119,47 @@ namespace Enumerables::TypeHelpers {
 
 	/// Function of std::decay without conversions: just strip qualifiers and &
 	template <class T>
-	using BaseT = std::remove_cv_t<remove_reference_t<T>>;
+	using BaseT			= std::remove_cv_t<remove_reference_t<T>>;
 
-	/// Pointed or referenced type. [T& / T* / T*& --> T;	T** --> T*]
+	/// Pointed or referenced type, unqualified.  [cv T&|T*|T*& --> T;  cv T** --> cv T*]
 	template <class T>
-	using BasePointedT = BaseT<remove_pointer_t<remove_reference_t<T>>>;
+	using BasePointedT	= std::remove_cv_t<remove_pointer_t<remove_reference_t<T>>>;
 
-	/// First level pointed or referenced type. [T* --> T;  T*& --> T*]
+	/// Top-level pointed or referenced type, unqualified.  [cv T*|T& --> T;  T*& --> T*]
 	template <class T>
-	using BaseOrPointedT = BaseT<remove_pointer_t<T>>;
+	using PointedOrRefdBaseT = BaseT<remove_pointer_t<T>>;
+
+	/// Top-level pointed or referenced type.  [T*|T& --> T;  T*& --> T*]
+	template <class T>
+	using PointedOrRefdT	 = remove_reference_t<remove_pointer_t<T>>;
+
+
+	/// Helper to consume T* and T& in a uniform way.
+	template <class>
+	struct PointerOrRef;
+
+	template <class T>
+	struct PointerOrRef<T*> {
+		static T*	Translate(T* ptr)	{ return ptr;  }
+		static T*	Translate(T& ref)	{ return &ref; }
+	};
+	template <class T>
+	struct PointerOrRef<T&> {
+		static T&	Translate(T* ptr)	{ return *ptr; }
+		static T&	Translate(T& ref)	{ return ref;  }
+	};
+
 
 	template <class T>
 	using RemoveRvalueRefT = conditional_t<is_rvalue_reference_v<T>, remove_reference_t<T>, T>;
 
+	/// Drop ref if pointer underlies.  [T*& --> T*;   T& --> T&]
 	template <class T>
-	using RemovePtrRefT = conditional_t<is_pointer_v<remove_reference_t<T>>, remove_reference_t<T>, T>;
+	using RemovePtrRefT	   = conditional_t<is_pointer_v<remove_reference_t<T>>, remove_reference_t<T>, T>;
 
+	/// Remove references and cv from scalars.
 	template <class T>
-	using RemoveScalarRefT = conditional_t< is_pointer_v<remove_reference_t<T>> || is_scalar_v<remove_reference_t<T>>,
-										    BaseT<T>,
-										    T >;
+	using DecayIfScalarT   = conditional_t<is_scalar_v<remove_reference_t<T>>, BaseT<T>, T>;
 
 
 	/// Finds the innermost pointed/referenced type (arrays left in place), qualifiers included.
@@ -156,30 +178,65 @@ namespace Enumerables::TypeHelpers {
 	struct RootPointed<T* volatile>			{ using Type = typename RootPointed<T>::Type; };
 	template <class T>
 	struct RootPointed<T&>					{ using Type = typename RootPointed<T>::Type; };
-
+	template <class T>
+	struct RootPointed<T&&>					{ using Type = typename RootPointed<T>::Type; };
 
 	/// The innermost pointed/referenced type without qualifiers (arrays left in place).
 	template <class T>
 	using RootPointedBaseT = std::remove_cv_t<typename RootPointed<T>::Type>;
 
 
-	/// Inject const inside first pointer/reference, or simply before value type. [Must succeed - No void, no mptrs]
+	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
 	template <class T>
 	using ConstValueT =
-		conditional_t< is_pointer_v<T> && !is_reference_v<T>,	const remove_pointer_t<remove_reference_t<T>>*,
-		conditional_t< is_lvalue_reference_v<T>,				const remove_reference_t<T>&,
-		conditional_t< is_rvalue_reference_v<T>,				const remove_reference_t<T>&&,
-																const T										  >>>;
+		conditional_t< is_pointer_v<T> && !is_reference_v<T>,	std::add_const_t<remove_pointer_t<remove_reference_t<T>>>*,
+		conditional_t< is_lvalue_reference_v<T>,				std::add_const_t<remove_reference_t<T>>&,
+		conditional_t< is_rvalue_reference_v<T>,				std::add_const_t<remove_reference_t<T>>&&,
+																std::add_const_t<T>										>>>;
+
+	/// Implementation of DeepConstT.
+	template <class T>
+	struct DeepConst {
+		using Type = T;
+		static_assert (!is_pointer<T>() && !is_reference<T>() && !std::is_array<T>(), "Internal error.");
+	};
+	template <class T>
+	struct DeepConst<T*>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> *; };
+	template <class T>
+	struct DeepConst<T* const>			{ using Type = std::add_const_t<typename DeepConst<T>::Type> * const; };
+	template <class T>
+	struct DeepConst<T* const volatile>	{ using Type = std::add_const_t<typename DeepConst<T>::Type> * const volatile; };
+	template <class T>
+	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
+	template <class T>
+	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &; };
+	template <class T>		
+	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &&; };
+	template <class T>		
+	struct DeepConst<T[]>				{ using Type = typename DeepConst<T>::Type const []; };
+	template <class T, size_t N>		
+	struct DeepConst<T[N]>				{ using Type = typename DeepConst<T>::Type const [N]; };
+
+	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
+	/// @remarks
+	///		Any less const-qualified similar type should be convertible into the result.
+	template <class T>
+	using DeepConstT = typename DeepConst<T>::Type;
+
 
 	// [void -> false]
 	template <class T>
-	constexpr bool HasConstValue = is_same_v<ConstValueT<OverrideT<T, int>>, T>;
+	constexpr bool HasConstValue	= is_same_v<ConstValueT<OverrideT<T, int>>, T>;
 
 	template <class Trg, class Src>
-	constexpr bool IsHeadAssignable = !is_reference_v<Trg> && is_assignable_v<Trg&, Src>;
+	constexpr bool IsHeadAssignable	= !is_reference_v<Trg> && is_assignable_v<Trg&, Src>;
 
 	template <class Trg, class Src>
-	constexpr bool IsRefCompatible = is_convertible_v<remove_reference_t<Src>*, remove_reference_t<Trg>*>;
+	constexpr bool IsRefCompatible	= is_convertible_v<remove_reference_t<Src>*, remove_reference_t<Trg>*>;
+
+	template <class T1, class T2>
+	constexpr bool AreRefCompatible	= IsRefCompatible<T1, T2> || IsRefCompatible<T2, T1>;
+
 
 	/// Innermost pointed/referenced type of Src is reference-compatible with Trg's innermost type - pointer depth ignored (!)
 	template <class Trg, class Src>

@@ -6,11 +6,9 @@
 #include <string>
 #include <memory>
 
-
 #ifdef __clang__
-#	pragma clang diagnostic ignored "-Wfloat-equal"
+#	pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
-
 
 
 namespace EnumerableTests {
@@ -55,7 +53,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (numsArr + 4,  &maxCoss.Last());
 
 			// take function pointer directly when an exact overload exists:
-			auto minFltCos = Enumerables::Range<float>(1.0, 5).As<float>().MinimumsBy(&cosf);
+			auto minFltCos = Enumerables::Range<float>(1.0, 5).MinimumsBy(&cosf);
 
 			// template function: needs OverloadResolver => explicit result
 			auto minDblCos = Enumerables::Range(1.0, 5).MinimumsBy<double>(&cos);
@@ -577,8 +575,8 @@ namespace EnumerableTests {
 				ASSERT (AreEqual({ "0", "0b", "0bc", "0bcd" },	bcd));
 				ASSERT (AreEqual({ "e", "ek", "ekf", "ekfg" },	ekfg));
 				ASSERT (AreEqual({ 'e', 'k', 'k', 'k' },		maxProj2));
-				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj1.MapTo<size_t>(FUN(x,  &x - projChars))));
-				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj3.MapTo<size_t>(FUN(x,  &x - projChars))));
+				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj1.MapTo<ptrdiff_t>(FUN(x,  &x - projChars))));
+				ASSERT (AreEqual({  0,   1,   1,   1  },		maxProj3.MapTo<ptrdiff_t>(FUN(x,  &x - projChars))));
 
 				// Short inputs:
 				ASSERT_EQ (false,	Enumerables::Empty<int>().Scan(FUN(x,		std::to_string(x)),

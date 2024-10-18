@@ -31,6 +31,15 @@ namespace EnumerableTests {
 	}
 
 
+	void AllocationCounter::AssertFreshCount(size_t expected, const char* file, long line)
+	{
+		if (EnableAsserts)
+			AssertEq(expected, Count(), "Allocation count", file, line);
+		Reset();
+	}
+
+
+
 	void Greet(const char* testName)
 	{
 		std::cout << "  " << testName << std::endl;

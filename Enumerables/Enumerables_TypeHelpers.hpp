@@ -214,8 +214,8 @@ namespace Enumerables::TypeHelpers {
 		static_assert (is_reference<Vote1>() || is_pointer<Vote1>() && is_pointer<Vote2>() || is_same<const Vote1, const Vote2>(),
 					   "Concatenation requires element value conversion (if possible). Specify forced element type for clarity!");
 
-		using T1 = BaseOrPointedT<Vote1>;
-		using T2 = BaseOrPointedT<Vote2>;
+		using T1 = PointedOrRefdBaseT<Vote1>;
+		using T2 = PointedOrRefdBaseT<Vote2>;
 		using CommonBaseVote = conditional_t< is_same_v<T1, T2>,			Vote1,
 							   conditional_t< is_convertible_v<T2*, T1*>,	Vote1,
 							   conditional_t< is_convertible_v<T1*, T2*>,	Vote2,
@@ -511,27 +511,12 @@ namespace Enumerables::TypeHelpers {
 
 	namespace LambdaCreators
 	{
-		// ==== Determine Safe + efficient parameter types to accept an element ===============
+		// ==== Parameter type helpers ========================================================
 
-		// * don't copy prvalue to parameter
-		// * but consider it movable ("Map" is the final call on it)
+		// For Predicates: const access only - even to pointees
+		// (Conditional only against clang's "& const" warning.)
 		template <class T>
-		using MapParamT = conditional_t< is_reference_v<T> || is_pointer_v<T>,
-										 T,
-										 T&& >;
-
-		// helper to std::forward some MapParamT
-		template <class T>
-		using MapForwardT = conditional_t< is_rvalue_reference_v<MapParamT<T>>,
-										   remove_reference_t<T>,
-										   T& >;
-
-		// * don't copy, don't move
-		// * const access only - even to pointee (for Predicates)
-		template <class T>
-		using ConstParamT = conditional_t< is_pointer_v<remove_reference_t<T>>,
-										   const remove_pointer_t<remove_reference_t<T>>*,
-										   const remove_reference_t<T>& >;
+		using ConstParamT = conditional_t<is_reference_v<T>, DeepConstT<T>, const DeepConstT<T>&>;
 
 
 
@@ -632,9 +617,9 @@ namespace Enumerables::TypeHelpers {
 		auto CustomMapper(Mptr p, IfMemberPointer<Mptr>* = nullptr)
 		{
 			return CustomMapper<T, R>(
-				[p](MapParamT<T> elem) -> decltype(auto)
+				[p](T&& elem) -> decltype(auto)
 				{
-					return MemberPointerHelpers::Select(forward<MapForwardT<T>>(elem), p);
+					return MemberPointerHelpers::Select(forward<T>(elem), p);
 				}
 			);
 		}
@@ -644,7 +629,7 @@ namespace Enumerables::TypeHelpers {
 		auto CustomMapper(Fptr p, IfPotentialFreeFunc<Fptr>* = nullptr)
 		{
 			return CustomMapper<T, R>(
-				[p](MapParamT<T> elem) -> decltype(auto) { return (*p)(forward<MapForwardT<T>>(elem)); }
+				[p](T&& elem) -> decltype(auto) { return (*p)(forward<T>(elem)); }
 			);
 		}
 
@@ -678,7 +663,7 @@ namespace Enumerables::TypeHelpers {
 			using TargetRes		= OverrideT<R, CorrectedRes>;
 
 			return Selector<T, TargetRes>(
-				[p](MapParamT<T> elem) -> TargetRes { return MemberPointerHelpers::Select(forward<MapForwardT<T>>(elem), p); }
+				[p](T&& elem) -> TargetRes { return MemberPointerHelpers::Select(forward<T>(elem), p); }
 			);
 		}
 
@@ -686,12 +671,12 @@ namespace Enumerables::TypeHelpers {
 		template <class T, class R = void, class Fptr>
 		auto Selector(Fptr p, IfPotentialFreeFunc<Fptr>* = nullptr)
 		{
-			using DeducedRes	= decltype((*p)(forward<MapForwardT<T>>(declval<T>())) );
+			using DeducedRes	= decltype(p(declval<T>()));
 			using CorrectedRes	= NonExpiringMemberT<T, DeducedRes>;
 			using TargetRes		= OverrideT<R, CorrectedRes>;
 
 			return Selector<T, TargetRes>(
-				[p](MapParamT<T> elem) -> TargetRes { return (*p)(forward<MapForwardT<T>>(elem)); }
+				[p](T&& elem) -> TargetRes { return (*p)(forward<T>(elem)); }
 			);
 		}
 
@@ -778,12 +763,10 @@ namespace Enumerables::TypeHelpers {
 		template <class T1, class T2, class R = void, class Mptr>
 		auto BinaryMapper(Mptr p, IfMemberPointer<Mptr>* = nullptr)
 		{
-			using FW1 = MapForwardT<T1>;
-			using FW2 = MapForwardT<T2>;
 			return BinaryMapper<T1, T2, R>(
-				[p](MapParamT<T1> lhs, MapParamT<T2> rhs) -> decltype(auto)
+				[p](T1&& lhs, T2&& rhs) -> decltype(auto)
 				{
-					return MemberPointerHelpers::ApplyBinop(forward<FW1>(lhs), p, forward<FW2>(rhs));
+					return MemberPointerHelpers::ApplyBinop(forward<T1>(lhs), p, forward<T2>(rhs));
 				}
 			);
 		}
@@ -792,10 +775,8 @@ namespace Enumerables::TypeHelpers {
 		template <class T1, class T2, class R = void, class Fptr = None>
 		auto BinaryMapper(Fptr p, IfPotentialFreeFunc<Fptr>* = nullptr)
 		{
-			using FW1 = MapForwardT<T1>;
-			using FW2 = MapForwardT<T2>;
 			return BinaryMapper<T1, T2, R>(
-				[p](MapParamT<T1> lhs, MapParamT<T2> rhs) -> decltype(auto) { return (*p)(forward<FW1>(lhs), forward<FW2>(rhs)); }
+				[p](T1&& lhs, T2&& rhs) -> decltype(auto) { return (*p)(forward<T1>(lhs), forward<T2>(rhs)); }
 			);
 		}
 	}	// namespace LambdaCreators

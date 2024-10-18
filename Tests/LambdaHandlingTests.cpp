@@ -528,6 +528,26 @@ namespace EnumerableTests {
 		ASSERT_EQ (3, holders.MinimumsBy<const int&>(FUN(h, h.GetConstData())).Single().data);
 		ASSERT_EQ (3, holders.MinimumsBy			(FUN(h, h.GetConstData())).Single().data);
 
+		// member-pointers should work just as fine with pointer sequences
+		auto holderPtrs = holders.Addresses();
+
+		ASSERT_EQ (4, holderPtrs.Select(&IntHolder::GetConstData).Min());
+		ASSERT_EQ (1, holderPtrs.Select<int>(&IntHolder::GetData).Min());
+		ASSERT_EQ (1, holderPtrs.Select<int&>(&IntHolder::GetData).Min());
+		ASSERT_EQ (1, holderPtrs.Select<const int&>(&IntHolder::GetData).Min());
+
+		ASSERT_EQ (6, holderPtrs.MinimumsBy<const int&>(&IntHolder::GetData) .Single()->constData);
+		ASSERT_EQ (6, holderPtrs.MinimumsBy<const int&>(&IntHolder::data)	 .Single()->constData);
+		ASSERT_EQ (6, holderPtrs.MinimumsBy			   (&IntHolder::data)	 .Single()->constData);
+		ASSERT_EQ (6, holderPtrs.MinimumsBy<const int&>(FUN(h, h->GetData())).Single()->constData);
+		ASSERT_EQ (6, holderPtrs.MinimumsBy			   (FUN(h, h->GetData())).Single()->constData);
+
+		ASSERT_EQ (3, holderPtrs.MinimumsBy<const int&>(&IntHolder::GetConstData) .Single()->data);
+		ASSERT_EQ (3, holderPtrs.MinimumsBy			   (&IntHolder::GetConstData) .Single()->data);
+		ASSERT_EQ (3, holderPtrs.MinimumsBy<const int&>(&IntHolder::constData)	  .Single()->data);
+		ASSERT_EQ (3, holderPtrs.MinimumsBy			   (&IntHolder::constData)	  .Single()->data);
+		ASSERT_EQ (3, holderPtrs.MinimumsBy<const int&>(FUN(h, h->GetConstData())).Single()->data);
+		ASSERT_EQ (3, holderPtrs.MinimumsBy			   (FUN(h, h->GetConstData())).Single()->data);
 
 		auto prHolders = Enumerables::Range(1, 3).Map(FUN(i, (IntHolder { i, 7 - i })));
 		ASSERT_ELEM_TYPE (IntHolder, prHolders);

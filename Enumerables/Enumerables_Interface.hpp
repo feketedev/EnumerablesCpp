@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *										Enumerables for C++ 	v2.0a-17									  *
+	 *										Enumerables for C++   v2.0.1a-17									  *
 	 *																											  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
@@ -69,7 +69,7 @@
 
 /// General shorthand for lambda (similar to C# => arrow)
 /// - Only ref capture, be aware when returned!
-#define FUN(...)	ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUN3, FUN2, FUN1)(__VA_ARGS__))
+#define FUN(...)	ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUN3, FUN2, FUN1, 0)(__VA_ARGS__))
 
 #define FUN1(x, expression)			[&](auto&& x)						-> decltype(auto)	{ return (expression); }
 #define FUN2(x, y, expression)		[&](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }
@@ -78,7 +78,7 @@
 
 /// General shorthand for lambda (similar to C# => arrow)
 /// - Value capture for locals, ref for members [this].
-#define FUNV(...) ENUMERABLES_EXPAND_VARARGS (ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1) (__VA_ARGS__))
+#define FUNV(...) ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1, 0)(__VA_ARGS__))
 
 #define FUNV1(x, expression)		[=](auto&& x)						-> decltype(auto)	{ return (expression); }
 #define FUNV2(x, y, expression)		[=](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }
@@ -180,7 +180,7 @@ namespace Enumerables::Def {
 		using TEnumerator	  = decltype(factory());
 		using TElem			  = EnumeratedT<TEnumerator>;
 		using TElemDecayed	  = std::decay_t<TElem>;
-		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// "deeper" const for predicates
+		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// deep-const for predicates
 
 
 		static_assert(!is_reference<TFactory>(), "AutoEnumerable construction error");
@@ -337,10 +337,10 @@ namespace Enumerables::Def {
 		}
 
 		template <class Pred>
-		static decltype(auto) Predicate(Pred& p)		{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
+		static decltype(auto) Predicate(Pred& p)	{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
 
 		template <class Pred>
-		static decltype(auto) BinPred(Pred& p)			{ return LambdaCreators::BinaryMapper<ConstValueT<TElem>, ConstValueT<TElem>, bool>(forward<Pred>(p)); }
+		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryMapper<TElemConstParam, TElemConstParam, bool>(forward<Pred>(p)); }
 
 
 
@@ -486,8 +486,8 @@ namespace Enumerables::Def {
 		// --- Shorthands for convenience ---
 
 		/// Elements not equal to nullptr
-		auto NonNulls() const &		{ return		Where(FUN(v, v != nullptr)); }
-		auto NonNulls() &&			{ return Move().Where(FUN(v, v != nullptr)); }
+		auto NonNulls() const &		{ return		Where(FUN(x, x != nullptr)); }
+		auto NonNulls() &&			{ return Move().Where(FUN(x, x != nullptr)); }
 
 		/// Unbox optional-like types where a value is available
 		auto ValuesOnly() const &	{ return		Where(FUN(x, Enumerables::HasValue(x))).Dereference(); }
@@ -531,16 +531,37 @@ namespace Enumerables::Def {
 	// ----- Conversions -------------------------------------------------------------------------------------------------------------
 
 		/// Apply an implicit conversion to type R for each element.
-		template <class R>	auto As() const &	
+		template <class R>	auto As() const &
 		{ 
 			if constexpr (is_same_v<R, TElem>)	return *this;
 			else								return Chain<ConverterEnumerator, R>();
 		}
-		template <class R>	auto As() &&		
+		template <class R>	auto As() &&
 		{ 
 			if constexpr (is_same_v<R, TElem>)	return Move();
 			else								return MvChain<ConverterEnumerator, R>();
 		}
+
+		/// Apply static_cast to type R for each element.
+		template <class R>	auto Cast() const &
+		{
+			if constexpr (is_same_v<R, TElem>)	return *this;
+			else								return Chain<CastingEnumerator, R>();
+		}
+		template <class R>	auto Cast() &&
+		{ 
+			if constexpr (is_same_v<R, TElem>)	return Move();
+			else								return MvChain<CastingEnumerator, R>();
+		}
+
+		/// Apply dynamic_cast to type R for each element.
+		template <class R>	auto DynamicCast()	const &	{ return   Chain<DynCastingEnumerator, R>(); }
+		template <class R>	auto DynamicCast()	&&		{ return MvChain<DynCastingEnumerator, R>(); }
+
+		/// Filter and dynamic_cast to type R. (Use exact * or & type.)
+		template <class R>	auto OfType()		const &	{ return   Chain<TypeFilterEnumerator, R>(); }
+		template <class R>	auto OfType()		&&		{ return MvChain<TypeFilterEnumerator, R>(); }
+
 
 		/// Same elements with const qualifier injected to top pointed or referenced type.
 		auto AsConst()		const &	{ return As<ConstValueT<TElem>>(); }
@@ -683,19 +704,23 @@ namespace Enumerables::Def {
 		template <class Pred = PF>	bool			  All		  (const Pred& p) const;
 		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(p).Any();		   }
 		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(p).First();		   }
+		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
 		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(p).Single();	   }
 		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(p).FirstIfAny();   }
+		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(p).LastIfAny();    }
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
-		template <class Pred = PF>	size_t			  Count		  (const Pred& p) const   { return ToReferenced().Where(p).Count();		   }
-		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
+		
+		template <class Pred = PF, class = enable_if_t<!is_convertible_v<Pred, TElemConstParam>>>
+		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
 
 	// ----- Shorthands comparing to an element --------------------------------------------------------------------------------------
 
-		bool	AllEqual(const TElemDecayed& x) const   { return ToReferenced().All  (FUN(v, v == x)); }
-		bool	Contains(const TElemDecayed& x) const   { return ToReferenced().Any  (FUN(v, v == x)); }
-		size_t	Count	(const TElemDecayed& x) const   { return ToReferenced().Where(FUN(v, v == x)).Count(); }
+		template <class R = TElemDecayed>
+		bool	AllEqual(const R& rhs)		  const   { return ToReferenced().All  (FUN(x, x == rhs)); }
+		bool	Contains(TElemConstParam val) const   { return ToReferenced().Any  (FUN(x, x == val)); }
+		size_t	Count	(TElemConstParam val) const   { return ToReferenced().Where(FUN(x, x == val)).Count(); }
 
 
 	// ----- Aggregating operations --------------------------------------------------------------------------------------------------

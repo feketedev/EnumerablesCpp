@@ -19,12 +19,12 @@ namespace EnumerableTests {
 
 		struct DerivedA : public Base {
 			double d;
-			DerivedA(int x, double d) : Base { x }, d { d } {}
+			DerivedA(int bx, double d) : Base { bx }, d { d } {}
 		};
 
 		struct DerivedB : public Base {
 			char c;
-			DerivedB(int x, char c) : Base { x }, c { c } {}
+			DerivedB(int bx, char c) : Base { bx }, c { c } {}
 		};
 
 	}
@@ -463,7 +463,8 @@ namespace EnumerableTests {
 
 			// with some conversions
 			double d1 = 5.9;
-			auto dubs = Concat<double>({ d1 }, nums1, { 6, 8, (double)x2 });
+			double d2 = x2;
+			auto dubs = Concat<double>({ d1 }, nums1, { 6, 8, d2 });
 			ASSERT_ELEM_TYPE (double, dubs);
 			ASSERT_EQ		 (9.0,    dubs.Last());
 			ASSERT_EQ		 (5.9,    dubs.First());
