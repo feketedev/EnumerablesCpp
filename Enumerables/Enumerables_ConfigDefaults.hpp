@@ -253,7 +253,7 @@ namespace Enumerables::StlBinding {
 
 
 
-#if defined(_MSC_VER) && defined(_OPTIONAL_)
+#if defined(_MSC_VER) && defined(_OPTIONAL_) || defined(_GLIBCXX_OPTIONAL)
 
 	// Suggested way of using std::optional if OptResult is undesired.
 	struct OptionalOperations {

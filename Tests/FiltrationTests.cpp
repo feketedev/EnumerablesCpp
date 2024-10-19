@@ -400,6 +400,7 @@ namespace EnumerableTests {
 	void TestFiltration()
 	{
 		Greet("Filtrations");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		SetOperationsSimple();
 		SetOperationsByReference();

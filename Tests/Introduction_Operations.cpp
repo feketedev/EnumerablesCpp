@@ -500,6 +500,7 @@ namespace EnumerableTests {
 	void RunIntroduction2()
 	{
 		Greet("Introduction 2");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		TerminalOperations();
 		CombineSequences();

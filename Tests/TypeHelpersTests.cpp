@@ -853,6 +853,7 @@ namespace EnumerableTests {
 	void TestTypeHelpers()
 	{
 		Greet("Typehelpers");
+		AllocationCounter::EnableAsserts = true;
 
 		TestOverloadResolver();
 		TestGenStorage();

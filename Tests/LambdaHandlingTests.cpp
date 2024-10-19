@@ -714,6 +714,7 @@ namespace EnumerableTests {
 	void TestLambdaUsage()
 	{
 		Greet("Lambda usage");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		SimpleProjectionOverloads();
 		OverloadResolverUsage();

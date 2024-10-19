@@ -384,6 +384,7 @@ namespace EnumerableTests {
 	void TestMisc()
 	{
 		Greet("Misc");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		Flattening();
 		ClosingWithFirsts();

@@ -596,6 +596,7 @@ namespace EnumerableTests {
 	void TestArithmetics()
 	{
 		Greet("Arithmetics");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		Orderings();
 		Summation();

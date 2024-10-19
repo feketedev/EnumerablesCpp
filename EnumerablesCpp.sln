@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.35229.62
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tests", "Tests\Tests.vcxitems", "{E9F3D24B-E3DA-4BAA-B03C-A6DA39EC2CD5}"
 EndProject
@@ -11,13 +11,31 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsMSVC", "TestsMSVC\Test
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsClang", "TestsClang\TestsClang.vcxproj", "{0155B3F6-17D7-4935-9FB0-6615A015A800}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestCommons", "TestCommons\TestCommons.vcxitems", "{6A3EB561-3B54-4D8E-8014-86447CBA0752}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsAltBinding", "TestsAltBinding\TestsAltBinding.vcxitems", "{1721DFAF-E333-45FC-A0F6-0FDBE2A61F4A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsAltMSVC", "TestsAltMSVC\TestsAltMSVC.vcxproj", "{C80C27D1-2C30-4D0B-A14F-216674D547A2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsAltClang", "TestsAltClang\TestsAltClang.vcxproj", "{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		Enumerables\Enumerables.vcxitems*{0155b3f6-17d7-4935-9fb0-6615a015a800}*SharedItemsImports = 4
+		TestCommons\TestCommons.vcxitems*{0155b3f6-17d7-4935-9fb0-6615a015a800}*SharedItemsImports = 4
 		Tests\Tests.vcxitems*{0155b3f6-17d7-4935-9fb0-6615a015a800}*SharedItemsImports = 4
+		TestsAltBinding\TestsAltBinding.vcxitems*{1721dfaf-e333-45fc-a0f6-0fdbe2a61f4a}*SharedItemsImports = 9
 		Enumerables\Enumerables.vcxitems*{45d41acc-2c3c-43d2-bc10-02aa73ffc7c7}*SharedItemsImports = 9
+		Enumerables\Enumerables.vcxitems*{64d8603d-19ab-48d8-b842-1be6d2c6f31b}*SharedItemsImports = 4
+		TestCommons\TestCommons.vcxitems*{64d8603d-19ab-48d8-b842-1be6d2c6f31b}*SharedItemsImports = 4
+		TestsAltBinding\TestsAltBinding.vcxitems*{64d8603d-19ab-48d8-b842-1be6d2c6f31b}*SharedItemsImports = 4
+		TestCommons\TestCommons.vcxitems*{6a3eb561-3b54-4d8e-8014-86447cba0752}*SharedItemsImports = 9
 		Enumerables\Enumerables.vcxitems*{6d81e361-1d9c-40d3-9bac-fdd27f8bbfdf}*SharedItemsImports = 4
+		TestCommons\TestCommons.vcxitems*{6d81e361-1d9c-40d3-9bac-fdd27f8bbfdf}*SharedItemsImports = 4
 		Tests\Tests.vcxitems*{6d81e361-1d9c-40d3-9bac-fdd27f8bbfdf}*SharedItemsImports = 4
+		Enumerables\Enumerables.vcxitems*{c80c27d1-2c30-4d0b-a14f-216674d547a2}*SharedItemsImports = 4
+		TestCommons\TestCommons.vcxitems*{c80c27d1-2c30-4d0b-a14f-216674d547a2}*SharedItemsImports = 4
+		TestsAltBinding\TestsAltBinding.vcxitems*{c80c27d1-2c30-4d0b-a14f-216674d547a2}*SharedItemsImports = 4
 		Tests\Tests.vcxitems*{e9f3d24b-e3da-4baa-b03c-a6da39ec2cd5}*SharedItemsImports = 9
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -43,6 +61,22 @@ Global
 		{0155B3F6-17D7-4935-9FB0-6615A015A800}.Release|x64.Build.0 = Release|x64
 		{0155B3F6-17D7-4935-9FB0-6615A015A800}.Release|x86.ActiveCfg = Release|Win32
 		{0155B3F6-17D7-4935-9FB0-6615A015A800}.Release|x86.Build.0 = Release|Win32
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Debug|x64.ActiveCfg = Debug|x64
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Debug|x64.Build.0 = Debug|x64
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Debug|x86.ActiveCfg = Debug|Win32
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Debug|x86.Build.0 = Debug|Win32
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Release|x64.ActiveCfg = Release|x64
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Release|x64.Build.0 = Release|x64
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Release|x86.ActiveCfg = Release|Win32
+		{C80C27D1-2C30-4D0B-A14F-216674D547A2}.Release|x86.Build.0 = Release|Win32
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Debug|x64.ActiveCfg = Debug|x64
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Debug|x64.Build.0 = Debug|x64
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Debug|x86.ActiveCfg = Debug|Win32
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Debug|x86.Build.0 = Debug|Win32
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Release|x64.ActiveCfg = Release|x64
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Release|x64.Build.0 = Release|x64
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Release|x86.ActiveCfg = Release|Win32
+		{64D8603D-19AB-48D8-B842-1BE6D2C6F31B}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

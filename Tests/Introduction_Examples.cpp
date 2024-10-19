@@ -208,6 +208,7 @@ namespace EnumerableTests {
 	void RunIntroduction3()
 	{
 		Greet("Introduction 3");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		Example1();
 		Example2();

@@ -667,6 +667,7 @@ namespace EnumerableTests {
 	void TestConstruction()
 	{
 		Greet("Source constructions");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		SeededConstruction();
 		CollectionBasics();

@@ -207,6 +207,7 @@ namespace EnumerableTests {
 	void TestFeatures17()
 	{
 		Greet("Features since C++17");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		NonuniformIterators();
 		SizeStlContainers();

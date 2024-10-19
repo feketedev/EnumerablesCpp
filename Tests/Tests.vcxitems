@@ -16,7 +16,6 @@
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)Tests.hpp" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)TestUtils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)ArithmeticTests.cpp" />
@@ -32,7 +31,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)MiscellaneousTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)OptResultTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)PerfTests.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)TestUtils.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Fundamentals.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)TypeHelpersTests.cpp" />
   </ItemGroup>

@@ -1,13 +1,6 @@
 #pragma once
 
-// For allocation tests: Disable allocation on empty std::vector construction
-#ifdef _DEBUG
-#	ifdef __clang__
-#		pragma clang diagnostic ignored "-Wreserved-id-macro"
-#	endif
-#	define _ITERATOR_DEBUG_LEVEL 0
-#endif
-
+#include "TestCompileSetup.hpp"
 #include <iostream>
 #include <utility>
 
@@ -26,13 +19,18 @@
 #define NO_MORE_HEAP		::EnumerableTests::AllocationGuard forbidHeap(0, __FILE__, __LINE__)
 #define UNUSED(var)			(void)(var)
 
-#define ASSERT_THROW(Ex, xpr)	try {													\
-									::EnumerableTests::DisableClientBreaks dontAssert;	\
-									xpr;												\
-									ASSERT (false); 									\
-								}														\
-								catch (const Ex&) {}									\
+#define ASSERT_THROW(Ex, xpr)	try {														\
+									::EnumerableTests::DisableClientBreaks dontAssert;		\
+									xpr;													\
+									ASSERT (false); 										\
+								}															\
+								catch (const Ex&) {}										\
 								(void)0
+
+// disable allocation checks if running with ResultsView for debug
+#define RESULTSVIEW_DISABLES_ALLOCASSERTS													\
+	::EnumerableTests::AllocationCounter::EnableAsserts = !ENUMERABLES_USE_RESULTSVIEW		\
+													   || !ENUMERABLES_RESULTSVIEW_AUTO_EVAL
 
 
 
@@ -61,12 +59,12 @@ namespace EnumerableTests {
 	class AllocationCounter	{
 		friend void* ::operator new(size_t);
 
-		static const bool			EnableAsserts;	// global masking for ResultsView
-
 		thread_local static size_t	globalCount;
 		size_t						myStart;
 
 	public:
+		static bool					EnableAsserts;		// global masking for ResultsView
+		
 		AllocationCounter();
 
 		size_t Count() const		{ return globalCount - myStart; }
@@ -195,7 +193,7 @@ namespace EnumerableTests {
 
 
 namespace std {
-	
+
 	template <class F, class S>
 	struct hash<pair<F, S>> {
 		size_t operator ()(const pair<F, S>& p) const

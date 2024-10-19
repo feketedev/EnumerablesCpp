@@ -1,5 +1,4 @@
 #include "TestUtils.hpp"
-#include "Enumerables.hpp"		// ResultsView macros only
 #include <new>
 #include <cassert>
 
@@ -18,12 +17,8 @@
 
 namespace EnumerableTests {
 
-	// Skip allocation checks if ResultsView is enabled for manual testing.
-	static constexpr bool noResultsView = !ENUMERABLES_USE_RESULTSVIEW
-									   || !ENUMERABLES_RESULTSVIEW_AUTO_EVAL;
-
-	thread_local size_t   AllocationCounter::globalCount   = 0;
-	const bool			  AllocationCounter::EnableAsserts = noResultsView;
+	thread_local size_t		AllocationCounter::globalCount   = 0;
+	bool					AllocationCounter::EnableAsserts = true;
 
 
 	AllocationCounter::AllocationCounter() : myStart { globalCount }

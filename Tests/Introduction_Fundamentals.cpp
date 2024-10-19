@@ -985,6 +985,7 @@ namespace EnumerableTests {
 	void RunIntroduction1()
 	{
 		Greet("Introduction 1");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		Fundamentals();
 		AutoTyping();
