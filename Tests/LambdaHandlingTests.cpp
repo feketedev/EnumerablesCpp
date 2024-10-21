@@ -411,8 +411,8 @@ namespace EnumerableTests {
 		 //	auto datasOvrldC = holders.Select<const std::unique_ptr<int>&>(&IntHeapHolder::GetData); //
 		 //	auto datasOvrldL = holders.Select<std::unique_ptr<int>&>(&IntHeapHolder::GetData);		 // - CTE by language anyway
 
+			[[maybe_unused]]
 		 	auto dangling = holders.MapTo<std::unique_ptr<int>&&>(&IntHeapHolder::GetData);			 // Compiles, Map = programmer's responsibility
-			UNUSED (dangling);
 
 			auto constsField = holders.Select(&IntHeapHolder::constData);
 			auto constsSimpl = holders.Select(&IntHeapHolder::GetConstData);

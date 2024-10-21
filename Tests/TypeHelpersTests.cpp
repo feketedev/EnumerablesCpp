@@ -267,9 +267,11 @@ namespace EnumerableTests {
 			{
 				OverloadResolver<const GetterTester&,	const char&>	c1 { &FreeExtractor };
 				OverloadResolver<GetterTester&,			const char&>	c2 { &FreeExtractor };	// WARNING: const overload selected by return type!
+				[[maybe_unused]]
 				OverloadResolver<GetterTester,			const char&>	c3 { &FreeExtractor };	// <
 				OverloadResolver<GetterTester&&,		const char&>	c4 { &FreeExtractor };	// < Gets dangling if part of object
-				OverloadResolver<const GetterTester,	const char&>	c5 { &FreeExtractor };  // < (.Select forbids this, can be ok with .Map)
+				[[maybe_unused]]																// < (.Select forbids this, can be ok with .Map)
+				OverloadResolver<const GetterTester,	const char&>	c5 { &FreeExtractor };  // <
 
 				OverloadResolver<GetterTester,			char&&>		r1 { &FreeExtractor };
 				OverloadResolver<GetterTester&&,		char&&>		r2 { &FreeExtractor };
@@ -282,8 +284,6 @@ namespace EnumerableTests {
 				ASSERT(&obj.cConst == &c1(obj));
 				ASSERT(&obj.cConst == &c2(obj));
 				ASSERT(&obj.cConst == &c4(std::move(obj)));		// moved but not dangling yet (no sense IRL)
-				UNUSED(c3);									// would get dangling in this test
-				UNUSED(c5);                                 //
 				char&& rr1 = r1(std::move(obj));
 				char&& rr2 = r2(std::move(obj));
 				ASSERT(&obj.cRight == &rr1);

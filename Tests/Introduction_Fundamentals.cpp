@@ -911,8 +911,8 @@ namespace EnumerableTests {
 			// and support a limited (but free) resolution for free-functions.
 			// -> see IsSquare(Rectangle&)
 
+			[[maybe_unused]]
 			bool (*shouldntCall)(Rectangle&) = &IsSquare;
-			UNUSED (shouldntCall);
 		}
 
 

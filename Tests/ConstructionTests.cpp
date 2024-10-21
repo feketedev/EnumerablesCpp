@@ -120,9 +120,9 @@ namespace EnumerableTests {
 			ASSERT_EQ		 (3, consts2.ElementAt(30)->data);
 
 			// The dangerous part is const & access from rvalues - no current safety mechanism for that!
+			[[maybe_unused]]
 			const Base& viaRvalue = baseConsts.Skip(1).First();			// dangling after result of .Skip destroys!!!
 			int					x = baseConsts.Skip(1).First().x;		// is OK, saving a copy before temporary destroys
-			UNUSED (viaRvalue);
 			ASSERT_EQ (1, x);
 
 			// CONSIDER: a static_assert is theoretically possible to prevent giving out const& to self-contained values in rvalue enumerables,

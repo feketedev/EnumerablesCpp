@@ -475,8 +475,8 @@ namespace EnumerableTests {
 			const size_t			setAllocs = allocations.Count();
 
 			allocations.Reset();
-			std::unordered_set<int> set1 = move(set0);
-			const size_t			setMoveAllocs = allocations.Count();
+			std::unordered_set<int>			set1 = move(set0);
+			[[maybe_unused]] const size_t	setMoveAllocs = allocations.Count();
 
 			allocations.Reset();
 			auto roots = Enumerate(set1).MapTo<double>(&sqrt);
@@ -489,7 +489,6 @@ namespace EnumerableTests {
 			allocations.AssertFreshCount(2 * setMoveAllocs + setAllocs);
 #		else
 			allocations.AssertFreshCount(setAllocs);
-			UNUSED (setMoveAllocs);
 #		endif
 		}
 	}

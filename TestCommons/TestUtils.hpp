@@ -17,7 +17,6 @@
 #define ASSERT(cond)		::EnumerableTests::Assert((cond), #cond, __FILE__, __LINE__)
 #define ASSERT_EQ(x, y)		::EnumerableTests::AssertEq(x, y, #x " == " #y, __FILE__, __LINE__)
 #define NO_MORE_HEAP		::EnumerableTests::AllocationGuard forbidHeap(0, __FILE__, __LINE__)
-#define UNUSED(var)			(void)(var)
 
 #define ASSERT_THROW(Ex, xpr)	try {														\
 									::EnumerableTests::DisableClientBreaks dontAssert;		\
@@ -163,14 +162,10 @@ namespace EnumerableTests {
 
 
 	template <class A, class B>
-	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<std::is_floating_point_v<B>>
+	auto PrintDiff(const A& a, const B& b)
 	{
-		PrintObj("\tDiff =      ",  b - a);
-	}
-
-	template <class A, class B>
-	auto PrintDiff(const A& a, const B& b) -> std::enable_if_t<!std::is_floating_point_v<B>>
-	{
+		if constexpr (std::is_floating_point<B>() && std::is_convertible<A, B>())
+			PrintObj("\tDiff =      ",  b - a);
 	}
 
 

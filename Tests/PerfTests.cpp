@@ -688,14 +688,13 @@ namespace EnumerableTests {
 
 		static InCollection	GenerateInput(size_t s)							{ return TestCase::GenerateInput(s); }
 		static Res			RunClassic(const InCollection& in, size_t s)	{ return TestCase::RunClassic(in, s); }
+		static auto			CreateQuery(const InCollection& in)
+		{
+			if constexpr (UseInterface)		return TestCase::CreateQuery(in).ToInterfaced();
+			else							return TestCase::CreateQuery(in);
+		}
 
-		template <bool I = UseInterface, std::enable_if_t<!I, int> = 0>
-		static auto			CreateQuery(const InCollection& in)		{ return TestCase::CreateQuery(in); }
-
-		template <bool I = UseInterface, std::enable_if_t<I, int> = 0>
-		static auto			CreateQuery(const InCollection& in)		{ return TestCase::CreateQuery(in).ToInterfaced(); }
-
-		using Query	= decltype(CreateQuery<UseInterface>(std::declval<InCollection>()));
+		using Query	= decltype(CreateQuery(std::declval<InCollection>()));
 	};
 
 
@@ -990,7 +989,7 @@ namespace EnumerableTests {
 				std::cout << std::endl;
 				col = 0;
 			}
-			return filled;		// return anything for template below :)
+			return filled;
 		}
 
 
@@ -1008,8 +1007,7 @@ namespace EnumerableTests {
 		{
 			static_assert (sizeof...(T) <= Columns, "Not enough columns defined.");
 
-			std::initializer_list<unsigned> ress { PutCell(vals)... };
-			UNUSED (ress);
+			(..., PutCell(vals));
 			CloseRow();
 		}
 	};

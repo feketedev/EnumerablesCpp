@@ -62,7 +62,7 @@ namespace EnumerableTests {
 
 	static bool MaskClientBreaks = false;
 
-	void MaskableClientBreak(const char* err)
+	void MaskableClientBreak([[maybe_unused]] const char* err)
 	{
 		if (MaskClientBreaks)
 			return;
@@ -72,7 +72,6 @@ namespace EnumerableTests {
 #	else
 		assert(false);
 #	endif
-		UNUSED (err);	// Release or non-MS
 	}
 
 
