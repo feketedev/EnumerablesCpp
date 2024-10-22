@@ -229,7 +229,7 @@ namespace Enumerables::Def {
 		/// Main constructor. Wraps an Enumerator-factory directly. Intended for usage through creator functions.
 		/// @param pureSource:  enumerating is sideeffect-free, allows auto-evaluation for debugging.
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
-		AutoEnumerable(TFactory&& factory, bool pureSource = true, bool stepToDebug = true) :
+		AutoEnumerable(TFactory&& factory, bool pureSource = true, [[maybe_unused]] bool stepToDebug = true) :
 			factory { move(factory) },
 			isPure  { pureSource && is_copy_constructible<TElem>() }
 		{
@@ -922,19 +922,13 @@ namespace Enumerables::Def {
 
 	};
 
+	template <class Fact>	
+	AutoEnumerable(Fact&&, bool = true, bool = true) -> AutoEnumerable<Fact>;
 
 
 
 
 #pragma region Source creators
-
-	template <class Fact>
-	AutoEnumerable<Fact>   WrapFactory(Fact&& fact, bool isPure = true, bool stepToDebug = true)
-	{
-		return AutoEnumerable<Fact> { forward<Fact>(fact), isPure, stepToDebug };
-	}
-
-
 
 	#pragma region Generate sequences
 
@@ -942,7 +936,7 @@ namespace Enumerables::Def {
 	template <class V>
 	auto Empty()
 	{
-		return WrapFactory([]() { return EmptyEnumerator<V> {}; });
+		return AutoEnumerable { []() { return EmptyEnumerator<V> {}; } };
 	}
 
 
@@ -959,7 +953,7 @@ namespace Enumerables::Def {
 			RepeaterEnumerator<Storage, Output>   operator ()() const   { return { seed }; }
 		};
 
-		return WrapFactory(InfRepeaterFactory { forward<Vin>(val) });
+		return AutoEnumerable { InfRepeaterFactory { forward<Vin>(val) } };
 	}
 
 
@@ -981,7 +975,7 @@ namespace Enumerables::Def {
 			}
 		};
 
-		return WrapFactory(RepeaterFactory { forward<Vin>(val), count });
+		return AutoEnumerable { RepeaterFactory { forward<Vin>(val), count } };
 	}
 
 
@@ -1019,7 +1013,7 @@ namespace Enumerables::Def {
 			}
 		};
 
-		return WrapFactory(SequenceFactory { forward<Vin>(seed), forward<StepFun>(step) });
+		return AutoEnumerable { SequenceFactory { forward<Vin>(seed), forward<StepFun>(step) } };
 	}
 
 
@@ -1098,7 +1092,7 @@ namespace Enumerables::Def {
 				};
 			}
 		};
-		return WrapFactory(IndexRangeFactory { list });
+		return AutoEnumerable { IndexRangeFactory { list } };
 	}
 
 
@@ -1126,7 +1120,7 @@ namespace Enumerables::Def {
 				};
 			}
 		};
-		return WrapFactory(RevIndexRangeFactory { list });
+		return AutoEnumerable { RevIndexRangeFactory { list } };
 	}
 
 	#pragma endregion
@@ -1162,10 +1156,10 @@ namespace Enumerables::Def {
 	template <class ForcedResult = void, class Container>
 	auto Enumerate(Container& cont)
 	{
-		return WrapFactory(
+		return AutoEnumerable {
 			[&cont]() { return CreateEnumeratorFor<ForcedResult>(cont); },
 			true, false
-		);
+		};
 	}
 
 
@@ -1180,9 +1174,9 @@ namespace Enumerables::Def {
 	{
 		using Elem = IterableT<const Container&>;
 		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedResult, Elem>>();
-		return WrapFactory(
+		return AutoEnumerable {
 			[c = move(cont)]() { return CreateEnumeratorFor<ForcedResult>(c); }
-		);
+		};
 	}
 
 
@@ -1197,9 +1191,9 @@ namespace Enumerables::Def {
 	template <class ForcedResult = void, class TBegin, class TEnd>
 	auto Enumerate(TBegin begin, TEnd end)
 	{
-		return WrapFactory(
+		return AutoEnumerable {
 			[b = move(begin), e = move(end)]() { return IteratorEnumerator<TBegin, TEnd, ForcedResult> { b, e }; }
-		);
+		};
 	}
 
 	#pragma endregion
@@ -1284,9 +1278,9 @@ namespace Enumerables::Def {
 	auto Enumerate(std::initializer_list<T>& cont)
 	{
 		using It = typename std::initializer_list<T>::iterator;
-		return WrapFactory(
+		return AutoEnumerable {
 			[&cont]() { return IteratorEnumerator<It, It, ForcedResult> { cont.begin(), cont.end() }; }
-		);
+		};
 	}
 
 	#pragma endregion

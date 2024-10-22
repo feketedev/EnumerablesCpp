@@ -69,10 +69,6 @@ namespace Enumerables::Def {
 	};
 
 
-	template <class Container>
-	constexpr bool HasIteratorDifference = HasQueryableDistance<IteratorT<Container>, EndIteratorT<Container>>::value;
-
-
 
 	/// Actual iterator distance, if available.
 	template <class From, class To>
@@ -540,6 +536,9 @@ namespace Enumerables::Def {
 		IteratorEnumerator(const TBegin& beg, const TEnd& end) : curr { beg }, end { end }  {}
 	};
 
+	template <class TBegin, class TEnd = TBegin>
+	IteratorEnumerator(const TBegin&, const TEnd&) -> IteratorEnumerator<TBegin, TEnd>;
+
 
 
 	/// Variation of IteratorEnumerator for non-randomaccess iterators when the container is sizeable.
@@ -588,6 +587,9 @@ namespace Enumerables::Def {
 
 		ContainerEnumerator(Container& subject) : subject { subject }  {}
 	};
+
+	template <class C>
+	ContainerEnumerator(C&) -> ContainerEnumerator<C>;
 
 	#pragma endregion
 
@@ -1401,32 +1403,19 @@ namespace Enumerables::Def {
 
 #pragma region Construction helpers
 
-	#pragma region Container Enumerator choice
-
-	template <class C>
-	using IfContainerSizeOnly = enable_if_t< HasQueryableSize<C>::value &&
-											!HasIteratorDifference<C>,
-											unsigned >;
-
-	template <class C>
-	using IfTrySizeIterators = enable_if_t< !HasQueryableSize<C>::value ||
-											HasIteratorDifference<C>,
-											unsigned >;
-
-
-	template <class ForcedResult = void, class C, IfTrySizeIterators<C&> = 0>
-	auto CreateEnumeratorFor(C& container) -> IteratorEnumerator<IteratorT<C&>, EndIteratorT<C&>, ForcedResult>
+	/// Choose Enumerator for Container based on available kinds of size info.
+	template <class ForcedResult = void, class C>
+	auto CreateEnumeratorFor(C& container)
 	{
-		return { AdlBegin(container), AdlEnd(container) };
+		using Beg = IteratorT<C&>;
+		using End = EndIteratorT<C&>;
+		constexpr bool containerSizeOnly = HasQueryableSize<C>::value && 
+										  !HasQueryableDistance<Beg, End>::value;
+		if constexpr (containerSizeOnly)
+			return ContainerEnumerator<C, ForcedResult> { container };
+		else
+			return IteratorEnumerator<Beg, End, ForcedResult> { AdlBegin(container), AdlEnd(container) };
 	}
-
-	template <class ForcedResult = void, class C, IfContainerSizeOnly<C&> = 0>
-	auto CreateEnumeratorFor(C& container) -> ContainerEnumerator<C, ForcedResult>
-	{
-		return { container };
-	}
-
-	#pragma endregion
 
 
 

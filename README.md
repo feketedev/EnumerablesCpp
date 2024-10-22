@@ -139,6 +139,10 @@ The theoretical benefit is that a good intellisense can provide method completio
 As mentioned, the library can use any container for its List / Set types through a few macros and user-defined binding classes that consist of simple static methods for the necessary basic operations.
 This means that - while the library is not tied to STL -, in each module (.exe or .dll) only 1 such binding-set can exist, due to ODR.<br/>
 
+For a small demo, the tests under [TestsAltBinding](/TestsAltBinding) employ an alternative configuration set up in [EnumerablesAlt.hpp](/TestsAltBinding/EnumerablesAlt.hpp),
+which for example binds C++17's std::optional as the result type of concerned terminal operations in place of the default Enumerables::OptResult.
+(These tests must be instantiated in separated DLLs to avoid theoretical link-time collision with the default *Enumerable* types laid out for the base tests.)
+
 The alternative could be to use additional template parameters for those binding (or strategy) classes, but *Enumerable*s of the various bindings would still be incompatible, so I didn't see enough value in that added complexity so far.
 
 
