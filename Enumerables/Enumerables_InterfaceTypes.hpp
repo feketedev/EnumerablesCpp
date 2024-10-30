@@ -133,7 +133,7 @@ namespace Enumerables {
 
 		// quickfix: this separate gate triggers substitution failure prior to static_asserts of CustomMapper - which would fire even in subsequently disqualified overloads
 		template <class M, class TT = T>
-		using IfMappable = std::enable_if_t<TypeHelpers::IsCallable<M&&, TT>::value || std::is_member_pointer<std::decay_t<M>>::value, int>;
+		using IfMappable = std::enable_if_t<TypeHelpers::IsCallable<M, TT>::value || std::is_member_pointer<std::decay_t<M>>::value, int>;
 
 
 
@@ -301,7 +301,7 @@ namespace Enumerables {
 
 		/// If has value, apply a transformation function to it - otherwise forward error code.
 		/// @param mapper:	Lambda, pointer to member, or exact [member-] function pointer to accept type T.
-		template <class M>
+		template <class M, IfMappable<M, T> = 0>
 		OptResult<MapResult<M, T>>			MapValue(M&& mapper)	&&
 		{
 			auto map = TypeHelpers::LambdaCreators::CustomMapper<T>(mapper);

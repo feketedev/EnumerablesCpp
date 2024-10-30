@@ -101,6 +101,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MinimalRebuild>false</MinimalRebuild>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
+      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -119,6 +123,10 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MinimalRebuild>false</MinimalRebuild>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
+      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,6 +146,9 @@
       <LanguageStandard>stdcpp14</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -159,6 +170,9 @@
       <LanguageStandard>stdcpp14</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -6,7 +6,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>EnableAllWarnings</WarningLevel>
-      <AdditionalOptions>-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-return-std-move-in-c++11 -Wno-deprecated-redundant-constexpr-static-def -Wno-covered-switch-default -Wno-shadow-field-in-constructor -Wno-reorder-ctor -Wno-missing-field-initializers -Wno-parentheses -Wno-logical-op-parentheses -Wno-sign-compare -Wno-double-promotion -Wno-float-equal -Wno-unknown-warning-option -Wno-documentation -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-Wpedantic -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-return-std-move-in-c++11 -Wno-unknown-warning-option -Wno-deprecated-redundant-constexpr-static-def -Wno-covered-switch-default -Wno-shadow-field-in-constructor -Wno-reorder-ctor -Wno-missing-field-initializers -Wno-parentheses -Wno-logical-op-parentheses -Wno-sign-compare -Wno-double-promotion -Wno-float-equal -Wno-documentation -Wno-unqualified-std-cast-call -Wno-unsafe-buffer-usage %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup />

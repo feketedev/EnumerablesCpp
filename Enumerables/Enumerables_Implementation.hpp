@@ -676,7 +676,7 @@ namespace Def {
 
 	template <class T>
 	template <class V, class Factory>
-	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<!is_copy_constructible<V>::value>*)
+	void ResultBuffer<T>::Fill(Factory&, bool isPure, bool autoCall, enable_if_t<!is_copy_constructible<V>::value>*)
 	{
 		ENUMERABLES_INTERNAL_ASSERT (!isPure);
 		Status = "Not available for this type.";
