@@ -601,8 +601,8 @@ namespace Enumerables::TypeHelpers {
 		template <class T, class R = void, class L>
 		decltype(auto) CustomMapper(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			// will call a copy inside an Enumerator ==> should not find "&&" overload; but no constness required
-			using AppliedL = decay_t<L>;
+			// will be stored inside Enumerable ==> should not find && overload; constness required!
+			using AppliedL = ConstValueT<L>&;
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary mapper function or selector for: TElem -> TMapped."
 														   " Check lambda's parameter type including constness!"						   );
 
@@ -640,7 +640,7 @@ namespace Enumerables::TypeHelpers {
 		template <class T, class R = void, class L>
 		decltype(auto) Selector(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			using AppliedL = decay_t<L>;
+			using AppliedL = ConstValueT<L>&;
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary projection function or selector for: TElem -> TSubobj."
 														   " Check lambda's parameter type including constness!"							   );
 
@@ -687,8 +687,8 @@ namespace Enumerables::TypeHelpers {
 		template <class T, class L>
 		decltype(auto) Predicate(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			// will call a copy inside an Enumerator ==> should not find && overload; but no constness required
-			using AppliedL = decay_t<L>;
+			// will be stored inside Enumerable ==> should not find && overload; constness required!
+			using AppliedL = ConstValueT<L>&;
 
 			// CONSIDER: Enforce constness of T? Currently idempotence of lambda is user responsibility.
 			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary predicate function or selector for: TElem -> bool."
@@ -749,7 +749,7 @@ namespace Enumerables::TypeHelpers {
 		template <class T1, class T2, class R = void, class L>
 		decltype(auto) BinaryMapper(L&& lambda, IfPotentialLambda<remove_reference_t<L>>* = nullptr)
 		{
-			using AppliedL = decay_t<L>;
+			using AppliedL = ConstValueT<L>&;
 			static_assert (IsCallable<AppliedL, T1, T2>::value, "This method expects a binary operation: (TValue1, TValue2) -> TMapped."
 																" Check lambda's parameter type including constness!"					);
 

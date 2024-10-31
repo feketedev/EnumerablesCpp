@@ -781,6 +781,86 @@ namespace EnumerableTests {
 
 
 
+#pragma region Formatting Utils
+
+	template <class Period>
+	std::ostream& operator <<(std::ostream& os, const std::chrono::duration<double, Period>& t)
+	{
+		if (t.count() > 1000.0)
+			os << std::fixed << std::setprecision(0);
+		else
+			os << std::defaultfloat << std::setprecision(4);
+
+		return os << t.count();
+	}
+
+
+
+	template <size_t Columns>
+	class TableWriter {
+		unsigned		col			= 0;
+		bool			waitRewrite	= false;
+
+	public:
+		const unsigned	Widths[Columns];
+
+		template <class... Args>
+		constexpr TableWriter(Args... args) : Widths { (unsigned)args... }
+		{
+		}
+
+
+		template <class T, size_t N = 1>
+		unsigned PutCell(const T& val, const char (&suffix)[N] = "", bool forRewrite = false)
+		{
+			if (waitRewrite) {
+				// oversimplified - just works for this tiny feedback here...
+				for (unsigned i = 0; i < Widths[col]; i++)
+					std::cout << '\b';
+			}
+			if (col == 0) {
+				// 0 serves as indentation only
+				ASSERT (!waitRewrite);
+				std::cout << std::setw(Widths[col++]) << ' ';
+			}
+
+			std::cout << std::setw(Widths[col] - N + 1) << val << suffix;
+			if (waitRewrite = forRewrite)
+				return col;
+
+			const unsigned filled = col++;
+			if (col == Columns) {
+				std::cout << std::endl;
+				col = 0;
+			}
+			return filled;
+		}
+
+
+		void CloseRow()
+		{
+			if (col > 0)
+				std::cout << std::endl;
+			col = 0;
+			waitRewrite = false;
+		}
+
+
+		template <class... T>
+		void PutRow(const T&... vals)
+		{
+			static_assert (sizeof...(T) <= Columns, "Not enough columns defined.");
+
+			(..., PutCell(vals));
+			CloseRow();
+		}
+	};
+
+#pragma endregion
+
+
+
+
 #pragma region Runner
 
 	using Enumerables::TypeHelpers::InvokeResultT;
@@ -937,85 +1017,62 @@ namespace EnumerableTests {
 
 
 
-#pragma region Formatting
-
-	template <class Period>
-	std::ostream& operator <<(std::ostream& os, const std::chrono::duration<double, Period>& t)
+	static std::vector<PerfComparison>	RunAllWith(size_t complexity, unsigned cycles)
 	{
-		if (t.count() > 1000.0)
-			os << std::fixed << std::setprecision(0);
-		else
-			os << std::defaultfloat<< std::setprecision(4);
+		std::string cyclesTxt = std::to_string(MeasurementCount) + " * " + std::to_string(cycles);
+		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
+				  << " Cycles: " << cyclesTxt << std::endl;
 
-		return os << t.count();
+		TableWriter<5> tb { 5, 34, 16, 15, 20 };
+
+		std::cout << std::endl << std::right;
+		tb.PutRow("", "Handwritten", "Enumerable", "    Enumerable   ");
+		tb.PutRow("", "",			  "  query   ", "construct + query");
+
+		std::vector<PerfComparison> results;
+
+		results.push_back(RunTestcase<ListingTest<DirectCopy>>				(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<DirectCopy, true>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<CopyFromDict>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<CopyFromDict, true>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<ConversionCopy>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<Squares<int>>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<Squares<double>>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<Squares<int>, true>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<Squares<double>, true>>	(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<NeighborDiffs<int>>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<NeighborDiffs<double>>>	(tb, complexity, cycles));
+
+		results.push_back(RunTestcase<ListingTest<FilterByField>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<SubrangeFiltered>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<SubrangeFiltered>>		(tb, complexity, cycles, complexity / 5));
+		results.push_back(RunTestcase<ListingTest<ProjectFiltered>>			(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<ProjectFiltered, true>>	(tb, complexity, cycles));
+
+		results.push_back(RunTestcase<ListingTest<IntSort>>					(tb, complexity / 10, cycles));
+		results.push_back(RunTestcase<ListingTest<IntSort, true>>			(tb, complexity / 10, cycles));
+		results.push_back(RunTestcase<ListingTest<IntSort2>>				(tb, complexity / 10, cycles));
+		results.push_back(RunTestcase<ListingTest<OrderByOtherField>>		(tb, complexity / 10, cycles));
+
+		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<PositiveMinimums>>		 (tb, complexity, cycles));   // from refs => needs copy
+		results.push_back(RunTestcase<ListingTest<PositiveMinimums, true>>	 (tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums>>		 (tb, complexity, cycles));   // from values => optimized
+		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums, true>>(tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<PositiveMinimumsOrdered>>	 (tb, complexity, cycles));
+
+		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, cycles));
+		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<AggregationTest<SumDoubles>>	(tb, complexity, cycles));
+		results.push_back(RunTestcase<AggregationTest<SumDoubles2>>	(tb, complexity, cycles));
+
+		return results;
 	}
 
 
-
-	template <size_t Columns>
-	class TableWriter {
-		unsigned		col			= 0;
-		bool			waitRewrite	= false;
-
-	public:
-		const unsigned	Widths[Columns];
-
-		template <class... Args>
-		constexpr TableWriter(Args... args) : Widths { (unsigned)args... }
-		{
-		}
-
-
-		template <class T, size_t N = 1>
-		unsigned PutCell(const T& val, const char (&suffix)[N] = "", bool forRewrite = false)
-		{
-			if (waitRewrite) {
-				// oversimplified - just works for this tiny feedback here...
-				for (unsigned i = 0; i < Widths[col]; i++)
-					std::cout << '\b';
-			}
-			if (col == 0) {
-				// 0 serves as indentation only
-				ASSERT (!waitRewrite);
-				std::cout << std::setw(Widths[col++]) << ' ';
-			}
-
-			std::cout << std::setw(Widths[col] - N + 1) << val << suffix;
-			if (waitRewrite = forRewrite)
-				return col;
-
-			const unsigned filled = col++;
-			if (col == Columns) {
-				std::cout << std::endl;
-				col = 0;
-			}
-			return filled;
-		}
-
-
-		void CloseRow()
-		{
-			if (col > 0)
-				std::cout << std::endl;
-			col = 0;
-			waitRewrite = false;
-		}
-
-
-		template <class... T>
-		void PutRow(const T&... vals)
-		{
-			static_assert (sizeof...(T) <= Columns, "Not enough columns defined.");
-
-			(..., PutCell(vals));
-			CloseRow();
-		}
-	};
-
-
-
 	// csv-like output to diff/collect
-	static void PrintCompact(const std::vector<PerfComparison>& res)
+	static void							PrintCompact(const std::vector<PerfComparison>& res)
 	{
 		TableWriter<6> tb { 5, 36, 15, 17, 17, 13 };
 
@@ -1071,64 +1128,6 @@ namespace EnumerableTests {
 		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
 		tb.PutCell(sum.TotalOverheadPercent(), " %");
 		tb.CloseRow();
-	}
-
-#pragma endregion
-
-
-
-
-	static std::vector<PerfComparison>	RunAllWith(size_t complexity, unsigned cycles)
-	{
-		std::string cyclesTxt = std::to_string(MeasurementCount) + " * " + std::to_string(cycles);
-		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
-				  << " Cycles: " << cyclesTxt << std::endl;
-
-		TableWriter<5> tb { 5, 34, 16, 15, 20 };
-
-		std::cout << std::endl << std::right;
-		tb.PutRow("", "Handwritten", "Enumerable", "    Enumerable   ");
-		tb.PutRow("", "",			  "  query   ", "construct + query");
-
-		std::vector<PerfComparison> results;
-
-		results.push_back(RunTestcase<ListingTest<DirectCopy>>				(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<DirectCopy, true>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<CopyFromDict>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<CopyFromDict, true>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<ConversionCopy>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<Squares<int>>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<Squares<double>>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<Squares<int>, true>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<Squares<double>, true>>	(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<NeighborDiffs<int>>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<NeighborDiffs<double>>>	(tb, complexity, cycles));
-
-		results.push_back(RunTestcase<ListingTest<FilterByField>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<SubrangeFiltered>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<SubrangeFiltered>>		(tb, complexity, cycles, complexity / 5));
-		results.push_back(RunTestcase<ListingTest<ProjectFiltered>>			(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<ProjectFiltered, true>>	(tb, complexity, cycles));
-
-		results.push_back(RunTestcase<ListingTest<IntSort>>					(tb, complexity / 10, cycles));
-		results.push_back(RunTestcase<ListingTest<IntSort, true>>			(tb, complexity / 10, cycles));
-		results.push_back(RunTestcase<ListingTest<IntSort2>>				(tb, complexity / 10, cycles));
-		results.push_back(RunTestcase<ListingTest<OrderByOtherField>>		(tb, complexity / 10, cycles));
-
-		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<PositiveMinimums>>		 (tb, complexity, cycles));   // from refs => needs copy
-		results.push_back(RunTestcase<ListingTest<PositiveMinimums, true>>	 (tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums>>		 (tb, complexity, cycles));   // from values => optimized
-		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums, true>>(tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<PositiveMinimumsOrdered>>	 (tb, complexity, cycles));
-
-		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, cycles));
-		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, cycles));
-		results.push_back(RunTestcase<AggregationTest<SumDoubles>>	(tb, complexity, cycles));
-		results.push_back(RunTestcase<AggregationTest<SumDoubles2>>	(tb, complexity, cycles));
-
-		return results;
 	}
 
 

@@ -15,10 +15,12 @@ namespace {
 	template <bool AllowDiff>
 	struct EndIterator {
 		const int& end;
+	};
+	template <>
+	struct EndIterator<true> {
+		const int& end;
 
-		template <bool D = AllowDiff>
-		std::enable_if_t<D, int>
-		operator -(const NumIterator& rhs) const	{ return 1 + end - rhs.x; }
+		int   operator -(const NumIterator& rhs) const;
 	};
 
 
@@ -46,6 +48,8 @@ namespace {
 
 	bool NumIterator::creationOccurred  = false;
 	bool NumIterator::incrementOccurred = false;
+
+	int  EndIterator<true>::operator -(const NumIterator& rhs) const   { return 1 + end - rhs.x; }
 
 
 	template <bool HasDiff, bool HasSize>

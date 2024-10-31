@@ -52,6 +52,8 @@ namespace EnumerableTests {
 		
 			Base1(int i) : i { i }  {}
 			virtual ~Base1() = default;
+			
+			Base1(const Base1&) = default;
 		};
 
 		struct Base2 {
@@ -59,6 +61,8 @@ namespace EnumerableTests {
 
 			explicit Base2(char c) : c { c }  {}
 			virtual ~Base2() = default;
+			
+			Base2(const Base2&) = default;
 		};
 
 		struct Derived1 : public Base1 {

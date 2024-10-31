@@ -475,7 +475,7 @@ namespace EnumerableTests {
 			const size_t			setAllocs = allocations.Count();
 
 			allocations.Reset();
-			std::unordered_set<int>			set1 = move(set0);
+			std::unordered_set<int>			set1 = std::move(set0);
 			[[maybe_unused]] const size_t	setMoveAllocs = allocations.Count();
 
 			allocations.Reset();
