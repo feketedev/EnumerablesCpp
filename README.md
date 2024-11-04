@@ -3,8 +3,8 @@
 This header-only library aims to bring the features of .Net's Linq library to C++14 (or newer),
 to enable a more declarative / functional coding style.
 
-> &#9989; *This branch (**clean17**) contains a cleaned-up, slightly modernized version requiring **C++17**.<br/>
-> &emsp;&ensp;&thinsp;This is the **currently recommended** branch unless you are limited to using an older compiler!*
+> &#9989; *This branch (**feat20**) introduces additional features requiring C\++20,<br/>
+> &emsp;&ensp;&thinsp;but keeps being based on stabilized **clean17** code.*
 
 
 The library follows a pragmatic approach with the core objectives of:
