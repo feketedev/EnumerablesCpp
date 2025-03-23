@@ -297,7 +297,8 @@ namespace Enumerables {
 
 		// Recommended default for terminal operations of optional result.
 		struct OptionalOperations {
-			template <class T>	using Container = OptResult<T>;
+			template <class T>	using Container			 = OptResult<T>;	// this alias could adjust type (e.g. decay<T>)
+			template <class T>	using DeducibleContainer = OptResult<T>;	// this one enables deducing a closed parameter
 
 			template <class T, class Enumerator>
 			static Container<T>	FromCurrent(Enumerator& et)
@@ -309,7 +310,7 @@ namespace Enumerables {
 			static Container<T>	NoValue(StopReason rs)	{ return rs; }
 
 			template <class T>
-			static bool HasValue(const Container<T>& o) { return o.HasValue(); }
+			static bool			HasValue(const DeducibleContainer<T>& o) { return o.HasValue(); }
 		};
 
 
@@ -372,7 +373,7 @@ namespace Enumerables {
 	template <class V, size_t N>	size_t GetSize(const SmallListType<V, N>& l)	{ return SmallListOperations::GetSize<V, N>(l); }
 	template <class K, class V>		size_t GetSize(const DictionaryType<K, V>& d)	{ return DictOperations::GetSize<K, V>(d);		}
 
-	template <class T>				bool HasValue(const Optional<T>& o)				{ return OptionalOperations::HasValue<T>(o);	}
+	template <class T>				bool HasValue(const OptionalOperations::DeducibleContainer<T>& o)	{ return OptionalOperations::HasValue(o); }
 
 
 	// NOTE: To improve performance by enabling size hints,
