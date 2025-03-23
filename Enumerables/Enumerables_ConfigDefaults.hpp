@@ -300,9 +300,6 @@ namespace Enumerables::DefaultBinding {
 
 		template <class T>
 		static Container<T>	NoValue(StopReason rs)	{ return rs; }
-
-		template <class T>
-		static bool HasValue(const Container<T>& o) { return o.HasValue(); }
 	};
 
 
@@ -377,13 +374,22 @@ namespace Enumerables {
 	// NOTE: To improve performance ensure that size hints are enabled for used container types in either form!
 	
 
-	// HasValue in OptionalOperations is still required.
-	// Further overlaods can be defined to enable the .ValuesOnly() shorthand for more types. (Requires an operator* too.)
-	template <class T>		
-	bool HasValue(const Optional<T>& o)	
+	// HasValue overloads for optional-like types enable convenience features like the .ValuesOnly() shorthand.
+	// Further overlaods can be introduced by client code in the Enumerables namespace.
+	// (Similar to GetSize, removed from OptionalOperations for having more general role + simple type-inference.)
+	template <class T>
+	bool HasValue(const OptResult<T>& o)
 	{
-		return OptionalOperations::HasValue<T>(o); 
+		return o.HasValue(); 
 	}
+
+#if defined(_MSC_VER) && defined(_OPTIONAL_) || defined(_GLIBCXX_OPTIONAL)
+	template <class T>
+	bool HasValue(const std::optional<T>& o)
+	{
+		return o.has_value();
+	}
+#endif
 
 }	// namespace Enumerables
 
