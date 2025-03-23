@@ -62,6 +62,30 @@ namespace EnumerableTests::AltBinding {
 			ASSERT_EQ (3, mo3->data);
 			ASSERT_EQ (1, mo3->moveCount);
 		}
+
+		// filtration shorthand
+		{
+			std::optional<int> optIntArr[] = { 1, std::nullopt, 2, 3, std::nullopt };
+
+			auto optInts = Enumerate(optIntArr);
+
+			ASSERT_ELEM_TYPE (std::optional<int>&, optInts);
+			ASSERT_EQ		 (5, optInts.Count());
+
+			auto valids = optInts.ValuesOnly();
+
+			ASSERT_ELEM_TYPE (int&, valids);
+			ASSERT			 (Enumerables::AreEqual({ 1, 2, 3 }, valids));
+			ASSERT_EQ		 (&optIntArr[0].value(), &valids.First());
+			ASSERT_EQ		 (&optIntArr[2].value(), &valids.Skip(1).First());
+
+			// type nesting (optional<int>& must be decayed with std::optional)
+			auto second = optInts.ElementAt(1);
+			ASSERT_TYPE (std::optional<std::optional<int>>, second);
+			ASSERT		(second.has_value());
+			ASSERT_EQ	(std::nullopt, *second);
+			ASSERT		(!second->has_value());
+		}
 	}
 
 

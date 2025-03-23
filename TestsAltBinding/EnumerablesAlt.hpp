@@ -28,6 +28,19 @@
 #define ENUMERABLES_OPTIONAL_BINDING	Enumerables::StlBinding::OptionalOperations;
 
 
+// For custom types, you might want to define appropriate GetSize / HasValue overloads.
+// These are allowed extensions of the Enumerables namespace. (Consider supporting std::size instead!)
+namespace Enumerables 
+{
+	//template <class T>
+	//auto GetSize(const MyContainer<T>& c)	{ return c.GetMySize(); }
+
+	//template <class T>
+	//bool HasValue(const MyOptional<T>& o)	{ return o.HasValue();	}
+}
+
+
+
 // -- Instantiate the library after all config. --
 #include "Enumerables_Implementation.hpp"
 
