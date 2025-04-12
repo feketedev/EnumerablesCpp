@@ -133,6 +133,25 @@ namespace TypeHelpers {
 	};
 
 
+	
+	/// Ref-access guard for a temporarily held "Current" value stored in an Enumerator.
+	/// @remarks
+	///		It's important not to expose a [const] reference via Current() to an owned non-ref variable (e.g. an accumulator).
+	///		Even though that could save a copy in simple for-loops, that technical T& type would not represent the actual type of
+	///		sequence elements: couldn't be collected to a list, sorted, or just provide a Max element
+	///		- in that sense those T&-s wouldn't be Enumerable per se, only the generated T-s are.
+	template <class RequestedOutput, class Elem>
+	struct InterimElemAccess {
+		using Output = OverrideT<RequestedOutput, Elem>;
+
+		static_assert (is_reference<Elem>::value || !is_reference<Output>::value,
+					   "Ref output requested, but that requires ref yielded elements!");
+	};
+
+	template <class Override, class Elem>
+	using InterimElemAccessT = typename InterimElemAccess<Override, Elem>::Output;
+
+
 
 	/// Type-checking helper to wrap containers.
 	/// @remarks

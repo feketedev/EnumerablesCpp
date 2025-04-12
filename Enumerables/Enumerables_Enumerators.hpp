@@ -525,7 +525,7 @@ namespace Def {
 
 	/// Generates infinite (unchecked) sequence. Requires termination from outside.
 	template <class V, class Stepper, class Result = void>
-	class SequenceEnumerator final : public IEnumerator<OverrideT<Result, V>> {
+	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, V>> {
 		Reassignable<V>  curr;
 		const Stepper&	 step;
 		bool			 firstFetched = false;

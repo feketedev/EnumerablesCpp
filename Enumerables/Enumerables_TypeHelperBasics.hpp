@@ -64,6 +64,19 @@ namespace TypeHelpers {
 	}
 
 
+	/// Iterator of a C++ container
+	template <class Container>
+	using IteratorT = decltype(begin(declval<Container>()));
+
+	/// Iterated type of a legacy C++ iterator
+	template <class Iter>
+	using PointedT = decltype(*declval<Iter>());
+
+	/// Iterated type of a C++ container
+	template <class Container>
+	using IterableT = PointedT<IteratorT<Container>>;
+
+
 	/// R if C seems like a generic container, candidate to be wrapped by an Enumerable.
 	template <class C, class R = C>
 	using IfContainerLike = enable_if_t<is_convertible<decltype(begin(declval<C>()) != end(declval<C>())), bool>::value, R>;
@@ -252,19 +265,6 @@ namespace TypeHelpers {
 						  conditional_t< is_convertible<Sec, BaseT<Pri>>::value,
 										 BaseT<Pri>,
 						  void >>>>;
-
-
-	/// Iterated type of a legacy C++ iterator
-	template <class Iter>
-	using PointedT = decltype(*declval<Iter>());
-
-	/// Iterator of a C++ container
-	template <class Container>
-	using IteratorT = decltype(begin(declval<Container>()));
-
-	/// Iterated type of a C++ container
-	template <class Container>
-	using IterableT = PointedT<IteratorT<Container>>;
 
 
 
