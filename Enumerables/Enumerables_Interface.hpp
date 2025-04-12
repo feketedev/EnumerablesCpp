@@ -277,6 +277,18 @@ namespace Enumerables::Def {
 			ContainerWrapChecks::ByValueImplicit<IterableT<Container&>, TElem>();
 		}
 
+
+		/// Auto-wrap parameterless coroutine function or lambda.
+		/// @remarks:	Useful for concisely returning a lambda with arbitrary capture block.
+		///				To externally store parameters for the coroutine call use Enumerate(...).
+		template <CoroutineLike F>    requires is_same_v<TEnumerator, InterfacedEnumerator<TElem>>
+		AutoEnumerable(F&& coroutine) :
+			AutoEnumerable { [f = forward<F>(coroutine)]() {
+				return InterfacedEnumerator<TElem> { f };
+			}}
+		{
+		}
+
 	#pragma endregion
 
 
@@ -1154,6 +1166,7 @@ namespace Enumerables::Def {
 
 	/// Wrap any container by reference.
 	template <class ForcedResult = void, class Container>
+	requires RangeIterable<Container&>
 	auto Enumerate(Container& cont)
 	{
 		return AutoEnumerable {
@@ -1166,13 +1179,13 @@ namespace Enumerables::Def {
 	/// Wrap any container by move. The result is self-contained (Materialized).
 	template <
 		class ForcedResult = void,
-		class Container,
-		enable_if_t<!is_lvalue_reference_v<Container>
-				 && !IsSpeciallyTreatedContainer<Container>::value, int> = 0
+		RangeIterable C,
+		enable_if_t<!is_lvalue_reference_v<C>
+				 && !IsSpeciallyTreatedContainer<C>::value, int> = 0
 	>
-	auto Enumerate(Container&& cont)
+	auto Enumerate(C&& cont)
 	{
-		using Elem = IterableT<const Container&>;
+		using Elem = IterableT<const C&>;
 		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedResult, Elem>>();
 		return AutoEnumerable {
 			[c = move(cont)]() { return CreateEnumeratorFor<ForcedResult>(c); }
@@ -1189,6 +1202,7 @@ namespace Enumerables::Def {
 	///		 * iterators can invalidate on a simple Push/Add/Delete...
 	///		 * a container itself is an iterator-factory
 	template <class ForcedResult = void, class TBegin, class TEnd>
+	requires (!CoroutineLike<TBegin, TEnd>)
 	auto Enumerate(TBegin begin, TEnd end)
 	{
 		return AutoEnumerable {
@@ -1280,6 +1294,26 @@ namespace Enumerables::Def {
 		using It = typename std::initializer_list<T>::iterator;
 		return AutoEnumerable {
 			[&cont]() { return IteratorEnumerator<It, It, ForcedResult> { cont.begin(), cont.end() }; }
+		};
+	}
+
+	#pragma endregion
+
+
+
+	#pragma region Coroutines
+
+	/// Wrap a CoEnumerator coroutine. Can be function pointer or lambda.
+	/// @param args:   Optional call arguments to be stored into the Enumerable directly.
+	///				   For lambdas consider using their own capture block.
+	template <class... Args, CoroutineLike<Args...> F>
+	auto Enumerate(F&& coroutine, Args&&... args)
+	{
+		return AutoEnumerable {
+			[f = forward<F>(coroutine), ... cargs = std::forward<Args>(args)]()
+			{
+				return f(cargs...);
+			}
 		};
 	}
 
@@ -1483,7 +1517,9 @@ namespace Enumerables {
 	using Def::Enumerable;
 	using Def::IEnumerator;
 	using Def::InterfacedEnumerator;
-
+	
+	// -- coroutines --
+	using Def::CoEnumerator;
 
 	// -- source constructors --
 	// wrap collection

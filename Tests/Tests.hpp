@@ -24,6 +24,7 @@ namespace EnumerableTests {
 	void TestMisc();
 
 	void TestFeatures17();
+	void TestFeatures20();
 
 
 
@@ -41,6 +42,7 @@ namespace EnumerableTests {
 		TestArithmetics();
 		TestMisc();
 		TestFeatures17();
+		TestFeatures20();
 
 		NewPerfTests();
 	 // LegacyPerfTests();

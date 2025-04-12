@@ -11,6 +11,7 @@
 #include "Enumerables_InterfaceTypes.hpp"
 #include "Enumerables_TypeHelpers.hpp"
 #include <algorithm>
+#include <coroutine>
 
 
 
@@ -121,6 +122,24 @@ namespace Enumerables::Def {
 		}
 
 		using TEnumerator = decltype(GetEnumerator(declval<T&>()));
+	};
+
+	#pragma endregion
+
+
+
+	#pragma region Coroutine detection
+
+	template <class T, class Storage = T>	class CoEnumerator;
+
+	template <class T, class S>
+	void MatchAnyCoroutineEtor(CoEnumerator<T, S>);
+
+
+	template <class F, class... Args>
+	concept CoroutineLike = requires(F& fun)
+	{
+		MatchAnyCoroutineEtor(fun(declval<Args>()...));
 	};
 
 	#pragma endregion
@@ -590,6 +609,114 @@ namespace Enumerables::Def {
 
 	template <class C>
 	ContainerEnumerator(C&) -> ContainerEnumerator<C>;
+
+	#pragma endregion
+
+
+
+	#pragma region Coroutines
+
+	template <class T, class S = T>
+	struct CoPromise {
+		Deferred<S>			current;
+		std::exception_ptr	exception;
+		bool				ended	 = false;
+
+		CoEnumerator<T, S>	  get_return_object()	noexcept;
+
+		std::suspend_always	  initial_suspend()		noexcept
+		{
+			return {};
+		}
+
+		std::suspend_always	  final_suspend()		noexcept
+		{
+			ended = true;
+			return {};
+		}
+
+		template <class Y>
+		std::suspend_always	  yield_value(Y&& received)   noexcept(noexcept(T (std::declval<Y>())))
+		{
+			current.Reconstruct(forward<Y>(received));
+			return {};
+		}
+
+		void	return_void()			noexcept
+		{
+		}
+
+		void	unhandled_exception()	noexcept
+		{
+			ended     = true;
+			exception = std::current_exception();
+		}
+	};
+	
+
+
+	/// Enumerator and return object for basic coroutine operations.
+	/// @tparam T:			type of resulting TElem
+	/// @tparam Storage:	optionally separate type for interim storage of yielded values
+	template <class T, class Storage /*= T*/>
+	class CoEnumerator final : public IEnumerator<InterimElemAccessT<T, Storage>> {
+	public:
+		using promise_type = CoPromise<T, Storage>;
+
+		// NOTE: constraint could be lifted having ConsumeCurrent() implemented!
+		static_assert (is_constructible<T, const Storage&>(), "TElem must be constructible from the co_yielded type. "
+															  "In normal cases this means copy_constructibility."	  );
+
+	private:
+		std::coroutine_handle<promise_type>	  handle;
+
+		CoPromise<T, Storage>&   Promise()	{ return handle.promise(); }
+
+	public:
+		bool	 FetchNext()	  override
+		{
+			if (!Promise().ended)
+				handle.resume();
+
+			if (!Promise().exception)	[[likely]]
+				return !Promise().ended;
+			
+			std::rethrow_exception(Promise().exception);
+		}
+
+
+		T		Current()	      override
+		{ 
+			ENUMERABLES_ETOR_USAGE_ASSERT (Promise().current.IsInitialized(), NotFetchedError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (!Promise().ended,				  DepletedError);
+
+			return *Promise().current; 
+		}
+
+
+		SizeInfo Measure()	const override	
+		{ 
+			return { Boundedness::Unknown }; 
+		}
+
+
+		CoEnumerator(std::coroutine_handle<promise_type>&& h) noexcept : handle { move(h) }
+		{
+		}
+
+		~CoEnumerator() override
+		{
+			handle.destroy(); 
+		}
+	};
+
+
+
+	template <class T, class S>
+	CoEnumerator<T, S>   CoPromise<T, S>::get_return_object() noexcept
+	{
+		return { std::coroutine_handle<CoPromise<T, S>>::from_promise(*this) };
+	}
 
 	#pragma endregion
 

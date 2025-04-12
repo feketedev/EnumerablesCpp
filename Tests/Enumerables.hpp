@@ -40,6 +40,7 @@
 
 
 // Make the most fundamental identifiers available wherever Enumerables.hpp is included.
+using Enumerables::CoEnumerator;
 using Enumerables::Enumerable;
 using Enumerables::Enumerate;
 

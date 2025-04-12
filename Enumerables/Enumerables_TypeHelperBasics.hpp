@@ -111,6 +111,16 @@ namespace Enumerables::TypeHelpers {
 	template <class C, class R = C>
 	using IfContainerLike = enable_if_t<is_convertible_v<decltype(begin(declval<C>()) != end(declval<C>())), bool>, R>;
 
+	// TODO: replace old enable_if usages
+	/// Any container-like entity, candidate to be wrapped by an Enumerable.
+	template <class C>
+	concept RangeIterable = requires (IteratorT<C>& begin, EndIteratorT<C>& end)
+	{ 
+		++begin;
+		* begin;
+		{ begin != end } -> std::convertible_to<bool>;
+	};
+
 
 
 	// ===== Type parameter deduction adjustments =====================================================================
