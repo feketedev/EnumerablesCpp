@@ -245,43 +245,35 @@ namespace Enumerables::Def {
 
 
 		/// Wrap container implicitly to an interfaced Enumerable.
-		template <
-			class Container,
-			IfContainerLike<Container&, int> = 0,
-			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& is_same_v<TEnumerator, InterfacedEnumerator<TElem>>, int> = 0
-		>
-		AutoEnumerable(Container& c) :
+		template <ContainerLike C>	
+		requires IsInterfacedEnumerator<TEnumerator>::value
+		AutoEnumerable(C& c) :
 			AutoEnumerable { [&c]() { 
 				return InterfacedEnumerator<TElem> { [&c]() { return CreateEnumeratorFor<TElem>(c); } };
 			}}
 		{
-			ContainerWrapChecks::ByRefImplicit<IterableT<Container&>, TElem>();
+			ContainerWrapChecks::ByRefImplicit<IterableT<C&>, TElem>();
 		}
 
 
 		/// Auto-convert an r-value container to an interfaced, materialized Enumerable.
 		/// @remarks:	typical subjects are function results and returned locals [if eligible to NRVO]
-		template <
-			class Container,
-			IfContainerLike<const Container&, int> = 0,
-			enable_if_t<   !IsSpeciallyTreatedContainer<Container>::value
-						&& !is_lvalue_reference_v<Container>
-						&& is_same_v<TEnumerator, InterfacedEnumerator<TElem>>, int> = 0
-		>
-		AutoEnumerable(Container&& cont) :
+		template <ContainerLikeRval C>
+		requires IsInterfacedEnumerator<TEnumerator>::value
+		AutoEnumerable(C&& cont) :
 			AutoEnumerable { [c = move(cont)]() {
 				return InterfacedEnumerator<TElem> { [&c]() { return CreateEnumeratorFor<TElem>(c); } };
 			}}
 		{
-			ContainerWrapChecks::ByValueImplicit<IterableT<Container&>, TElem>();
+			ContainerWrapChecks::ByValueImplicit<IterableT<C&>, TElem>();
 		}
 
 
 		/// Auto-wrap parameterless coroutine function or lambda.
 		/// @remarks:	Useful for concisely returning a lambda with arbitrary capture block.
 		///				To externally store parameters for the coroutine call use Enumerate(...).
-		template <CoroutineLike F>    requires is_same_v<TEnumerator, InterfacedEnumerator<TElem>>
+		template <CoroutineLike F>
+		requires IsInterfacedEnumerator<TEnumerator>::value
 		AutoEnumerable(F&& coroutine) :
 			AutoEnumerable { [f = forward<F>(coroutine)]() {
 				return InterfacedEnumerator<TElem> { f };
@@ -411,12 +403,6 @@ namespace Enumerables::Def {
 
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
-
-		template <class ForcedAcc, class Init, class Combiner>
-		using IfInitByValue   = enable_if_t<IsAccuInit<TElem, Init, ForcedAcc>::byValue,   int>;
-
-		template <class ForcedAcc, class Init, class Combiner>
-		using IfInitByMapping = enable_if_t<IsAccuInit<TElem, Init, ForcedAcc>::byMapping, int>;
 
 		using DeduceAccumulator = AccuDeducer<TElem>;
 
@@ -632,14 +618,16 @@ namespace Enumerables::Def {
 
 		/// [N calls for length N;  use given value to initialize the accumulator.]
 		template <class ForcedAcc = void, class InAcc, class F>
-		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>, F> = 0)	const &
+		requires IsAccuInit<TElem, decay_t<InAcc>, ForcedAcc>::byValue
+		auto Scan(InAcc&& firstAccValue, F&& combiner)	const &
 		{
 			using Acc = typename DeduceAccumulator::template ForDirectInit<InAcc, F, ForcedAcc>;
 			return Chain<ScannerEnumerator, Acc>(SteadyParams(StoreAllowingRef<InAcc, Acc>(firstAccValue)), CombinerL<Acc, F>(combiner));
 			// SteadyParams: Acc is passed explicitly, don't repeat
 		}
 		template <class ForcedAcc = void, class InAcc, class F>
-		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>, F> = 0)	&&
+		requires IsAccuInit<TElem, decay_t<InAcc>, ForcedAcc>::byValue
+		auto Scan(InAcc&& firstAccValue, F&& combiner)	&&
 		{
 			using Acc = typename DeduceAccumulator::template ForDirectInit<InAcc, F, ForcedAcc>;
 			return MvChain<ScannerEnumerator, Acc>(SteadyParams(StoreAllowingRef<InAcc, Acc>(firstAccValue)), CombinerL<Acc, F>(combiner));
@@ -650,13 +638,15 @@ namespace Enumerables::Def {
 		/// @remarks
 		///		Citation needed? Can't find the page where I met this idea.
 		template <class ForcedAcc = void, class AccInitMap, class F>
-		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap, F> = 0)	const &
+		requires IsAccuInit<TElem, AccInitMap, ForcedAcc>::byMapping
+		auto Scan(AccInitMap&& init, F&& combiner)	const &
 		{
 			using Acc = typename DeduceAccumulator::template ForMappingInit<AccInitMap, F, ForcedAcc>;
 			return Chain<FetchFirstScannerEnumerator, Acc>(CombinerL<Acc, F>(combiner), FreeMapper<AccInitMap>(init));
 		}
 		template <class ForcedAcc = void, class AccInitMap, class F>
-		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap, F> = 0)	&&
+		requires IsAccuInit<TElem, AccInitMap, ForcedAcc>::byMapping
+		auto Scan(AccInitMap&& init, F&& combiner)	&&
 		{
 			using Acc = typename DeduceAccumulator::template ForMappingInit<AccInitMap, F, ForcedAcc>;
 			return MvChain<FetchFirstScannerEnumerator, Acc>(CombinerL<Acc, F>(combiner), FreeMapper<AccInitMap>(init));
@@ -723,7 +713,8 @@ namespace Enumerables::Def {
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
 		
-		template <class Pred = PF, class = enable_if_t<!is_convertible_v<Pred, TElemConstParam>>>
+		template <class Pred = PF>
+		requires (!is_convertible_v<Pred, TElemConstParam>)
 		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
 
@@ -750,7 +741,8 @@ namespace Enumerables::Def {
 		/// @throws				on empty input
 		/// @returns			Acc, determined by initMapper in implicit case
 		template <class Acc = void, class M, class F>
-		decltype(auto) Aggregate(M&& initMapper, F&& combiner, IfInitByMapping<Acc, M, F> = 0) const
+		requires IsAccuInit<TElem, M, Acc>::byMapping
+		decltype(auto) Aggregate(M&& initMapper, F&& combiner) const
 		{
 			return ToReferenced().template Scan<Acc>(forward<M>(initMapper), forward<F>(combiner)).Last();
 		}
@@ -760,7 +752,8 @@ namespace Enumerables::Def {
 		/// @param initVal: the initial value for accumulator
 		/// @returns		initVal directly in case of an empty sequence
 		template <class Acc = void, class Init, class F>
-		decltype(auto) Aggregate(Init&& initVal, F&& combiner, IfInitByValue<Acc, Init, F> = 0) const
+		requires IsAccuInit<TElem, Init, Acc>::byValue
+		decltype(auto) Aggregate(Init&& initVal, F&& combiner) const
 		{
 			// CONSIDER: Separate implementation could avoid Init copy - along with its whole copyable requirement, which is naturally set by Scan.
 			return ToReferenced()
@@ -898,13 +891,15 @@ namespace Enumerables::Def {
 		///
 		///		Covariance seems not to be viable, because it hinders overload resolution.
 		///
-		template <class F, class = enable_if_t<IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any>>
+		template <class F> 
+		requires (IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any)
 		AutoEnumerable(const AutoEnumerable<F>& src) :
 			AutoEnumerable { src.template As<TElem>().ToInterfaced().PassFactory(), src.isPure }
 		{
 		}
 
-		template <class F, class = enable_if_t<IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any>>
+		template <class F> 
+		requires (IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any)
 		AutoEnumerable(AutoEnumerable<F>&& src) :
 			AutoEnumerable { move(src).template As<TElem>().ToInterfaced().PassFactory(), src.isPure }
 		{
@@ -921,11 +916,8 @@ namespace Enumerables::Def {
 		/// 
 		///		This makes Enumerable<const V&> parameters kind of universal, but 
 		///		for small types Enumerable<V> should be preferred on consumer side.
-		template <
-			class V = TElem,
-			class   = enable_if_t<is_same_v<V, TElem> && !is_reference_v<V>>
-		>
-		operator Enumerable<const BaseT<V>&>() const
+		operator Enumerable<const BaseT<TElem>&>() const
+		requires (!is_reference_v<TElem>)
 		{
 			return ToMaterialized<const BaseT<TElem>&>().ToInterfaced();
 		}
@@ -1143,52 +1135,46 @@ namespace Enumerables::Def {
 	#pragma region Wrap Containers by Reference
 
 	/// Shortcuts to enable some generic code (to Enumerate either a container or any AutoEnumerable)
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedElem = void, class Fact>
 	auto Enumerate(const AutoEnumerable<Fact>& eb)
 	{
 		// note: unnecessary conversions are bypassed inside As
-		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedElem = void, class Fact>
 	auto Enumerate(AutoEnumerable<Fact>& eb)
 	{
-		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedElem = void, class Fact>
 	auto Enumerate(AutoEnumerable<Fact>&& eb)
 	{
-		return move(eb).template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return move(eb).template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
 
 
 	/// Wrap any container by reference.
-	template <class ForcedResult = void, class Container>
-	requires RangeIterable<Container&>
-	auto Enumerate(Container& cont)
+	template <class ForcedElem = void, ContainerLike C>
+	auto Enumerate(C& cont)
 	{
 		return AutoEnumerable {
-			[&cont]() { return CreateEnumeratorFor<ForcedResult>(cont); },
+			[&cont]() { return CreateEnumeratorFor<ForcedElem>(cont); },
 			true, false
 		};
 	}
 
 
 	/// Wrap any container by move. The result is self-contained (Materialized).
-	template <
-		class ForcedResult = void,
-		RangeIterable C,
-		enable_if_t<!is_lvalue_reference_v<C>
-				 && !IsSpeciallyTreatedContainer<C>::value, int> = 0
-	>
+	template <class ForcedElem = void, ContainerLikeRval C>
 	auto Enumerate(C&& cont)
 	{
 		using Elem = IterableT<const C&>;
-		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedResult, Elem>>();
+		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedElem, Elem>>();
 		return AutoEnumerable {
-			[c = move(cont)]() { return CreateEnumeratorFor<ForcedResult>(c); }
+			[c = move(cont)]() { return CreateEnumeratorFor<ForcedElem>(c); }
 		};
 	}
 
@@ -1201,12 +1187,12 @@ namespace Enumerables::Def {
 	///		   (~ the chances of malloc by std::function if converted to interfaced Enumerable<T>)
 	///		 * iterators can invalidate on a simple Push/Add/Delete...
 	///		 * a container itself is an iterator-factory
-	template <class ForcedResult = void, class TBegin, class TEnd>
+	template <class ForcedElem = void, class TBegin, class TEnd>
 	requires (!CoroutineLike<TBegin, TEnd>)
 	auto Enumerate(TBegin begin, TEnd end)
 	{
 		return AutoEnumerable {
-			[b = move(begin), e = move(end)]() { return IteratorEnumerator<TBegin, TEnd, ForcedResult> { b, e }; }
+			[b = move(begin), e = move(end)]() { return IteratorEnumerator<TBegin, TEnd, ForcedElem> { b, e }; }
 		};
 	}
 
@@ -1232,68 +1218,56 @@ namespace Enumerables::Def {
 	}
 
 
-
 	// Implicit type deduction is achieved by 4 additional, public wrappers.
 	//	Explicit Result type => braced-initializer elems can be converted
 	//							Note subcase: init-list type already deduced but needing conversion should work!
 	//										  Important for indirect usage, like Concat.
 	//	void Result type	 => initializer must be deducable -> pointer usage defaults to "capture-syntax"
 
-	template <class ForcedResult>
-	using IfInitRefs   = enable_if_t<is_reference_v<ForcedResult>, int>;
-	template <class ForcedResult>
-	using IfInitValues = enable_if_t<!is_reference_v<ForcedResult> && !is_void_v<ForcedResult>, int>;
-
-	template <class ForcedResult, class I>
-	using IfInitDeducedRefs   = enable_if_t< std::is_pointer_v<I> &&
-											(	is_void_v<ForcedResult>
-											||	is_reference_v<ForcedResult> &&
-												is_convertible_v<remove_pointer_t<I>&, ForcedResult>),
-											int >;
-	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t< !std::is_pointer_v<I> &&
-											 (is_void_v<ForcedResult> || is_convertible_v<I, ForcedResult>),
-											 int >;
-
-
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
-	template <class ForcedResult, IfInitValues<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<NoDeduce<ForcedResult>>&& init)
+	template <NonvoidValue Elem
+#	ifdef __clang__
+			, IfNonvoidVal<Elem, int> = 0		// TODO clang: concept not suffice to discard - bug or standard?
+#	endif
+	>
+	auto Enumerate(std::initializer_list<NoDeduce<Elem>>&& init)
 	{
-		return InitEnumerable<ForcedResult>(move(init));
+		return InitEnumerable<Elem>(move(init));
 	}
 
 	/// Take explicitly typed references from braced initializer. Use pointers as "capture-syntax".
 	/// (Explicit type allows conversions, thus usage of interfaces.)
-	template <class ForcedResult, IfInitRefs<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<remove_reference_t<ForcedResult>*>&& init)
+	template <Reference Elem>
+	auto Enumerate(std::initializer_list<remove_reference_t<Elem>*>&& init)
 	{
-		return InitEnumerable<ForcedResult>(move(init));
+		return InitEnumerable<Elem>(move(init));
 	}
 
 
 	/// Take implicitly typed values (pointers excluded) from braced initializer.
-	template <class ForcedResult = void, class T, IfInitDeducedValues<ForcedResult, T> = 0>
-	auto Enumerate(std::initializer_list<T>&& init)
+	template <class ForcedElem = void, class I>
+	requires InitListSupport::DeducibleValueInit<ForcedElem, I>
+	auto Enumerate(std::initializer_list<I>&& init)
 	{
-			return InitEnumerable<OverrideT<ForcedResult, T>>(move(init));
+			return InitEnumerable<OverrideT<ForcedElem, I>>(move(init));
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
-	template <class ForcedResult = void, class T, IfInitDeducedRefs<ForcedResult, T*> = 0>
-	auto Enumerate(std::initializer_list<T*>&& init)
+	template <class ForcedElem = void, class I>
+	requires InitListSupport::DeducibleRefInit<ForcedElem, I*>
+	auto Enumerate(std::initializer_list<I*>&& init)
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init));
+		return InitEnumerable<OverrideT<ForcedElem, I&>>(move(init));
 	}
 
 
 	// For lvalue initializer lists (often used in template tricks), does not copy elements!
-	template <class ForcedResult = void, class T>
-	auto Enumerate(std::initializer_list<T>& cont)
+	template <class ForcedElem = void, class I>
+	auto Enumerate(std::initializer_list<I>& cont)
 	{
-		using It = typename std::initializer_list<T>::iterator;
+		using It = typename std::initializer_list<I>::iterator;
 		return AutoEnumerable {
-			[&cont]() { return IteratorEnumerator<It, It, ForcedResult> { cont.begin(), cont.end() }; }
+			[&cont]() { return IteratorEnumerator<It, It, ForcedElem> { cont.begin(), cont.end() }; }
 		};
 	}
 

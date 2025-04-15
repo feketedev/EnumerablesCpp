@@ -107,11 +107,6 @@ namespace Enumerables::TypeHelpers {
 	using IterableT = PointedT<IteratorT<Container>>;
 
 
-	/// R if C seems like a generic container, candidate to be wrapped by an Enumerable.
-	template <class C, class R = C>
-	using IfContainerLike = enable_if_t<is_convertible_v<decltype(begin(declval<C>()) != end(declval<C>())), bool>, R>;
-
-	// TODO: replace old enable_if usages
 	/// Any container-like entity, candidate to be wrapped by an Enumerable.
 	template <class C>
 	concept RangeIterable = requires (IteratorT<C>& begin, EndIteratorT<C>& end)
@@ -376,6 +371,8 @@ namespace Enumerables::TypeHelpers {
 		static constexpr bool value = Check(nullptr);
 	};
 
+	template <class T, class... Args>
+	concept BraceConstructible = IsBraceConstructible<T, Args...>::value;
 
 
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
@@ -408,13 +405,23 @@ namespace Enumerables::TypeHelpers {
 	// ===== Enable_if shorthands =====================================================================================
 
 	template <class T>
-	using IfVoid	= enable_if_t<is_void_v<T>>;
+	using IfVoid		= enable_if_t<is_void_v<T>>;
+
+	template <class T, class S = T>
+	using IfNonvoidVal	= enable_if_t<std::is_object_v<T>, S>;
+
+	template <class T>
+	concept NonvoidValue = std::is_object_v<T>;
+
 
 	template <class T, class S = T>
 	using IfPRValue	  = enable_if_t<!is_reference_v<T>, S>;
 
 	template <class T, class S = T>
 	using IfReference = enable_if_t<is_reference_v<T>, S>;
+
+	template <class T>
+	concept Reference = is_reference_v<T>;
 
 	template <class T, class S = T>
 	using IfMutRVal	= enable_if_t< !is_const_v<remove_reference_t<T>> && (is_rvalue_reference_v<T> || !is_reference_v<T>),

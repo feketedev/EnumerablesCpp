@@ -69,6 +69,14 @@ namespace Enumerables::TypeHelpers {
 	};
 
 
+	template <class C>
+	concept ContainerLike	  = RangeIterable<C&> && !IsSpeciallyTreatedContainer<C>::value;
+
+	template <class C>
+	concept ContainerLikeRval = ContainerLike<C> && !is_lvalue_reference_v<C>;
+
+
+
 	/// Regulates implicit conversions from arbitrary AutoEnumerables to interfaced Enumerable<T>.
 	/// @tparam FromEt:	Enumerator type of the source AutoEnumerable
 	/// @tparam ToEt:	targeted InterfacedEnumerator<T> of Enumerable<T>
@@ -150,6 +158,19 @@ namespace Enumerables::TypeHelpers {
 	template <class Override, class Elem>
 	using InterimElemAccessT = typename InterimElemAccess<Override, Elem>::Output;
 
+
+	namespace InitListSupport
+	{
+		template <class ForcedElem, class I>
+		inline constexpr bool DeducibleRefInit   = std::is_pointer_v<I> &&
+												  (	 is_void_v<ForcedElem>
+												  || is_reference_v<ForcedElem> &&
+											  		 is_convertible_v<remove_pointer_t<I>&, ForcedElem>);
+
+		template <class ForcedElem, class I>
+		inline constexpr bool DeducibleValueInit = !std::is_pointer_v<I> &&
+													(is_void_v<ForcedElem> || is_convertible_v<I, ForcedElem>);
+	}
 
 
 	/// Type-checking helper to wrap containers.
@@ -592,14 +613,14 @@ namespace Enumerables::TypeHelpers {
 
 
 		template <class DeducedRes, class Trg, class L>
-		auto&&	WrapIfConversionReqd(L&& lambda, enable_if_t<is_same_v<DeducedRes, Trg>>* = nullptr)
+		auto&&	WrapIfConversionReqd(L&& lambda)		requires is_same_v<DeducedRes, Trg>
 		{
 			return forward<L>(lambda);
 		}
 
 
-		template <class DeducedRes, class Trg, class L>
-		auto	WrapIfConversionReqd(L&& lambda, enable_if_t<!is_same_v<DeducedRes, Trg>>* = nullptr)
+		template <class DeducedRes, class Trg, class L>	
+		auto	WrapIfConversionReqd(L&& lambda)		requires (!is_same_v<DeducedRes, Trg>)
 		{
 			static_assert (!is_reference<Trg>() || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
 						   "Requested result type loses const qualifier.");
@@ -818,7 +839,7 @@ namespace Enumerables::TypeHelpers {
 
 		Reassignable() = delete;
 
-		template <class TT = T, class = enable_if_t<IsBraceConstructible<T, TT>::value>>
+		template <class TT = T>  requires BraceConstructible<T, TT>
 		Reassignable(TT&& val) : GenericStorage<T> { ForwardParams, forward<TT>(val) }
 		{
 		}

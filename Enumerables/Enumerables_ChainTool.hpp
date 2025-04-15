@@ -255,8 +255,9 @@ namespace Enumerables::Def {
 
 	/// Same as above overload but with no SteadyParams specified.
 	template <template <class...> class NextEnumerator, class... PureTypeArgs,
-			  class... Args, class SourceFact,
-			  class = std::enable_if_t<sizeof...(Args) == 0 || !IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
+			  class... Args, class SourceFact>
+	requires (sizeof...(Args) == 0 ||
+			  !IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value)
 	auto ChainFactory(SourceFact&& sourceFact, Args&&... args)
 	{
 		return ChainFactory<NextEnumerator, PureTypeArgs...>(std::forward<SourceFact>(sourceFact), NoSteadyParams(), std::forward<Args>(args)...);
@@ -287,8 +288,8 @@ namespace Enumerables::Def {
 
 
 	/// Same as above overload but with no SteadyParams specified.
-	template <template <class...> class NextEnumerator, class... PureTypeArgs, class FactoryRefsTuple, class... Args,
-			  class = typename std::enable_if_t<!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
+	template <template <class...> class NextEnumerator, class... PureTypeArgs, class FactoryRefsTuple, class... Args>
+	requires (!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value)
 	auto JoinFactories(const FactoryRefsTuple& sourceFactories, Args&&... pargs)
 	{
 		return JoinFactories<NextEnumerator, PureTypeArgs...>(sourceFactories, NoSteadyParams(), std::forward<Args>(pargs)...);

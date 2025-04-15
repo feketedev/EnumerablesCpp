@@ -120,6 +120,7 @@ namespace Enumerables {
 
 
 		using TDecayed		= std::decay_t<T>;
+		using TConstValue	= TypeHelpers::ConstValueT<T>;
 
 		template <class F>
 		using IfFallbackFun	= std::enable_if_t<std::is_same_v<TypeHelpers::InvokeResultT<F>, OptResult>>;
@@ -150,7 +151,8 @@ namespace Enumerables {
 		OptResult(LateInitSelector) {}
 
 	public:
-		template <class... Args, class = std::enable_if_t<TypeHelpers::IsBraceConstructible<T, Args...>::value>>
+		template <class... Args>
+		requires TypeHelpers::BraceConstructible<T, Args...>
 		OptResult(Args&&... args)	: storage { TypeHelpers::ForwardParams, std::forward<Args>(args)... }
 		{
 		}
@@ -271,21 +273,22 @@ namespace Enumerables {
 
 		/// If this has no value, fallback to a guaranteed value.
 		/// [Value return - move/copy as appropriate.]
-		template <class TT = T, std::enable_if_t<!std::is_reference_v<TT>, int> = 0>
-		TDecayed			OrDefault(const TDecayed& def)		 && { return HasValue() ? std::move(*this).Value() : T { def }; }
+		TDecayed			OrDefault(const TDecayed& def)		 && requires (!std::is_reference_v<T>)
+																	{ return HasValue() ? std::move(*this).Value() : T { def }; }
 		TDecayed			OrDefault(TDecayed&& def)			 && { return HasValue() ? std::move(*this).Value() : std::move(def); }
 		TDecayed			OrDefault(TDecayed&& def)		const & { return HasValue() ? T { this->Value() }      : std::move(def); }
 
 		/// If this has no value, fallback to a guaranteed value.
 		/// [Choice made over payload references.]
-		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed&>, int> = 0>
-		T&					OrDefault(T& def)				const & { return HasValue() ? Value() : def; }
+		T&					OrDefault(T& def)				const &	requires std::is_same_v<T, TDecayed&>
+																	{ return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed> || std::is_same_v<TypeHelpers::ConstValueT<TT>, const TDecayed&>, int> = 0>
-		const TDecayed&		OrDefault(const TDecayed& def)	const & { return HasValue() ? Value() : def; }
+		const TDecayed&		OrDefault(const TDecayed& def)	const &	requires std::is_same_v<T, TDecayed>
+																		  || std::is_same_v<TConstValue, const TDecayed&>
+																	{ return HasValue() ? Value() : def; }
 
-		template <class TT = T, std::enable_if_t<std::is_same_v<TT, TDecayed>, int> = 0>
-		TDecayed&			OrDefault(TDecayed& def)			  & { return HasValue() ? Value() : def; }
+		TDecayed&			OrDefault(TDecayed& def)			  &	requires std::is_same_v<T, TDecayed>
+																	{ return HasValue() ? Value() : def; }
 
 
 		/// Only if this has no value, call the fallback function to produce a guaranteed value.
