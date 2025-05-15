@@ -197,18 +197,20 @@ namespace Def {
 		template <class Et>
 		static constexpr bool SureFitsInline()
 		{
-			using Buff = decltype(InterfacedEnumerator::fixBuffer);
+			// Caution: seems that decltype does not carry alignas requirement!!
+			using	  Buff			 = decltype(InterfacedEnumerator::fixBuffer);
+			constexpr size_t alnBuff = alignof(void*);
 
-			static_assert (alignof(Et) % alignof(Buff) == 0, "Alignment not power of 2?");
+			static_assert (alignof(Et) % alnBuff == 0, "Alignment not power of 2?");
 
 			// size_t req = alignof(Et);
 			// size_t sat = alignof(Buff);
 			// size_t slack = req - sat;
 			// return slack + sizeof(Et) <= sizeof(Buff);
 
-			return (alignof(Buff) >= alignof(Et))
+			return (alnBuff >= alignof(Et))
 				? (sizeof(Buff) >= sizeof(Et))
-				: (alignof(Et) - alignof(Buff) + sizeof(Et) <= sizeof(Buff));
+				: (alignof(Et) - alnBuff + sizeof(Et) <= sizeof(Buff));
 		}
 #	else
 		bool					IsOnHeap() const	{ return true; }
