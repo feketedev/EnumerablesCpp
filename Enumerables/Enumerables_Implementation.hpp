@@ -521,27 +521,55 @@ namespace Def {
 
 
 	template <class TFactory>
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> ListType<TElemDecayed>
+	template <class... ListOptions>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> ListType<TElemDecayed, ListOptions...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint);
+		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint, ListOptions {}...);
 	}
 
 	template <class TFactory>
-	template <size_t N>
+	template <class... ListOptions>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const ListOptions&... opts) const -> ListType<TElemDecayed, ListOptions...>
+	{
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint, opts...);
+	}
+
+
+	template <class TFactory>
+	template <size_t N, class... SmallListOptions>
 	ENUMERABLES_WARN_FOR_SMALLLIST
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> SmallListType<TElemDecayed, N>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> SmallListType<TElemDecayed, N, SmallListOptions...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint);
+		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint, SmallListOptions {}...);
+	}
+
+	template <class TFactory>
+	template <size_t N, class... SmallListOptions>
+	ENUMERABLES_WARN_FOR_SMALLLIST
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const SmallListOptions&... opts) const -> SmallListType<TElemDecayed, N, SmallListOptions...>
+	{
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint, opts...);
 	}
 
 
 	template <class TFactory>
-	auto AutoEnumerable<TFactory>::ToHashSet(size_t sizeHint) const -> SetType<TElemDecayed>
+	template <class... SetOptions>
+	auto AutoEnumerable<TFactory>::ToHashSet(size_t sizeHint) const -> SetType<TElemDecayed, SetOptions...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint);
+		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, SetOptions {}...);
+	}
+
+	template <class TFactory>
+	template <class... SetOptions>
+	auto AutoEnumerable<TFactory>::ToHashSet(size_t sizeHint, const SetOptions&... opts) const -> SetType<TElemDecayed, SetOptions...>
+	{
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, opts...);
 	}
 
 

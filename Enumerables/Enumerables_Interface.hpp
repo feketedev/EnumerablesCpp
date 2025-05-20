@@ -787,16 +787,57 @@ namespace Def {
 	// =========== Materialization / Lifetime-utils ==================================================================================
 	#pragma region
 
-		template <size_t N>
-		SmallListType<TElemDecayed, N>	ToList(size_t sizeHint = N)		const;
-		ListType<TElemDecayed>			ToList(size_t sizeHint = 0)		const;
-		SetType<TElemDecayed>			ToHashSet(size_t sizeHint = 0)	const;
+		// NOTE: For the customizability of the resulting containers, any further constructor arguments
+		//		 (e.g. allocators or non-default hash algorithms) can be passed down for construction
+		//		 after the commonly accepted "sizeHint".
+		//		 Separate overloads are provided to instantiate with actual argument objects (stateful strategies),
+		//		 and to specify type arguments only (stateless strategies), which will be default constructed.
+		//
+		//		 Mixing the two styles (having some arg objects but more type args to be default constructed)
+		//		 is not supported - would be solvable by having 2 packs and using auto return type, but that
+		//		 would be too ugly for minimal benefit.
+
+
+		/// Form a List from sequence elements.
+		/// @tparam Options:  Additional arguments for ListType [to be Default-constructed]
+		template <class... Options>
+		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0)					const;
+		
+		/// Form a List from sequence elements.
+		/// @tparam Options:  Additional arguments for ListType [to be Deduced from arguments]
+		template <class... Options>
+		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...)	const;
+		
+
+		/// Form a List with predefined inline buffer for N elements.
+		/// @tparam Options:  Additional arguments for SmallListType [to be Default-constructed]
+		template <size_t N, class... Options>
+		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint = N)					const;
+		
+		/// Form a List with predefined inline buffer for N elements.
+		/// @tparam Options:  Additional arguments for SmallListType [to be Deduced from arguments]
+		template <size_t N, class... Options>
+		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...)	const;
+
+
+		/// Form a HashSet out of distinct elements.
+		/// @tparam Options:  Additional arguments for SetType [to be Default-constructed]
+		///					  (typ.: Hasher, Equality comparer, Allocator)
+		template <class... Options>
+		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint = 0)				  const;
+		
+		/// Form a HashSet out of distinct elements.
+		/// @tparam Options:  Additional arguments for SetType [to be Deduced from arguments]
+		///					  (typ.: Hasher, Equality comparer, Allocator)
+		template <class... Options>
+		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint, const Options&...) const;
+
 
 
 		/// Evaluate current query and pass it as a self-contained enumeration (an abstract collection).
 		template <class Output = TElem>
 		auto ToMaterialized() const;
-
+		
 		/// Cache calculation results (For & elements => not totally self-contained!)
 		auto ToSnapshot()	const;
 

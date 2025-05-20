@@ -24,6 +24,7 @@ namespace TypeHelpers {
 #pragma region StorableT
 
 	/// Holds a pointer bypassing a reference for unified storage/access in generic code.
+	/// Convertible to and std::hashable as the referred lvalue.
 	template <class T>
 	class RefHolder {
 		static_assert (!is_reference<T>::value, "Use with (qualified) decayed type.");
@@ -32,13 +33,13 @@ namespace TypeHelpers {
 
 	public:
 		template <class Ref, class = enable_if_t<is_same<const T, const remove_reference_t<Ref>>::value>>
-		RefHolder(Ref&& ref) : ptr { &ref }
+		RefHolder(Ref&& ref) noexcept : ptr { &ref }
 		{
 			static_assert (is_lvalue_reference<Ref>::value, "Reference stored from rvalue soon becomes dangling!");
 		}
 
-		T&		 Get() const	{ return *ptr; }
-		operator T&()  const	{ return *ptr; }
+		T&		 Get() const noexcept	{ return *ptr; }
+		operator T&()  const noexcept	{ return *ptr; }
 	};
 
 
@@ -291,5 +292,32 @@ namespace TypeHelpers {
 
 }		// namespace TypeHelpers
 }		// namespace Enumerables
+
+
+
+
+
+namespace std {
+
+
+#pragma region StorableT
+
+	template<class T>
+	struct hash<Enumerables::TypeHelpers::RefHolder<T>> : hash<remove_const_t<T>>	// inherit disabledness
+	{
+		// SFINAE: don't define when disabled for referred type
+		template<class TT = T, enable_if_t<is_same<TT, T>::value, int> = 0>
+		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
+		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
+		{
+			return this->operator()(ref.Get());
+		}
+	};
+
+#pragma endregion
+
+
+}		// namespace std
+
 
 #endif	// ENUMERABLES_GENERICSTORAGE_HPP

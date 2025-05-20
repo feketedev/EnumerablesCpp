@@ -12,6 +12,8 @@
 #include <utility>
 
 
+// Workaround for <T1, T2> or { a, b } in macro calls
+#define COMMA , 
 
 #define ASSERT_TYPE(T, expr)		static_assert (std::is_same<T, decltype(expr)>(), "Type assertion failed.")
 
@@ -53,6 +55,9 @@ namespace EnumerableTests {
 	template <class A, class B>
 	bool AssertEq(const A& a, const B& b, const char* txt, const char* file, long line);
 	bool Assert  (bool  cond,			  const char* txt, const char* file, long line);
+
+	template <class S1, class S2>
+	bool EqualSets(const S1& lhs, const S2& rhs);
 
 
 
@@ -188,6 +193,24 @@ namespace EnumerableTests {
 		PrintDiff(a, b);
 		AskForBreak(txt, file, line);
 		return false;
+	}
+
+
+	template <class S1, class S2>
+	bool EqualSets(const S1& lhs, const S2& rhs)
+	{
+		if (lhs.size() != rhs.size())
+			return false;
+
+		for (auto& el : rhs) {
+			if (lhs.find(el) == lhs.end())
+				return false;
+		}
+		for (auto& el : lhs) {
+			if (rhs.find(el) == rhs.end())
+				return false;
+		}
+		return true;
 	}
 
 }	// namespace EnumerableTests

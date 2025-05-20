@@ -184,7 +184,10 @@ namespace Def {
 		IEnumerator<T>*			ptr;
 
 #	if ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE > 0
-		alignas(void*) char		fixBuffer[ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE];
+		static constexpr size_t buffAlign = alignof(void*);		// provided by ptr anyway
+
+
+		alignas(buffAlign) char	fixBuffer[ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE];
 
 
 		bool IsOnHeap() const
@@ -198,19 +201,18 @@ namespace Def {
 		static constexpr bool SureFitsInline()
 		{
 			// Caution: seems that decltype does not carry alignas requirement!!
-			using	  Buff			 = decltype(InterfacedEnumerator::fixBuffer);
-			constexpr size_t alnBuff = alignof(void*);
+			using Buff = decltype(InterfacedEnumerator::fixBuffer);
 
-			static_assert (alignof(Et) % alnBuff == 0, "Alignment not power of 2?");
+			static_assert (alignof(Et) % buffAlign == 0, "Alignment not power of 2?");
 
 			// size_t req = alignof(Et);
 			// size_t sat = alignof(Buff);
 			// size_t slack = req - sat;
 			// return slack + sizeof(Et) <= sizeof(Buff);
 
-			return (alnBuff >= alignof(Et))
+			return (buffAlign >= alignof(Et))
 				? (sizeof(Buff) >= sizeof(Et))
-				: (alignof(Et) - alnBuff + sizeof(Et) <= sizeof(Buff));
+				: (alignof(Et) - buffAlign + sizeof(Et) <= sizeof(Buff));
 		}
 #	else
 		bool					IsOnHeap() const	{ return true; }
@@ -335,7 +337,7 @@ namespace Def {
 
 	#pragma region Caching operations Fundamentals
 
-	/// Abstract Enumerator for multi-pass algorithms run deffered on first Fetch.
+	/// Abstract Enumerator for multi-pass algorithms run deferred on first Fetch.
 	/// Results container as a whole can be obtained as an optimization.
 	/// @remarks
 	///		Implementors and ObtainCachedResults calls should use the same alias:
@@ -344,7 +346,7 @@ namespace Def {
 	///		have different RTTI.
 	template <class V, template <class> class Container>
 	class CachingEnumerator : public IEnumerator<V> {
-	protected:
+	public:
 		using TCache = Container<StorableT<V>>;
 
 	private:
@@ -414,8 +416,8 @@ namespace Def {
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
 		template <class V, template <class> class C>
-		static auto GetCache(CachingEnumerator<V, C>&& source)	{ return source.CalcResults(); }
-		static None GetCache(...)								{ return None {}; }
+		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return {}; }
+		static None GetCache(...)																 { return None {}; }
 
 	public:
 		using TCache = decltype(GetCache(declval<Enumerator>()));
@@ -430,22 +432,30 @@ namespace Def {
 	/// Obtain results in the desired container type - by the least copy/conversion possible, expecting a potential CachingEnumerator as Source.
 	/// @param  hint:	for manual hints (e.g. .ToList(n))
 	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::asWhole, Cont>* = nullptr)
+	template <class ContainerOps, class R, size_t... N, class... ContOptions,
+			  class Cont = typename ContainerOps::template Container<R, N..., ContOptions...>,
+			  class Source>
+	enable_if_t<HasConvertibleCache<Source, Cont, R>::asWhole,
+				Cont>
+	ObtainCachedResults(Source& etor, size_t /*hint*/, const ContOptions&...)
 	{
 		// CachingEnumerator:  Direct convert / pass results if possible
 		return etor.CalcResults();
 	}
 
 
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t /*hint*/, enable_if_t<HasConvertibleCache<Source, Cont, R>::byElementOnly, Cont>* = nullptr)
+	template <class ContainerOps, class R, size_t... N, class... ContOptions,
+		class Cont = typename ContainerOps::template Container<R, N..., ContOptions...>,
+		class Source>
+	enable_if_t<HasConvertibleCache<Source, Cont, R>::byElementOnly,
+				Cont>
+	ObtainCachedResults(Source& etor, size_t /*hint*/, const ContOptions&... options)
 	{
 		// CachingEnumerator:  Convert / pass by element if available cache is unconvertible
 		auto cached = etor.CalcResults();
 		size_t size = GetSize(cached);
 
-		Cont res = ContainerOps::template Init<R, N...>(size);
+		Cont res = ContainerOps::template Init<R, N...>(size, options...);
 		for (auto& e : cached)
 			ContainerOps::Add(res, PassRevived(e));		// StorableT!
 
@@ -453,14 +463,18 @@ namespace Def {
 	}
 
 
-	template <class ContainerOps, class R, size_t... N, class Cont = typename ContainerOps::template Container<R, N...>, class Source>
-	Cont ObtainCachedResults(Source& etor, size_t hint, enable_if_t<!HasConvertibleCache<Source, Cont, R>::byElement, Cont>* = nullptr)
+	template <class ContainerOps, class R, size_t... N, class... ContOptions,
+		class Cont = typename ContainerOps::template Container<R, N..., ContOptions...>,
+		class Source>
+	enable_if_t<!HasConvertibleCache<Source, Cont, R>::byElement,
+				Cont>
+	ObtainCachedResults(Source& etor, size_t hint, const ContOptions&... options)
 	{
 		// Not CachingEnumerator: create new list by enumerating
 		SizeInfo si  = etor.Measure();
 		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
 
-		Cont res = ContainerOps::template Init<R, N...>(cap);
+		Cont res = ContainerOps::template Init<R, N...>(cap, options...);
 		while (etor.FetchNext())
 			ContainerOps::Add(res, etor.Current());
 
@@ -471,15 +485,17 @@ namespace Def {
 #if ENUMERABLES_EMPLOY_DYNAMICCAST
 
 	// NOTE: SmallList<T, N> is not supported currently. Solve if any CachingEnumerator<T, SmallList> will exist.
-	template <class ContainerOps, class R, template <class> class ContTempl = ContainerOps::template Container>
-	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<IfPRValue<R>>& etor, size_t hint)
+	template <class ContainerOps, class R, class... ContOptions,
+			  template <class...> class ContTempl = ContainerOps::template Container,
+			  class T = R>
+	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<T>& etor, size_t hint, const ContOptions&... options)
 	{
-		using ET = CachingEnumerator<R, ContTempl>;
+		using ET = CachingEnumerator<T, ContTempl>;
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)
-			return ObtainCachedResults<ContainerOps, R>(etor.WrappedInterface(), hint);
+			return ObtainCachedResults<ContainerOps, R>(etor.WrappedInterface(), hint, options...);
 		else
-			return ObtainCachedResults<ContainerOps, R>(*caching, hint);
+			return ObtainCachedResults<ContainerOps, R>(*caching, hint, options...);
 	}
 
 #endif
