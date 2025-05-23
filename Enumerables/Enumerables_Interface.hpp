@@ -443,30 +443,36 @@ namespace Def {
 		template <class Pred = PF>	auto TakeUntilFinal(Pred&& p) &&		{ return MvChain<FilterUntilEnumerator>(SteadyParams(FilterMode::ReleaseBy), Predicate<Pred>(p)); }
 
 
-		// --- Boolean operations capturing readily available sets ---
+		// --- Boolean operations capturing readily available sets [can form in-place using braced-initializer] ---
 		
 		// NOTE: Result is not a set! Duplicated elements of this sequence (where accepted) will pass through.
 
-		auto Except(const SetType<TElemDecayed>& set)	const &		{ return		Where(FUN(x, !SetOperations::Contains(set, x))); }
-		auto Except(const SetType<TElemDecayed>& set)	&&			{ return Move().Where(FUN(x, !SetOperations::Contains(set, x))); }
-		auto Except(SetType<TElemDecayed>&& set)		const &		{ return		Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
-		auto Except(SetType<TElemDecayed>&& set)		&&			{ return Move().Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
+		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, !SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	&&		 { return Move().Where(FUN(x, !SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&&      set)	const &	 { return		 Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
+		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&&      set)	&&		 { return Move().Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
 
-		auto Intersect(const SetType<TElemDecayed>& set) const &	{ return		Where(FUN(x, SetOperations::Contains(set, x)));  }
-		auto Intersect(const SetType<TElemDecayed>& set) &&			{ return Move().Where(FUN(x, SetOperations::Contains(set, x)));  }
-		auto Intersect(SetType<TElemDecayed>&& set)		 const &	{ return		Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
-		auto Intersect(SetType<TElemDecayed>&& set)		 &&			{ return Move().Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
+		template <class... SetOptions>  auto Intersect(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Intersect(const SetType<TElemDecayed, SetOptions...>& set)	&&		 { return Move().Where(FUN(x, SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	const &	 { return		 Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
+		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	&&		 { return Move().Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
 
 
 		// --- Boolean operations evaluating other iterables ---
 		
-		// NOTE: 2nd operand gets evaluated lazily before enumeration - forming a SetType.
+		// NOTE: 2nd operand gets evaluated lazily, before enumeration - forming a temporary SetType.
 
-		template <class E>		auto Except(E&& list)	 const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(list, SteadyParams(false)); }
-		template <class E>		auto Except(E&& list)	 &&			{ return MvChainJoined<E, TElem, SetFilterEnumerator>(list, SteadyParams(false)); }
-
-		template <class E>		auto Intersect(E&& list) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(list, SteadyParams(true)); }
-		template <class E>		auto Intersect(E&& list) &&			{ return MvChainJoined<E, TElem, SetFilterEnumerator>(list, SteadyParams(true)); }
+		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types injected directly to SetType used as filter internally
+		template <class... SetOptions, class E>	 auto Except   (E&& elems) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
+		template <class... SetOptions, class E>	 auto Except   (E&& elems) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
+		template <class... SetOptions, class E>	 auto Intersect(E&& elems) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
+		template <class... SetOptions, class E>	 auto Intersect(E&& elems) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
+		
+		/// @param setOptions:    hash/equal_to/etc. strategy objects injected to the internally constructed SetType used as filter
+		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
+		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
+		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
+		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
 
 		// NOTE: Union wouldn't make much sense asymmetrically.
 		//		 For a proper set result .Concat(s).ToHashSet() is effective! (No lazy evaluation though.)
@@ -799,35 +805,35 @@ namespace Def {
 
 
 		/// Form a List from sequence elements.
-		/// @tparam Options:  Additional arguments for ListType [to be Default-constructed]
+		/// @tparam Options:  Additional arguments for ListType [Default-constructed]
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0)					const;
 		
 		/// Form a List from sequence elements.
-		/// @tparam Options:  Additional arguments for ListType [to be Deduced from arguments]
+		/// @tparam Options:  Additional arguments for ListType [Deduced]
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...)	const;
 		
 
 		/// Form a List with predefined inline buffer for N elements.
-		/// @tparam Options:  Additional arguments for SmallListType [to be Default-constructed]
+		/// @tparam Options:  Additional arguments for SmallListType [Default-constructed]
 		template <size_t N, class... Options>
 		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint = N)					const;
 		
 		/// Form a List with predefined inline buffer for N elements.
-		/// @tparam Options:  Additional arguments for SmallListType [to be Deduced from arguments]
+		/// @tparam Options:  Additional arguments for SmallListType [Deduced]
 		template <size_t N, class... Options>
 		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...)	const;
 
 
-		/// Form a HashSet out of distinct elements.
-		/// @tparam Options:  Additional arguments for SetType [to be Default-constructed]
+		/// Form a Set out of distinct elements.
+		/// @tparam Options:  Additional arguments for SetType [Default-constructed]
 		///					  (typ.: Hasher, Equality comparer, Allocator)
 		template <class... Options>
 		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint = 0)				  const;
 		
-		/// Form a HashSet out of distinct elements.
-		/// @tparam Options:  Additional arguments for SetType [to be Deduced from arguments]
+		/// Form a Set out of distinct elements.
+		/// @tparam Options:  Additional arguments for SetType [Deduced]
 		///					  (typ.: Hasher, Equality comparer, Allocator)
 		template <class... Options>
 		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint, const Options&...) const;
@@ -836,10 +842,10 @@ namespace Def {
 
 		/// Evaluate current query and pass it as a self-contained enumeration (an abstract collection).
 		template <class Output = TElem>
-		auto ToMaterialized() const;
+		auto ToMaterialized()  const;
 		
 		/// Cache calculation results (For & elements => not totally self-contained!)
-		auto ToSnapshot()	const;
+		auto ToSnapshot()	   const;
 
 		/// Fork a temporary instance referencing this (just like a container), when a heavy copy would be undesired.
 		/// @remarks	

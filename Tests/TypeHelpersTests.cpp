@@ -416,6 +416,49 @@ namespace EnumerableTests {
 		}
 
 
+		// RefHolder transparent equality
+		{
+			std::pair<int, char> obj1 { 1, 'a' };		// type with templated op==
+			std::pair<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::pair<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::pair<int, char>> ref1 = obj1;
+
+			ASSERT (ref1 == cpy1);
+			ASSERT (ref1 != obj2);
+			ASSERT (cpy1 == ref1);
+			ASSERT (obj2 != ref1);
+
+			ASSERT (ref1.operator==({ 1, 'a'}));		// edge-case of default type argument
+
+
+			RefHolder<std::pair<int, char>> ref2   = obj2;
+			RefHolder<std::pair<int, char>> refcpy = ref1;
+
+			ASSERT (ref1 != ref2);
+			ASSERT (ref1 == refcpy);
+
+			// holding different, but equatable type
+			std::pair<int&, char&> refPair { obj1.first, obj1.second };
+
+			ASSERT (refPair == obj1);
+			ASSERT (obj1 == refPair);
+
+			RefHolder<std::pair<int&, char&>> refPairRef = refPair;
+
+			ASSERT (refPairRef == refPair);
+			ASSERT (refPairRef == obj1);
+			ASSERT (refPair	== refPairRef);
+			ASSERT (obj1	== refPairRef);
+
+			int*			ptr	   = &obj1.first;
+			RefHolder<int*> ptrRef = ptr;
+
+			ASSERT (ptrRef != nullptr);
+			ASSERT (nullptr != ptrRef);
+		}
+
+
 		struct alignas(64) ConstStruct {
 			const int				id;
 			std::unique_ptr<double> payload;

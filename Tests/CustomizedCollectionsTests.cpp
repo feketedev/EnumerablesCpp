@@ -51,6 +51,7 @@ namespace EnumerableTests {
 			{ 1, "Aldo",	23 },
 			{ 2, "Charlie", 42 },
 			{ 5, "Dave",	44 },
+			{ 1, "Aldo",	23 },	// intentional duplicate
 		};
 
 		const Person groupB[] = {
@@ -117,52 +118,57 @@ namespace EnumerableTests {
 			auto allMembers = Enumerables::Concat(groupA, groupB);
 
 			// Using standard op ==
-			auto distincts1 = allMembers.ToHashSet<Hasher>();
-			auto distincts2 = allMembers.ToHashSet(0, hashLambda);
-			
-			ASSERT_TYPE (std::unordered_set<Person COMMA Hasher>,		distincts1);
-			ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda>, distincts2);
+			auto distincts0 = allMembers.ToHashSet<Hasher>();
+			{
+				auto distincts2 = allMembers.ToHashSet(0, hashLambda);
 
-			ASSERT_EQ (distincts1.size(), 5u);			// both groups having Aldo
-			ASSERT    (EqualSets(distincts1, distincts2));
+				ASSERT_TYPE (std::unordered_set<Person COMMA Hasher>, distincts0);
+				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda>, distincts2);
 
+				ASSERT_EQ (distincts0.size(), 5u);			// both groups having Aldo
+				ASSERT    (EqualSets(distincts0, distincts2));
+			}
 
 			// Full comparison still, just with worse hash
-			auto distincts3 = allMembers.ToHashSet<IdHasher>();
-			auto distincts4 = allMembers.ToHashSet(0, idHashLambda);
+			{
+				auto distincts1 = allMembers.ToHashSet<IdHasher>();
+				auto distincts2 = allMembers.ToHashSet(0, idHashLambda);
 
-			ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher>,		  distincts3);
-			ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda>, distincts4);
+				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher>,		  distincts1);
+				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda>, distincts2);
 
-			ASSERT (EqualSets(distincts1, distincts3));
-			ASSERT (EqualSets(distincts1, distincts4));
-
+				ASSERT (EqualSets(distincts0, distincts1));
+				ASSERT (EqualSets(distincts0, distincts2));
+			}
 
 			// Resorting to "id" field
-			auto uniqueIdd1 = allMembers.ToHashSet<IdHasher, IdComparer>();
-			auto uniqueIdd2 = allMembers.ToHashSet(0, idHashLambda, idsEqualLambda);
+			{
+				auto uniqueIdd1 = allMembers.ToHashSet<IdHasher, IdComparer>();
+				auto uniqueIdd2 = allMembers.ToHashSet(0, idHashLambda, idsEqualLambda);
 
-			ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher COMMA IdComparer>,		   uniqueIdd1);
-			ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda COMMA EqualIdsLambda>, uniqueIdd2);
+				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher COMMA IdComparer>,		   uniqueIdd1);
+				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda COMMA EqualIdsLambda>, uniqueIdd2);
 			
-			auto idsAsc = Enumerate(uniqueIdd1).Select(&Person::id).Order();
+				auto idsAsc = Enumerate(uniqueIdd1).Select(&Person::id).Order();
 			
-			ASSERT (AreEqual({ 1, 2, 3, 5 }, idsAsc));
-			ASSERT (EqualSets(uniqueIdd1, uniqueIdd2));
-
+				ASSERT (AreEqual({ 1, 2, 3, 5 }, idsAsc));
+				ASSERT (EqualSets(uniqueIdd1, uniqueIdd2));
+			}
 
 			// By content, ignoring "id"
-			auto uniqueData1 = allMembers.ToHashSet<DataHasher, DataComparer>();
-			auto uniqueData2 = allMembers.ToHashSet(0, dataHashLambda, dataEqualLambda);
+			{
+				auto uniqueData1 = allMembers.ToHashSet<DataHasher, DataComparer>();
+				auto uniqueData2 = allMembers.ToHashSet(0, dataHashLambda, dataEqualLambda);
 
-			ASSERT_TYPE (std::unordered_set<Person COMMA DataHasher COMMA DataComparer>,		  uniqueData1);
-			ASSERT_TYPE (std::unordered_set<Person COMMA DataHasherLambda COMMA EqualDataLambda>, uniqueData2);
+				ASSERT_TYPE (std::unordered_set<Person COMMA DataHasher COMMA DataComparer>,		  uniqueData1);
+				ASSERT_TYPE (std::unordered_set<Person COMMA DataHasherLambda COMMA EqualDataLambda>, uniqueData2);
 
-			ASSERT_EQ (4, uniqueData1.size());
-			ASSERT_EQ (1, Enumerate(uniqueData1).Count(FUN(p,  p.name == "Charlie")));
-			ASSERT_EQ (2, Enumerate(uniqueData1).Count(FUN(p,  p.id   == 5)));
+				ASSERT_EQ (4, uniqueData1.size());
+				ASSERT_EQ (1, Enumerate(uniqueData1).Count(FUN(p,  p.name == "Charlie")));
+				ASSERT_EQ (2, Enumerate(uniqueData1).Count(FUN(p,  p.id   == 5)));
 
-			ASSERT (EqualSets(uniqueData1, uniqueData2));
+				ASSERT (EqualSets(uniqueData1, uniqueData2));
+			}
 
 			// With custom allocator
 			{
@@ -171,17 +177,98 @@ namespace EnumerableTests {
 				std::aligned_storage_t<sizeof(Person), alignof(Person)>  buffer[30];
 				TestAllocator<Person, 10> fixedAlloc { buffer };
 
-				auto distincts5 = allMembers.ToHashSet(0, hashLambda, std::equal_to<>{}, fixedAlloc);
+				auto distincts2 = allMembers.ToHashSet(0, hashLambda, std::equal_to<>{}, fixedAlloc);
 
-				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda COMMA std::equal_to<> COMMA decltype(fixedAlloc)>, distincts5);
+				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda COMMA std::equal_to<> COMMA decltype(fixedAlloc)>, distincts2);
 
-				ASSERT (EqualSets(distincts1, distincts5));
+				ASSERT (EqualSets(distincts0, distincts2));
 			}
-
 		}
 
 		// 2. Internal usage in filters
-		// TODO
+		{
+			// Using standard op ==
+			auto diff0 = Enumerate(groupA).Except<Hasher>(groupB);
+			auto isec0 = Enumerate(groupA).Intersect<Hasher>(groupB);
+			{
+				auto diff2 = Enumerate(groupA).Except(groupB, hashLambda);
+				auto isec2 = Enumerate(groupA).Intersect(groupB, hashLambda);
+
+				ASSERT_ELEM_TYPE (const Person&, diff0);
+				ASSERT_ELEM_TYPE (const Person&, diff2);
+				ASSERT_ELEM_TYPE (const Person&, isec0);
+				ASSERT_ELEM_TYPE (const Person&, isec2);
+
+				ASSERT (AreEqual(diff0.Addresses(), diff2.Addresses()));
+				ASSERT (AreEqual(isec0.Addresses(), isec2.Addresses()));
+
+				ASSERT (AreEqual(Enumerate(groupA).Skip(1).Take(2),		diff0));	// 1st and Last is Aldo, being in both groups
+				ASSERT (AreEqual(Enumerate({ &groupB[0], &groupB[0] }),	isec0));	// value-eq
+
+				// duplicate items pass through filter in original order
+				ASSERT (AreEqual({ &groupA[0], &groupA[3] }, isec0.Addresses()));
+			}
+
+			// Full comparison still, worse hash
+			{
+				auto diff1 = Enumerate(groupA).Except<IdHasher>(groupB);
+				auto isec1 = Enumerate(groupA).Intersect<IdHasher>(groupB);
+				auto diff2 = Enumerate(groupA).Except(groupB, idHashLambda);
+				auto isec2 = Enumerate(groupA).Intersect(groupB, idHashLambda);
+
+				ASSERT (AreEqual(diff0.Addresses(), diff1.Addresses()));
+				ASSERT (AreEqual(diff0.Addresses(), diff2.Addresses()));
+				ASSERT (AreEqual(isec0.Addresses(), isec1.Addresses()));
+				ASSERT (AreEqual(isec0.Addresses(), isec2.Addresses()));
+			}
+
+			// Resorting to "id" field
+			{
+				auto idDiff1 = Enumerate(groupA).Except<IdHasher, IdComparer>(groupB);
+				auto idIsec1 = Enumerate(groupA).Intersect<IdHasher, IdComparer>(groupB);
+				auto idDiff2 = Enumerate(groupA).Except(groupB, idHashLambda, idsEqualLambda);
+				auto idIsec2 = Enumerate(groupA).Intersect(groupB, idHashLambda, idsEqualLambda);
+
+				ASSERT (AreEqual(idDiff1.Addresses(), idDiff2.Addresses()));
+				ASSERT (AreEqual(idIsec1.Addresses(), idIsec2.Addresses()));
+				
+				// only Charlie has unused id
+				ASSERT_EQ (&groupA[1], &idDiff1.Single());
+				ASSERT    (AreEqual({ &groupA[0], &groupA[2], &groupA[3] }, idIsec1.Addresses()));
+			}
+
+			// By content, ignoring "id"
+			{
+				auto dataDiff1 = Enumerate(groupA).Except<DataHasher, DataComparer>(groupB);
+				auto dataIsec1 = Enumerate(groupA).Intersect<DataHasher, DataComparer>(groupB);
+				auto dataDiff2 = Enumerate(groupA).Except(groupB, dataHashLambda, dataEqualLambda);
+				auto dataIsec2 = Enumerate(groupA).Intersect(groupB, dataHashLambda, dataEqualLambda);
+				
+				ASSERT (AreEqual(dataDiff1.Addresses(), dataDiff2.Addresses()));
+				ASSERT (AreEqual(dataIsec1.Addresses(), dataIsec2.Addresses()));
+				
+				// only Dave has unique data
+				ASSERT_EQ (&groupA[2], &dataDiff1.Single());
+				ASSERT    (AreEqual({ &groupA[0], &groupA[1], &groupA[3] }, dataIsec1.Addresses()));
+			}
+
+			// With custom allocator
+			{
+				std::vector<const Person*> expectDiff = diff0.Addresses().ToList();
+				std::vector<const Person*> expectIsec = isec0.Addresses().ToList();
+
+				NO_MORE_HEAP;
+
+				std::aligned_storage_t<sizeof(Person), alignof(Person)>  buffer[30];
+				TestAllocator<Person, 10> fixedAlloc { buffer };
+
+				auto diff2 = Enumerate(groupA).Except(groupB, hashLambda, std::equal_to<>{}, fixedAlloc);
+				auto isec2 = Enumerate(groupA).Intersect(groupB, hashLambda, std::equal_to<>{}, fixedAlloc);
+
+				ASSERT (AreEqual(expectDiff, diff2.Addresses()));
+				ASSERT (AreEqual(expectIsec, isec2.Addresses()));
+			}
+		}
 	}
 
 

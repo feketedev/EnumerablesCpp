@@ -807,14 +807,21 @@ namespace Def {
 
 
 	// for cases when the operand can't be readily captured as a SetType<T>
-	template <class Source, class OpSource>
+	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 
 		using S = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
 
-		Source			source;
-		SetType<S>		operand;
-		const bool		intersect;	// == !subtract
+		Source						source;
+		SetType<S, SetOptions...>	operand;
+		const bool					intersect;	// == !subtract
+
+
+		static SetType<S, SetOptions...>   CreateOperand(OpSource&& etor, const SetOptions&... opts)
+		{
+			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be quite lucky anyway
+			return ObtainCachedResults<SetOperations, S>(etor, 0, opts...);
+		}
 
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
@@ -822,7 +829,7 @@ namespace Def {
 		bool		FetchNext() override
 		{
 			while (source.FetchNext()) {
-				bool inOper = SetOperations::Contains(operand, source.Current());
+				bool inOper = SetOperations::Contains<S>(operand, source.Current());
 				if (inOper == intersect)
 					return true;
 			}
@@ -843,16 +850,21 @@ namespace Def {
 		template <class SrcFactory, class OpFactory>
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
 			source    { getSource() },
-			intersect { intersect }
+			intersect { intersect },
+			operand   { CreateOperand(getOpSource(), SetOptions {}...) }
 		{
-			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be really extreme anyway
-			auto etor = getOpSource();
-			operand   = ObtainCachedResults<SetOperations, S>(etor, 0);
+		}
+
+		template <class SrcFactory, class OpFactory, bool NeedOptions = 0 < sizeof...(SetOptions), class = enable_if_t<NeedOptions>>
+		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, const SetOptions&... opts, bool intersect) :
+			source    { getSource() },
+			intersect { intersect },
+			operand   { CreateOperand(getOpSource(), opts...) }
+		{
 		}
 
 		SetFilterEnumerator(SetFilterEnumerator&&) = default;
 	};
-
 
 
 	template <class Source>

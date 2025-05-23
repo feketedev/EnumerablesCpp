@@ -40,7 +40,27 @@ namespace TypeHelpers {
 
 		T&		 Get() const noexcept	{ return *ptr; }
 		operator T&()  const noexcept	{ return *ptr; }
+
+
+		// let's have full transparency with equality-checks
+		template <class RH = T>
+		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
+		
+		template <class RH = T>
+		bool operator !=(const RH& rhs)				const	 noexcept(noexcept(Get() != rhs))		{ return Get() != rhs; }
+
+		template <class RT>
+		bool operator ==(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() == rhs.Get()))	{ return Get() == rhs.Get(); }
+		
+		template <class RT>
+		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
 	};
+
+	template <class T, class LH = T>
+	bool operator ==(const LH& lhs, const RefHolder<T>& ref) noexcept(noexcept(lhs == ref.Get()))	{ return lhs == ref.Get(); }
+
+	template <class T, class LH = T>
+	bool operator !=(const LH& lhs, const RefHolder<T>& ref) noexcept(noexcept(lhs != ref.Get()))	{ return lhs != ref.Get(); }
 
 
 
@@ -310,7 +330,7 @@ namespace std {
 		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
 		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
 		{
-			return this->operator()(ref.Get());
+			return hash<remove_const_t<T>>::operator()(ref.Get());
 		}
 	};
 
