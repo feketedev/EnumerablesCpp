@@ -135,6 +135,26 @@ namespace Def {
 
 	#pragma endregion
 
+
+
+	#pragma region Collection config helpers
+
+		// List with default (or user-specified) allocator
+		template <class V, class Alloc = None, class = std::enable_if_t<IsNone<Alloc>>, class... Args>
+		ListType<V>   CreateListWithAllocator(const Alloc&, Args&&... args)
+		{ 
+			return ListOperations::Init<V>(std::forward<Args>(args)...); 
+		}
+
+		// List with designated (or user-overridden) allocator
+		template <class V, class Alloc, class = std::enable_if_t<!IsNone<Alloc>>, class... Args>
+		auto		  CreateListWithAllocator(const Alloc& alloc, Args&&... args)
+		{
+			return ListOperations::InitWithAllocator<V, Alloc>(alloc, std::forward<Args>(args)...);
+		}
+
+	#pragma endregion
+
 #pragma endregion
 
 

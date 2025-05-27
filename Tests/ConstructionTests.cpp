@@ -5,6 +5,7 @@
 
 #include "Tests.hpp"
 #include "TestUtils.hpp"
+#include "TestAllocator.hpp"
 #include "Enumerables.hpp"
 
 
@@ -364,6 +365,105 @@ namespace EnumerableTests {
 	}
 
 
+	
+	// Exact copy of r-value BracedInit tests, just with custom allocator parameter.
+	static void BracedInitWithAllocator()
+	{
+		AllocationCounter heapAllocs;
+
+		std::aligned_storage_t<sizeof(int*), alignof(int*)>  buffer[12];
+		TestAllocator<int*, 3> fixedAlloc { buffer };
+
+		{
+			Enumerable<int> ints = Empty<int>();
+			{
+				auto localInts = Enumerate({ 1, 2, 3, 4 }, fixedAlloc);
+				ints = localInts;
+				ASSERT_ELEM_TYPE (int, localInts);
+			}
+			ASSERT_EQ (4, ints.Count());
+			ASSERT_EQ (1, ints.First());
+			ASSERT_EQ (4, ints.Last());
+
+			// Forced type disambiguites the initializer
+			{
+				ints = Enumerate<int>({ 1, 2u, 3, '4' }, fixedAlloc);
+			}
+			ASSERT_EQ (4,	ints.Count());
+			ASSERT_EQ (1,	ints.First());
+			ASSERT_EQ ('4', ints.Last());
+		}
+		heapAllocs.AssertFreshCount(2);		// 2 x type-erasure, not for lists
+
+		int a = 5, b = 6, c = 7;
+		{
+			// "Capture-syntax" is supported to enumerate references of objects
+			// - currently only for inline (rvalue) initializers!
+			auto ints2 = Enumerate({ &c, &b, &a }, fixedAlloc);
+			ASSERT_ELEM_TYPE (int&, ints2);
+			ASSERT_EQ		 (3, ints2.Count());
+			ASSERT_EQ		 (7, ints2.First());
+			c = 8;
+			ASSERT_EQ		 (8, ints2.First());
+		}
+		heapAllocs.AssertFreshCount(0);
+
+		{
+			// with explicit type
+			auto ints3 = Enumerate<int&>({ &c, &b, &a }, fixedAlloc);
+			auto ints4 = Enumerate<const int&>({ &c, &b, &a }, fixedAlloc);
+			ASSERT_ELEM_TYPE (int&, ints3);
+			ASSERT_ELEM_TYPE (const int&, ints4);
+			ints3.First() = 1;
+			ASSERT_EQ (1, ints4.First());
+
+			// auto bad1 = Enumerate<int&>({ 1, 2, 3, 4 }, fixedAlloc);		// CTE
+			// auto bad2 = Enumerate<int>({ &c, &b, &a }, fixedAlloc);		// CTE
+		}
+		heapAllocs.AssertFreshCount(0);
+
+		{
+			// explicit type can override "capture-syntax" to keep simple pointers :)
+			auto ptrs = Enumerate<int*>({ &c, &b, &a }, fixedAlloc);
+			ASSERT_ELEM_TYPE (int*, ptrs);
+			ASSERT_EQ (&a, ptrs.Last());
+
+			// explicit allows the initializer to accept polymorphic objects too:
+			Base		base { 1 };
+			DerivedA	derA { 20, 5.5 };
+			DerivedB	derB { 33, 'e' };
+
+			auto mixedList = Enumerate<Base&>({ &base, &derA, &derB }, fixedAlloc);
+			ASSERT_ELEM_TYPE (Base&, mixedList);
+			ASSERT_EQ		 (3, mixedList.Count());
+			ASSERT_EQ		 (&base, &mixedList.First());
+			ASSERT_EQ		 (&derB, &mixedList.Last());
+		}
+		heapAllocs.AssertFreshCount(0);
+
+
+		// Check the type-only syntax for default-constructible allocators as well (some examples only)
+		{
+			// Forced type disambiguites the initializer
+			auto ints = Enumerate<int, std::allocator<int>>({ 1, 2u, 3, '4' });
+			
+			ASSERT_EQ (4,	ints.Count());
+			ASSERT_EQ (1,	ints.First());
+			ASSERT_EQ ('4', ints.Last());
+
+
+			// with explicit type
+			auto ints3 = Enumerate<int&, std::allocator<int*>>({ &c, &b, &a });
+			auto ints4 = Enumerate<const int&, std::allocator<int*>>({ &c, &b, &a });
+			ASSERT_ELEM_TYPE (int&, ints3);
+			ASSERT_ELEM_TYPE (const int&, ints4);
+			ints3.First() = 1;
+			ASSERT_EQ (1, ints4.First());
+		}
+	}
+
+
+
 	// Concatenation (with const- or value conversion)
 	static void ConcatenationsSimple()
 	{
@@ -671,6 +771,7 @@ namespace EnumerableTests {
 		SeededConstruction();
 		CollectionBasics();
 		BracedInit();
+		BracedInitWithAllocator();
 		ConcatenationsSimple();
 		ConcatenationsInheritance();
 		ConstructionByMove();

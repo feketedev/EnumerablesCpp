@@ -851,7 +851,7 @@ namespace Def {
 		/// @remarks	
 		///		Mostly an internal tool for utilizing existing Enumerators to implement terminal operations concisely.
 		///		CONSIDER: for usage somehow at parameters, like EnumerableRef<T> ?
-		auto ToReferenced() const &
+		auto ToReferenced() const &  noexcept
 		{
 			auto proxy = [this]() { return GetEnumerator(); };
 			return AutoEnumerable<decltype(proxy)> { move(proxy), isPure, false };
@@ -1165,20 +1165,20 @@ namespace Def {
 	#pragma region Wrap Containers by Reference
 
 	/// Shortcuts to enable some generic code (to Enumerate either a container or any AutoEnumerable)
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(const AutoEnumerable<Fact>& eb)
 	{
 		// note: unnecessary conversions are bypassed inside As
 		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(AutoEnumerable<Fact>& eb)
 	{
 		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact>
+	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(AutoEnumerable<Fact>&& eb)
 	{
 		return move(eb).template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
@@ -1239,20 +1239,19 @@ namespace Def {
 
 	// These 2 overloads could work publicly IF enumerated type was always provided explicitly.
 	// They provide the  R* -> R&  "capture-syntax".
-	template <class R, class I, class = R*>
-	auto InitEnumerable(std::initializer_list<I>&& init)
+	template <class R, class A, class I, class = R*>
+	auto InitEnumerable(std::initializer_list<I>&& init, const A& alloc)
 	{
 		static_assert (!is_reference<R>::value, "Enumerables internal error.");
 
-		// NOTE: List-init support is assumed only here for ListType! Is it expectable?
-		return Enumerate<R>(ListType<I>(init));
+		return Enumerate<R>(CreateListWithAllocator<I, A>(alloc, init));
 	}
 
-	template <class R, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
-	auto InitEnumerable(std::initializer_list<V*>&& init)
+	template <class R, class A, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
+	auto InitEnumerable(std::initializer_list<V*>&& init, const A& alloc)
 	{
 		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
-		return Enumerate<RB*>(ListType<V*>(init)).Dereference();
+		return Enumerate<RB*>(CreateListWithAllocator<V*, A>(alloc, init)).Dereference();
 	}
 
 
@@ -1280,33 +1279,37 @@ namespace Def {
 
 
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
-	template <class ForcedResult, IfInitValues<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<NoDeduce<ForcedResult>>&& init)
+	template <class ForcedResult, class CustomAllocator = None,
+			  IfInitValues<ForcedResult> = 0>
+	auto Enumerate(std::initializer_list<NoDeduce<ForcedResult>>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<ForcedResult>(move(init));
+		return InitEnumerable<ForcedResult>(move(init), alloc);
 	}
 
 	/// Take explicitly typed references from braced initializer. Use pointers as "capture-syntax".
 	/// (Explicit type allows conversions, thus usage of interfaces.)
-	template <class ForcedResult, IfInitRefs<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<remove_reference_t<ForcedResult>*>&& init)
+	template <class ForcedResult, class CustomAllocator = None,
+			  IfInitRefs<ForcedResult> = 0>
+	auto Enumerate(std::initializer_list<remove_reference_t<ForcedResult>*>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<ForcedResult>(move(init));
+		return InitEnumerable<ForcedResult>(move(init), alloc);
 	}
 
 
 	/// Take implicitly typed values (pointers excluded) from braced initializer.
-	template <class ForcedResult = void, class T, IfInitDeducedValues<ForcedResult, T> = 0>
-	auto Enumerate(std::initializer_list<T>&& init)
+	template <class ForcedResult = void, class CustomAllocator = None,
+			  class T, IfInitDeducedValues<ForcedResult, T> = 0>
+	auto Enumerate(std::initializer_list<T>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init));
+		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init), alloc);
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
-	template <class ForcedResult = void, class T, IfInitDeducedRefs<ForcedResult, T*> = 0>
-	auto Enumerate(std::initializer_list<T*>&& init)
+	template <class ForcedResult = void, class CustomAllocator = None,
+			  class T, IfInitDeducedRefs<ForcedResult, T*> = 0>
+	auto Enumerate(std::initializer_list<T*>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init));
+		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init), alloc);
 	}
 
 

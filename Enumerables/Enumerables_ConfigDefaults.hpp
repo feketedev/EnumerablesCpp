@@ -192,14 +192,11 @@ namespace StlBinding {
 			using type = std::vector<V, Options...>;
 		};
 
+
+
+		// Custom container type with arbitrary user-provided type-arguments.
 		template <class V, class... Options>
 		using Container = typename VectorBindHelper<V, Options...>::type;
-
-		// Argument deduction won't work through a depentend type, only with a direct alias.
-		// Fortunately, deduced arguments don't trigger the (supposed) clang bug.
-		template <class V, class... Options>
-		using DeducibleContainer = std::vector<V, Options...>;
-
 
 		template <class V, class... Opts>
 		static auto	Init(size_t capacity, const Opts&... opts) -> typename VectorBindHelper<V, Opts...>::type
@@ -208,6 +205,53 @@ namespace StlBinding {
 			l.reserve(capacity);
 			return l;
 		}
+
+
+
+		// TODO: Could these initializations be simplified?
+		//		 (Full benefit will come with builder-syntax for allocators.)
+
+		// Similar to Init, but these overloads explicitly take an allocator designated for the container.
+		//	* Should Container accept further parameters from the user in customizable contexts,
+		//	  those are to be forwarded after capacity and alloc, as well.
+		//	* A user-specified custom allocator should take precedence over the designated one.
+		//	  [e.g.: ToList<int, MyAlloc>()]	This is solved by 2 overloads for std::vector.
+		//	* The exact result type is not assumed at call places.
+		template <class V, class Alloc>
+		static Container<V, Alloc>			InitWithAllocator(const Alloc& alloc, size_t capacity)
+		{
+			return Init<V, Alloc>(capacity, alloc);
+		}
+
+		template <class V, class Alloc, class DirectAlloc>
+		static Container<V, DirectAlloc>	InitWithAllocator(const Alloc&, size_t capacity, const DirectAlloc& alloc)
+		{
+			return Init<V, DirectAlloc>(capacity, alloc);
+		}
+
+
+
+		// Init_list overloads:
+		// Required solely by direct Enumerate({ a, b, c }) syntax, only for List, no custom parameters.
+		template <class V>
+		static Container<V>			Init(std::initializer_list<V> initList)
+		{
+			return std::vector<V> (initList);
+		}
+		
+		template <class V, class Alloc>
+		static Container<V, Alloc>	InitWithAllocator(const Alloc& a, std::initializer_list<V> initList)
+		{
+			return { initList, a };
+		}
+
+
+
+		// Argument deduction won't work through a depentend type, only with a direct alias.
+		// Fortunately, deduced arguments don't trigger the (supposed) clang bug.
+		template <class V, class... Options>
+		using DeducibleContainer = std::vector<V, Options...>;
+
 
 		template <class V, class... Opts, class Vin>
 		static void		Add(DeducibleContainer<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
