@@ -54,6 +54,14 @@ namespace TypeHelpers {
 		
 		template <class RT>
 		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
+
+
+		// also support default ordering -> be usable in tree-sets
+		template <class RH = T>
+		bool operator <(const RH& rhs)				const	 noexcept(noexcept(Get() < rhs))		{ return Get() < rhs; }
+
+		template <class RT>
+		bool operator <(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() < rhs.Get()))	{ return Get() < rhs.Get(); }
 	};
 
 	template <class T, class LH = T>
@@ -61,6 +69,9 @@ namespace TypeHelpers {
 
 	template <class T, class LH = T>
 	bool operator !=(const LH& lhs, const RefHolder<T>& ref) noexcept(noexcept(lhs != ref.Get()))	{ return lhs != ref.Get(); }
+
+	template <class T, class LH = T>
+	bool operator <(const LH& lhs, const RefHolder<T>& ref)	 noexcept(noexcept(lhs < ref.Get()))	{ return lhs < ref.Get(); }
 
 
 

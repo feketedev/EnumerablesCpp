@@ -118,9 +118,9 @@ namespace EnumerableTests {
 			auto allMembers = Enumerables::Concat(groupA, groupB);
 
 			// Using standard op ==
-			auto distincts0 = allMembers.ToHashSet<Hasher>();
+			auto distincts0 = allMembers.ToSet<Hasher>();
 			{
-				auto distincts2 = allMembers.ToHashSet(0, hashLambda);
+				auto distincts2 = allMembers.ToSet(0, hashLambda);
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA Hasher>, distincts0);
 				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda>, distincts2);
@@ -131,8 +131,8 @@ namespace EnumerableTests {
 
 			// Full comparison still, just with worse hash
 			{
-				auto distincts1 = allMembers.ToHashSet<IdHasher>();
-				auto distincts2 = allMembers.ToHashSet(0, idHashLambda);
+				auto distincts1 = allMembers.ToSet<IdHasher>();
+				auto distincts2 = allMembers.ToSet(0, idHashLambda);
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher>,		  distincts1);
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda>, distincts2);
@@ -143,8 +143,8 @@ namespace EnumerableTests {
 
 			// Resorting to "id" field
 			{
-				auto uniqueIdd1 = allMembers.ToHashSet<IdHasher, IdComparer>();
-				auto uniqueIdd2 = allMembers.ToHashSet(0, idHashLambda, idsEqualLambda);
+				auto uniqueIdd1 = allMembers.ToSet<IdHasher, IdComparer>();
+				auto uniqueIdd2 = allMembers.ToSet(0, idHashLambda, idsEqualLambda);
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher COMMA IdComparer>,		   uniqueIdd1);
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda COMMA EqualIdsLambda>, uniqueIdd2);
@@ -157,8 +157,8 @@ namespace EnumerableTests {
 
 			// By content, ignoring "id"
 			{
-				auto uniqueData1 = allMembers.ToHashSet<DataHasher, DataComparer>();
-				auto uniqueData2 = allMembers.ToHashSet(0, dataHashLambda, dataEqualLambda);
+				auto uniqueData1 = allMembers.ToSet<DataHasher, DataComparer>();
+				auto uniqueData2 = allMembers.ToSet(0, dataHashLambda, dataEqualLambda);
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA DataHasher COMMA DataComparer>,		  uniqueData1);
 				ASSERT_TYPE (std::unordered_set<Person COMMA DataHasherLambda COMMA EqualDataLambda>, uniqueData2);
@@ -177,7 +177,7 @@ namespace EnumerableTests {
 				std::aligned_storage_t<sizeof(Person), alignof(Person)>  buffer[30];
 				TestAllocator<Person, 10> fixedAlloc { buffer };
 
-				auto distincts2 = allMembers.ToHashSet(0, hashLambda, std::equal_to<>{}, fixedAlloc);
+				auto distincts2 = allMembers.ToSet(0, hashLambda, std::equal_to<>{}, fixedAlloc);
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda COMMA std::equal_to<> COMMA decltype(fixedAlloc)>, distincts2);
 

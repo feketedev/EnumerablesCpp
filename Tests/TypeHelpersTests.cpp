@@ -459,6 +459,48 @@ namespace EnumerableTests {
 		}
 
 
+		// RefHolder transparent compare (for tree-sets)
+		{
+			std::pair<int, char> obj1 { 1, 'a' };		// type with templated op<
+			std::pair<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::pair<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::pair<int, char>> ref1 = obj1;
+
+			ASSERT_EQ (false, obj1 < cpy1);
+			ASSERT_EQ (true,  obj1 < obj2);
+
+			ASSERT_EQ (false, ref1 < cpy1);
+			ASSERT_EQ (false, cpy1 < ref1);
+			ASSERT_EQ (true,  ref1 < obj2);
+			ASSERT_EQ (false, obj2 < ref1);
+
+			ASSERT (ref1.operator<({1, 'b'}));			// edge-case of default type argument
+
+
+			RefHolder<std::pair<int, char>> ref2   = obj2;
+			RefHolder<std::pair<int, char>> refcpy = ref1;
+
+			ASSERT_EQ (true,  ref1 < ref2);
+			ASSERT_EQ (false, ref1 < refcpy);
+
+			// holding different, but comparable type
+			std::pair<int&, char&> refPair { obj1.first, obj1.second };
+
+			ASSERT_EQ (true,  refPair < obj2);
+			ASSERT_EQ (false, refPair < obj1);
+			ASSERT_EQ (false, obj1 < refPair);
+
+			RefHolder<std::pair<int&, char&>> refPairRef = refPair;
+
+			ASSERT_EQ (false, refPairRef < refPair);
+			ASSERT_EQ (true,  refPairRef < obj2);
+			ASSERT_EQ (false, refPair	 < refPairRef);
+			ASSERT_EQ (false, obj2		 < refPairRef);
+		}
+
+
+
 		struct alignas(64) ConstStruct {
 			const int				id;
 			std::unique_ptr<double> payload;

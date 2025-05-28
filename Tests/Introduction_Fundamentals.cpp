@@ -216,7 +216,7 @@ namespace EnumerableTests {
 			Enumerable<int&> approved = numbers.Where(FUN(x,  x > 2));
 			
 			std::vector<int>		list = approved.ToList();			// Decays element automatically
-			std::unordered_set<int> set  = approved.ToHashSet();		//
+			std::unordered_set<int> set  = approved.ToSet();			//
 			
 			ASSERT	  (Enumerables::AreEqual({ 5, 3, 3 },	list));
 			ASSERT_EQ ((std::unordered_set<int>{ 5, 3 }),	set);

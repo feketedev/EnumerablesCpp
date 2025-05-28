@@ -511,7 +511,7 @@ namespace EnumerableTests {
 			auto roots = Enumerate(set1).MapTo<double>(&sqrt);
 			allocations.AssertFreshCount(0);
 
-			std::unordered_set<double> rootSet = roots.ToHashSet();
+			std::unordered_set<double> rootSet = roots.ToSet();
 
 #		if defined(_DEBUG) && !defined(__clang__)
 			// MSVC doesn't apply NRVO in debug + its move ctor does allocate!

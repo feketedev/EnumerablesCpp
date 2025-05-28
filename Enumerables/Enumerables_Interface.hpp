@@ -475,7 +475,7 @@ namespace Def {
 		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
 
 		// NOTE: Union wouldn't make much sense asymmetrically.
-		//		 For a proper set result .Concat(s).ToHashSet() is effective! (No lazy evaluation though.)
+		//		 For a proper set result .Concat(s).ToSet() is effective! (No lazy evaluation though.)
 
 
 		// --- Shorthands for convenience ---
@@ -827,16 +827,18 @@ namespace Def {
 
 
 		/// Form a Set out of distinct elements.
+		/// Can be ordered or based on hash, according to configuration.
 		/// @tparam Options:  Additional arguments for SetType [Default-constructed]
 		///					  (typ.: Hasher, Equality comparer, Allocator)
 		template <class... Options>
-		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint = 0)				  const;
+		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint = 0)				  const;
 		
 		/// Form a Set out of distinct elements.
+		/// Can be ordered or based on hash, according to configuration.
 		/// @tparam Options:  Additional arguments for SetType [Deduced]
 		///					  (typ.: Hasher, Equality comparer, Allocator)
 		template <class... Options>
-		SetType<TElemDecayed, Options...>			ToHashSet(size_t sizeHint, const Options&...) const;
+		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint, const Options&...) const;
 
 
 

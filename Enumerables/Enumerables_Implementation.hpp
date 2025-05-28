@@ -558,7 +558,7 @@ namespace Def {
 
 	template <class TFactory>
 	template <class... SetOptions>
-	auto AutoEnumerable<TFactory>::ToHashSet(size_t sizeHint) const -> SetType<TElemDecayed, SetOptions...>
+	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint) const -> SetType<TElemDecayed, SetOptions...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, SetOptions {}...);
@@ -566,7 +566,7 @@ namespace Def {
 
 	template <class TFactory>
 	template <class... SetOptions>
-	auto AutoEnumerable<TFactory>::ToHashSet(size_t sizeHint, const SetOptions&... opts) const -> SetType<TElemDecayed, SetOptions...>
+	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint, const SetOptions&... opts) const -> SetType<TElemDecayed, SetOptions...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, opts...);
