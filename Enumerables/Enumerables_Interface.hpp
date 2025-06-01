@@ -318,6 +318,15 @@ namespace Def {
 		template <class Mapper, class VForced = void>
 		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m)); }
 
+		// Forced l-value variant for ToDictionary
+		template <class Mapper>
+		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem&>(forward<Mapper>(m)); }
+
+		// Special SFINAE variant for ToDictionary overloads - Not forcing Selector, as target is always decayed.
+		template <class Mapper, class = enable_if_t<!is_convertible<Mapper, size_t>::value>>
+		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::CustomMapper<TElem>(forward<Mapper>(m)); }
+
+
 		template <class Mapper, class VForced = void>
 		static decltype(auto) IndepMapper(Mapper& m)
 		{
@@ -356,6 +365,9 @@ namespace Def {
 		using OverloadTo = TypeHelpers::OverloadResolver<TElem, Res>;
 
 		template <class Res>
+		using LVOverloadTo = TypeHelpers::OverloadResolver<TElem&, Res>;
+
+		template <class Res>
 		using ConstOverloadTo = TypeHelpers::OverloadResolver<TElemConstParam, Res>;
 
 		// As a default type, supports limited, but simple overload-resolution for Predicate Functions.
@@ -385,6 +397,12 @@ namespace Def {
 		{
 			return [op = forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
 		}
+
+
+	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
+
+		template <class Mapper>  using DecayedResult   = std::decay_t<MappedT<TElem, Mapper>>;
+		template <class Mapper>  using DecayedResultLV = std::decay_t<MappedT<TElem&, Mapper>>;
 
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
@@ -792,6 +810,8 @@ namespace Def {
 
 	// =========== Materialization / Lifetime-utils ==================================================================================
 	#pragma region
+		
+		// ----- Container creators --------------------------------------------------------------------------------------------------
 
 		// NOTE: For the customizability of the resulting containers, any further constructor arguments
 		//		 (e.g. allocators or non-default hash algorithms) can be passed down for construction
@@ -805,42 +825,86 @@ namespace Def {
 
 
 		/// Form a List from sequence elements.
-		/// @tparam Options:  Additional arguments for ListType [Default-constructed]
+		/// @tparam Options:  Additional arguments for ListType
 		template <class... Options>
-		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0)					const;
-		
-		/// Form a List from sequence elements.
-		/// @tparam Options:  Additional arguments for ListType [Deduced]
-		template <class... Options>
-		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...)	const;
-		
-
-		/// Form a List with predefined inline buffer for N elements.
-		/// @tparam Options:  Additional arguments for SmallListType [Default-constructed]
-		template <size_t N, class... Options>
-		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint = N)					const;
+		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0) const;
 		
 		/// Form a List with predefined inline buffer for N elements.
-		/// @tparam Options:  Additional arguments for SmallListType [Deduced]
+		/// @tparam N:		  size of inline buffer
+		/// @tparam Options:  Additional arguments for SmallListType
 		template <size_t N, class... Options>
-		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...)	const;
+		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint = N) const;
 
-
-		/// Form a Set out of distinct elements.
+		/// Form a Set of distinct elements.
 		/// Can be ordered or based on hash, according to configuration.
-		/// @tparam Options:  Additional arguments for SetType [Default-constructed]
+		/// @tparam Options:  Additional arguments for SetType
 		///					  (typ.: Hasher, Equality comparer, Allocator)
-		template <class... Options>
-		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint = 0)				  const;
+		template <class... Options>	
+		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint = 0) const;
+
+
+		/// Map sequence elements to unique keys, forwarding them as a whole into values of a Dictionary.
+		/// @tparam Options:  Additional arguments for DictionaryType
+		/// @param  makeKey:  TElem& -> Key mapper function
+		template <class... Options, class KeyMap>
+		auto ToDictionary(KeyMap&& toKey, size_t sizeHint = 0)			 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
+																								 TElemDecayed,
+																								 Options...>;
 		
-		/// Form a Set out of distinct elements.
-		/// Can be ordered or based on hash, according to configuration.
-		/// @tparam Options:  Additional arguments for SetType [Deduced]
-		///					  (typ.: Hasher, Equality comparer, Allocator)
+		/// Map sequence elements to unique keys by a pointer to possibly const-overloaded getter.
+		/// @tparam  K:		  Explicit type of keys (required)
+		template <class K, class... Options>
+		auto ToDictionaryOf(LVOverloadTo<K> getKey, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+
+
+		/// Form a custom Dictionary.
+		/// @tparam Options:  Additional arguments for DictionaryType
+		/// @param  k:		  TElem& -> Key   mapper function
+		/// @param  v:		  TElem  -> Value mapper function
+		template <class... Options, class KeyMap, class ValMap>
+		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint = 0)	 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																								 DecayedResult<decltype(ValueMapper(v))>,
+																								 Options...>;
+
+		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
+		/// @tparam Options:  Additional arguments for DictionaryType
+		/// @tparam  K:		  Explicit type of keys   (required)
+		/// @tparam  V:		  Explicit type of values (required)
+		template <class K, class V, class... Options>
+		auto ToDictionaryOf(LVOverloadTo<K> getKey, OverloadTo<V> getValue, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+
+
+
+			// ----- Overloads with Options... deduced from (possibly stateful) parameters. -----
+
+		template <class... Options>
+		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...) const;
+		
+		template <size_t N, class... Options>
+		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...) const;
+
 		template <class... Options>
 		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint, const Options&...) const;
 
 
+		template <class... Options, class KeyMap>
+		auto ToDictionary(KeyMap&& k, size_t sizeHint, const Options&...)				const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																												TElemDecayed,
+																												Options...>;
+		template <class K, class... Options>
+		auto ToDictionaryOf(LVOverloadTo<K>, size_t sizeHint, const Options&...)		const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+
+
+		template <class... Options, class KeyMap, class ValMap>
+		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint, const Options&...)	const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																												DecayedResult<decltype(ValueMapper(v))>,
+																												Options...>;
+		template <class K, class V, class... Options>
+		auto ToDictionaryOf(LVOverloadTo<K>, OverloadTo<V>, size_t sizeHint, const Options&...) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+
+
+
+		// ----- Lifetime tools ------------------------------------------------------------------------------------------------------
 
 		/// Evaluate current query and pass it as a self-contained enumeration (an abstract collection).
 		template <class Output = TElem>

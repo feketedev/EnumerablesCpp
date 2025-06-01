@@ -144,6 +144,70 @@ namespace EnumerableTests {
 			ASSERT_EQ (0.0, s2.x);
 			ASSERT_EQ (0.0, s2.y);
 		}
+
+		// Some terminal operations form containers out of sequence elements.
+		// ToList and ToSet are simplistic and have been covered. ToDictionary needs more input:
+		{
+			// Suppose a sample record:
+			struct Person {
+				unsigned		id;
+				std::string		name;
+
+				unsigned			GetId()	  const { return id; }
+				std::string&		GetName()		{ return name; }
+				const std::string&	GetName() const { return name; }
+
+				bool operator ==(const Person& rhs) const   { return id == rhs.id && name == rhs.name; }
+			};
+
+			Person personArr[] = {
+				{ 1, "Aldo" },
+				{ 2, "Ben" },
+				{ 3, "Charlie" },
+				{ 1, "Dave" }		// duplicate id!
+			};
+
+			Enumerable<Person&> persons = personArr;
+
+			// The 1st overload requires just a mapper to designate the keys.
+			// Just like .ToList, it decays elements to store them as values:
+			std::unordered_map<unsigned, Person>	  dict1 = persons.ToDictionary(FUN(p, p.id));
+			
+			// The 2nd takes a value-mapper too.
+			std::unordered_map<unsigned, std::string> dict2 = persons.ToDictionary(FUN(p, p.id),
+																				   FUN(p, p.name));
+			ASSERT_EQ (3, dict1.size());
+			ASSERT_EQ (3, dict2.size());
+
+			// In both cases, Values are forwarded into the container / value-mapper parameter.
+			// This case the input was Person&, so no moves have happened:
+			ASSERT_EQ ("Aldo",    personArr[0].name);
+			ASSERT_EQ ("Charlie", personArr[2].name);
+
+			// Duplicate keys are handled by the container itself, as configured via DictOperations::Add.
+			// Typically the first occurrence should be kept.
+			ASSERT_EQ ("Aldo",    dict1[1].name);
+			ASSERT_EQ ("Aldo",    dict2[1]);
+			ASSERT_EQ ("Charlie", dict1[3].name);
+			ASSERT_EQ ("Charlie", dict2[3]);
+
+			// It is possible to use member-pointers:
+			std::unordered_map<unsigned, Person>	  dictS1 = persons.ToDictionary(&Person::id);
+			std::unordered_map<unsigned, std::string> dictS2 = persons.ToDictionary(&Person::id, &Person::name);
+
+			ASSERT_EQ (dict1, dictS1);
+			ASSERT_EQ (dict2, dictS2);
+
+			// To follow .Map/.Select convention, overload-resolution of qualified getters can be enabled by specifying "-Of<K, V>" types
+			// explicitly when convenient (although with the caveat that method-pointers cannot be mixed with anything else at the moment).
+			std::unordered_map<unsigned, Person>	  dictO1 = persons.ToDictionaryOf<unsigned>(&Person::GetId);
+			std::unordered_map<unsigned, std::string> dictO2 = persons.ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
+			std::unordered_map<unsigned, std::string> dictO2C = persons.AsConst()
+																	   .ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
+			ASSERT_EQ (dictS1, dictO1);
+			ASSERT_EQ (dictS2, dictO2);
+			ASSERT_EQ (dictS2, dictO2C);	// called const overload => no "unused function" warning
+		}
 	}
 
 

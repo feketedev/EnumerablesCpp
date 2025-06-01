@@ -616,6 +616,9 @@ namespace Def {
 	public:
 		using typename IteratorEnumerator::IEnumerator::TElem;
 
+		static_assert (!is_reference<ForcedResult>::value || HasConstValue<ForcedResult> || !HasConstValue<PointedT<TIter>>,
+					   "The explicitly requested reference type loses const qualifier.");
+
 		static_assert (!is_reference<ForcedResult>::value || IsRefCompatible<ForcedResult, PointedT<TIter>>,
 					   "The explicitly requested type is not reference-compatible with elements - could return reference to a temporary.");
 

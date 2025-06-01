@@ -3,6 +3,7 @@
 #include "TestUtils.hpp"
 #include "TestAllocator.hpp"
 #include "Enumerables.hpp"
+#include <string>
 
 
 
@@ -16,6 +17,10 @@ namespace EnumerableTests {
 			std::string		name;
 			unsigned		age;
 
+			unsigned			GetId()   const	   { return id; }
+			std::string&		GetName()		&  { return name; }
+			const std::string&	GetName() const	&  { return name; }
+			std::string&&		GetName()		&& { return std::move(name); }
 
 			bool HasEqualData(const Person& rhs) const
 			{
@@ -40,6 +45,56 @@ namespace EnumerableTests {
 			{
 				return id + HashData();
 			}
+
+
+			Vector2D<int>  GetLocation() const
+			{
+				return Vector2D<int>(static_cast<int>(id),			// random mock idea
+									 static_cast<int>(age / 10));
+			}
+		};
+
+
+		// -- Related default-constructible function objects to be used as type-only arguments --
+
+		struct Hasher {
+			size_t operator ()(const Person& p) const { return p.Hash(); }
+		};
+
+		struct DataHasher {
+			size_t operator ()(const Person& p) const { return p.HashData(); }
+		};
+
+		struct IdHasher {
+			std::hash<decltype(Person::id)> h;
+
+			size_t operator ()(const Person& p) const { return h(p.id); }
+		};
+
+
+		struct IdComparer {
+			bool operator ()(const Person& l, const Person& r) const
+			{
+				return l.id == r.id;
+			}
+		};
+
+		struct DataComparer {
+			bool operator ()(const Person& l, const Person& r) const
+			{
+				return l.HasEqualData(r);
+			}
+		};
+
+		
+		// ----
+
+		struct VecYHasher {
+			size_t operator ()(const Vector2D<int>& v) const { return std::hash<int> {}(v.y); }
+		};
+
+		struct VecYComparer {
+			bool operator ()(const Vector2D<int>& l, const Vector2D<int>& r) const { return l.y == r.y; }
 		};
 	}
 
@@ -74,43 +129,12 @@ namespace EnumerableTests {
 			return l.HasEqualData(r);
 		};
 
-		// A) Lambdas can be passed in easily, but designating the deduced set will require types
+		// Lambdas can be passed in easily, but designating the deduced SetType will require types
 		using HasherLambda	   = decltype(hashLambda);
 		using DataHasherLambda = decltype(dataHashLambda);
 		using IdHasherLambda   = decltype(idHashLambda);
 		using EqualIdsLambda  = decltype(idsEqualLambda);
 		using EqualDataLambda = decltype(dataEqualLambda);
-
-
-		// B) Default-constructible function objects to be used as type-only arguments
-		struct Hasher {
-			size_t operator ()(const Person& p) const { return p.Hash(); }
-		};
-
-		struct DataHasher {
-			size_t operator ()(const Person& p) const { return p.HashData(); }
-		};
-
-		struct IdHasher {
-			std::hash<decltype(Person::id)> h;
-
-			size_t operator ()(const Person& p) const { return h(p.id); }
-		};
-
-
-		struct IdComparer {
-			bool operator ()(const Person& l, const Person& r) const
-			{
-				return l.id == r.id;
-			}
-		};
-
-		struct DataComparer {
-			bool operator ()(const Person& l, const Person& r) const
-			{
-				return l.HasEqualData(r);
-			}
-		};
 
 
 		// 1. Simple terminal operations
@@ -125,7 +149,7 @@ namespace EnumerableTests {
 				ASSERT_TYPE (std::unordered_set<Person COMMA Hasher>, distincts0);
 				ASSERT_TYPE (std::unordered_set<Person COMMA HasherLambda>, distincts2);
 
-				ASSERT_EQ (distincts0.size(), 5u);			// both groups having Aldo
+				ASSERT_EQ (5u, distincts0.size());			// both groups having Aldo
 				ASSERT    (EqualSets(distincts0, distincts2));
 			}
 
@@ -315,6 +339,222 @@ namespace EnumerableTests {
 	}
 
 
+	// Similar to CustomHashes(), but a more complicated terminal operator
+	static void CustomDictionaries()
+	{
+		const Person persons[] = {
+			{ 1, "Aldo",	23 },
+			{ 2, "Charlie", 42 },
+			{ 3, "Dave",	44 },
+			{ 1, "Aldo",	23 },	// duplicate
+			{ 5, "Dorothy",	44 },
+		};
+
+		auto uniqueIndices = Enumerate({ 0u, 1u, 2u, 4u });
+		
+		// TODO: Investigate! Enumerate<unsigned>({ 0, 1, 2, 4 });	
+		//		 choses "deduced" overload, only clang emits warning for conversion!
+
+		// Basic usage
+		std::unordered_map<unsigned, Person> byId;
+		{
+			auto byId0	   = Enumerate(persons).ToDictionary(&Person::id);
+			auto namesById = Enumerate(persons).ToDictionary(&Person::id, &Person::name);
+			auto ptrsById  = Enumerate(persons).Addresses().ToDictionary(&Person::id);
+			
+			ASSERT_TYPE (std::unordered_map<unsigned COMMA Person>,			byId0);
+			ASSERT_TYPE (std::unordered_map<unsigned COMMA const Person*>,	ptrsById);
+			ASSERT_TYPE (std::unordered_map<unsigned COMMA std::string>,	namesById);
+
+			byId = std::move(byId0);
+
+			ASSERT_EQ (4u, byId.size());		// Aldo was duplicated
+			ASSERT_EQ (4u, namesById.size());
+			ASSERT_EQ (4u, ptrsById.size());
+		
+			ASSERT_EQ (persons[0],  byId[1]);
+			ASSERT_EQ (persons + 0, ptrsById[1]);
+			ASSERT_EQ ("Aldo",		namesById[1]);
+			ASSERT_EQ ("Dave",		namesById[3]);
+
+			ASSERT (uniqueIndices.All(FUN(i,  persons[i] == byId[persons[i].id])));
+		}
+
+		// With custom hasher
+		auto hashByY = [](const Vector2D<int>& v) { return std::hash<int>{}(v.y); };
+		{
+			auto byLocation1 = Enumerate(persons).ToDictionary(&Person::GetLocation, 0u, hashByY);
+			auto byLocation2 = Enumerate(persons).ToDictionary<VecYHasher>(&Person::GetLocation);
+
+			// explicit types syntax (enables overload-resolver - not needed here)
+			auto byLocation3 = Enumerate(persons).ToDictionaryOf<Vector2D<int>, VecYHasher>(&Person::GetLocation);
+
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA decltype(hashByY)>, byLocation1);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA VecYHasher>,		 byLocation2);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA VecYHasher>,		 byLocation2);
+
+			ASSERT_EQ (4u, byLocation1.size());
+			ASSERT_EQ (4u, byLocation2.size());
+			ASSERT_EQ (byLocation2, byLocation3);
+
+			for (const auto& kv : byId) {
+				Vector2D<int> coords = kv.second.GetLocation();
+				ASSERT_EQ (kv.second, byLocation1[coords]);
+				ASSERT_EQ (kv.second, byLocation2[coords]);
+			}
+		}
+
+		// With custom (wrong) key-comparer
+		{
+			auto haveSameY = [](const Vector2D<int>& l, const Vector2D<int>& r) { return l.y == r.y; };
+
+			auto byLocY1 = Enumerate(persons).ToDictionary(&Person::GetLocation, 0u, hashByY, haveSameY);
+			auto byLocY2 = Enumerate(persons).ToDictionary<VecYHasher, VecYComparer>(&Person::GetLocation);
+			// NOTE: bit weird syntax omitting Value type - due to it being fixed
+			auto byLocY3 = Enumerate(persons).ToDictionaryOf<Vector2D<int>, VecYHasher, VecYComparer>(&Person::GetLocation);
+
+			auto namesByLocY1 = Enumerate(persons).ToDictionaryOf<Vector2D<int>, std::string, VecYHasher, VecYComparer>(&Person::GetLocation, &Person::GetName);
+			auto namesByLocY2 = Enumerate(persons).ToDictionaryOf<Vector2D<int>, std::string>(&Person::GetLocation, &Person::GetName, 0u, hashByY, haveSameY);
+
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA decltype(hashByY) COMMA decltype(haveSameY)>,	byLocY1);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA VecYHasher COMMA VecYComparer>,				byLocY2);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA Person COMMA VecYHasher COMMA VecYComparer>,				byLocY3);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA std::string COMMA VecYHasher COMMA VecYComparer>,				namesByLocY1);
+			ASSERT_TYPE (std::unordered_map<Vector2D<int> COMMA std::string COMMA decltype(hashByY) COMMA decltype(haveSameY)>,	namesByLocY2);
+
+			ASSERT_EQ (2u, byLocY1.size());		// having 20- and 40-somethings only
+			ASSERT_EQ (2u, byLocY2.size());
+			ASSERT_EQ (2u, namesByLocY1.size());
+			ASSERT_EQ (2u, namesByLocY2.size());
+			ASSERT_EQ (byLocY2, byLocY3);
+
+			ASSERT_EQ (persons[0], byLocY1[Vector2D<int>(1, 2)]);	// Aldo
+			ASSERT_EQ (persons[1], byLocY1[Vector2D<int>(2, 4)]);	// Charlie
+
+			for (const auto& kv : byLocY1) {
+				const Vector2D<int>& coords	= kv.first;
+				const Person&		 p		= kv.second;
+				ASSERT_EQ (p,		byLocY2[coords]);
+				ASSERT_EQ (p,		byLocY3[coords]);
+				ASSERT_EQ (p.name,	namesByLocY1[coords]);
+				ASSERT_EQ (p.name,	namesByLocY2[coords]);
+			}
+		}
+
+		// With custom allocator
+		{
+			NO_MORE_HEAP;
+
+			using KVPair = std::pair<unsigned, Person>;
+
+			std::aligned_storage_t<sizeof(KVPair), alignof(KVPair)>  buffer[30];
+			TestAllocator<KVPair, 10> fixedAlloc { buffer };
+
+			auto byId1 = Enumerate(persons).ToDictionary(&Person::id, 0u, std::hash<int>{}, std::equal_to<>{}, fixedAlloc);
+
+			ASSERT_TYPE (std::unordered_map<unsigned COMMA Person COMMA std::hash<int> COMMA std::equal_to<> COMMA decltype(fixedAlloc)>,  byId1);
+			for (const auto& kv : byId)
+				ASSERT_EQ (kv.second, byId1[kv.first]);
+		}
+
+		// Moving tests
+		{
+			auto copiesToMove = Enumerate(persons).As<MoveOnly<Person>>();
+
+			ASSERT_ELEM_TYPE (MoveOnly<Person>, copiesToMove);		// uncopiable rvalues from here
+
+			// only name is copyable - thus, values are moved:
+			std::unordered_map<std::string, MoveOnly<Person>> byName = copiesToMove.ToDictionary(FUN(mp, mp.data.GetName()));
+
+			ASSERT_EQ (4u, byName.size());
+
+			// ...while the keys (names) were copied - i.e. FUN didn't receive an rvalue
+			for (const auto& kv : byName) {
+				const std::string& name = kv.first;
+				ASSERT (Enumerate(persons).Select(&Person::name).Contains(name));
+
+				const MoveOnly<Person>& p = kv.second;
+				ASSERT_EQ (name, p.data.name);
+			}
+
+			// With overload-selection (have to avoid MoveOnly wrapper):
+			auto copies = Enumerate(persons).Copy();
+
+			std::unordered_map<std::string, Person> byName2 = copies.ToDictionaryOf<std::string>(&Person::GetName);
+			for (const auto& kv : byName2) {
+				const Person& p = byName.at(kv.first).data;
+				ASSERT_EQ (p, kv.second);
+			}
+
+			// when names serve as values, they are moved
+			// TODO tests: current proof is solely the mitigated "unused function" warning
+			std::unordered_map<unsigned, std::string> namesById = copies.ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
+			for (const auto& kv : namesById)
+				ASSERT_EQ (byId[kv.first].name, kv.second);
+		}
+
+		// Obtaining cached items through interface
+		{
+			constexpr size_t N = 5;
+
+			// let's have some heavy objects
+			std::vector<int> vectors[N] = {
+				{ 6, 3, 2 },
+				{ 2, 1, 3 },
+				{ 0, 2, 1 },
+				{ 1, 2, 4 },
+				{ 3, 2, 6 }
+			};
+
+			// OrderBy: won't make sense, but allocates deterministically ahead
+			auto						 vectorsAsc = Enumerate(vectors).Copy().OrderBy<int>(&std::vector<int>::back);
+			Enumerable<std::vector<int>> ifacedAsc  = vectorsAsc;
+
+			static_assert (sizeof(decltype(vectorsAsc)::TEnumerator) <= ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE, "Invalid test setup.");
+
+			AllocationCounter allocations;
+		
+			size_t dictAssembly;
+			{
+				std::vector<std::vector<int>> ascList = ifacedAsc.ToList();	
+				allocations.AssertFreshCount(N + 1);							// 1 cont.buffer + 4 vectors
+
+				std::unordered_map<int, std::vector<int>> exRes;
+				exRes.reserve(4);
+				for (auto& vec : ascList)
+					exRes.emplace(vec.front(), std::move(vec));
+
+				dictAssembly = allocations.Count();
+				allocations.Reset();
+			}
+
+#		if defined(_DEBUG) && !defined(__clang__)
+			// Yet again: MSVC doesn't apply NRVO in debug + its move ctor does allocate!
+			constexpr size_t dbgExtra = 4;
+#		else
+			constexpr size_t dbgExtra = 0;
+#		endif
+
+			std::unordered_map<int, std::vector<int>> fromTemplated = vectorsAsc.ToDictionaryOf<int>(&std::vector<int>::front);
+			allocations.AssertFreshCount(N + 1 + dictAssembly + dbgExtra);
+
+			std::unordered_map<int, std::vector<int>> fromInterfaced = ifacedAsc.ToDictionaryOf<int>(&std::vector<int>::front);
+			allocations.AssertFreshCount(N + 1 + dictAssembly + dbgExtra);
+			
+			// would be N more if cache were not obtainable to move contents e.g:
+			std::unordered_map<int, std::vector<int>> disrupted = vectorsAsc.Select(FUN(v, move(v)))
+																			.ToDictionaryOf<int>(&std::vector<int>::front);
+			allocations.AssertFreshCount(N + 1 + dictAssembly + N + dbgExtra);
+
+			ASSERT_EQ (N,			  fromTemplated.size());
+			ASSERT_EQ (vectors[0],	  fromTemplated[6]);
+			ASSERT_EQ (vectors[2],	  fromTemplated[0]);
+			ASSERT_EQ (vectors[4],	  fromTemplated[3]);
+			ASSERT_EQ (fromTemplated, fromInterfaced);
+			ASSERT_EQ (fromTemplated, disrupted);
+		}
+	}
+
 
 	void TestCollectionCustomizability()
 	{
@@ -322,6 +562,7 @@ namespace EnumerableTests {
 
 		CustomHashes();
 		CustomLists();
+		CustomDictionaries();
 	}
 
 }	// namespace EnumerableTests

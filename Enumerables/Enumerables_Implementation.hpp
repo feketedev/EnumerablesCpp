@@ -186,6 +186,63 @@ namespace Def {
 				.Concat(ConcatInternal<TForced, TCommon>(forward<C2>(cont2), forward<CMore>(tailConts)...));
 	}
 
+
+	// Build a Dictionary via 2 mapper functions, use Cache if available.
+	// (Core idea follows ObtainCachedResults.)
+	template <class K, class V,  class Source, class KeyMap, class ValMap, class... Options>
+	enable_if_t<HasConvertibleCache<Source, void, V>::byElement,
+				DictionaryType<K, V, Options...>>
+	BuildDictObtainCache(Source& etor, size_t /*hint*/, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
+	{
+		auto cache = etor.CalcResults();
+
+		auto res = DictOperations::Init<K, V>(GetSize(cache), opts...);
+		for (auto& elem : cache) {
+			K key = toKey(Revive(elem));
+			DictOperations::Add(res, move(key), toValue(PassRevived(elem)));
+		}
+		return res;
+	}
+
+	template <class K, class V,  class Source, class KeyMap, class ValMap, class... Options>
+	enable_if_t<!HasConvertibleCache<Source, void, V>::byElement,
+				DictionaryType<K, V, Options...>>
+	BuildDictObtainCache(Source& etor, size_t hint, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
+	{
+		SizeInfo si  = etor.Measure();
+		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
+
+		auto res = DictOperations::Init<K, V>(cap, opts...);
+		while (etor.FetchNext()) {
+			auto&& elem = etor.Current();
+			K      key  = toKey(elem);
+			DictOperations::Add(res, move(key), toValue(forward<decltype(elem)>(elem)));
+		}
+		return res;
+	}
+
+
+#if ENUMERABLES_EMPLOY_DYNAMICCAST
+
+	template <class K, class V, class KeyMap, class ValMap, class T, class... Options>
+	DictionaryType<K, V, Options...>   BuildDictObtainCache(InterfacedEnumerator<T>& etor, size_t hint,
+															KeyMap&& toKey, ValMap&& toValue,
+															const Options&... opts					  )
+	{
+		// NOTE: only List-Cachings exist so far, but
+		//		 - not even sure if it's worth to handle more just for devirtualization
+		//		 - moving items would be possible with ConsumeCurrent() on IEnumerable 
+		using ET = CachingEnumerator<T, ListOperations::Container>;
+
+		ET* caching = etor.template TryCast<ET>();
+		if (caching == nullptr)
+			return BuildDictObtainCache<K, V>(etor.WrappedInterface(), hint, toKey, toValue, opts...);
+		else
+			return BuildDictObtainCache<K, V>(*caching, hint, toKey, toValue, opts...);
+	}
+
+#endif
+
 #pragma endregion
 
 
@@ -521,16 +578,16 @@ namespace Def {
 
 
 	template <class TFactory>
-	template <class... ListOptions>
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> ListType<TElemDecayed, ListOptions...>
+	template <class... Options>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> ListType<TElemDecayed, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint, ListOptions {}...);
+		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint, Options {}...);
 	}
 
 	template <class TFactory>
-	template <class... ListOptions>
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const ListOptions&... opts) const -> ListType<TElemDecayed, ListOptions...>
+	template <class... Options>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const Options&... opts) const -> ListType<TElemDecayed, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return ObtainCachedResults<ListOperations, TElemDecayed>(etor, sizeHint, opts...);
@@ -538,18 +595,18 @@ namespace Def {
 
 
 	template <class TFactory>
-	template <size_t N, class... SmallListOptions>
+	template <size_t N, class... Options>
 	ENUMERABLES_WARN_FOR_SMALLLIST
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> SmallListType<TElemDecayed, N, SmallListOptions...>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint) const -> SmallListType<TElemDecayed, N, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint, SmallListOptions {}...);
+		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint, Options {}...);
 	}
 
 	template <class TFactory>
-	template <size_t N, class... SmallListOptions>
+	template <size_t N, class... Options>
 	ENUMERABLES_WARN_FOR_SMALLLIST
-	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const SmallListOptions&... opts) const -> SmallListType<TElemDecayed, N, SmallListOptions...>
+	auto AutoEnumerable<TFactory>::ToList(size_t sizeHint, const Options&... opts) const -> SmallListType<TElemDecayed, N, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return ObtainCachedResults<SmallListOperations, TElemDecayed, N>(etor, sizeHint, opts...);
@@ -557,19 +614,128 @@ namespace Def {
 
 
 	template <class TFactory>
-	template <class... SetOptions>
-	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint) const -> SetType<TElemDecayed, SetOptions...>
+	template <class... Options>
+	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint) const -> SetType<TElemDecayed, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, SetOptions {}...);
+		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, Options {}...);
 	}
 
 	template <class TFactory>
-	template <class... SetOptions>
-	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint, const SetOptions&... opts) const -> SetType<TElemDecayed, SetOptions...>
+	template <class... Options>
+	auto AutoEnumerable<TFactory>::ToSet(size_t sizeHint, const Options&... opts) const -> SetType<TElemDecayed, Options...>
 	{
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return ObtainCachedResults<SetOperations, TElemDecayed>(etor, sizeHint, opts...);
+	}
+
+
+	template<class TFactory>
+	template<class... Options, class KeyMap>
+	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, size_t hint) const
+		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
+	{
+		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
+		auto toKeyLambda = KeyMapper(toKey);
+		auto fwdValue	 = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+
+		using Key = DecayedResultLV<decltype(toKeyLambda)>;
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, toKeyLambda, fwdValue, Options {}...);
+	}
+
+	template<class TFactory>
+	template<class... Options, class KeyMap>
+	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, size_t hint, const Options&... opts) const
+		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
+	{
+		auto toKeyLambda = KeyMapper(toKey);
+		auto fwdValue	 = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+
+		using Key = DecayedResultLV<decltype(toKeyLambda)>;
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, toKeyLambda, fwdValue, opts...);
+	}
+
+
+	template<class TFactory>
+	template<class K, class... Options>
+	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint) const
+		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
+	{
+		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
+		auto fwdValue = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, Options {}...);
+	}
+	
+	template<class TFactory>
+	template<class K, class... Options>
+	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint, const Options&... opts) const
+		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
+	{
+		auto fwdValue = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, opts...);
+	}
+
+
+	template<class TFactory>
+	template<class... Options, class KeyMap, class ValMap>
+	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, ValMap&& toValue, size_t hint) const
+		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
+						  DecayedResult<decltype(ValueMapper(toValue))>,
+						  Options...>
+	{
+		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
+		auto toKeyLambda   = KeyMapper(toKey);
+		auto toValueLambda = ValueMapper(toValue);
+
+		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
+		using Value = DecayedResult<decltype(toValueLambda)>;
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<Key, Value>(etor, hint, toKeyLambda, toValueLambda, Options {}...);
+	}
+
+	template<class TFactory>
+	template<class... Options, class KeyMap, class ValMap>
+	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, ValMap&& toValue, size_t hint, const Options&... opts) const
+		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
+						  DecayedResult<decltype(ValueMapper(toValue))>,
+						  Options...>
+	{
+		auto toKeyLambda   = KeyMapper(toKey);
+		auto toValueLambda = ValueMapper(toValue);
+
+		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
+		using Value = DecayedResult<decltype(toValueLambda)>;
+
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<Key, Value>(etor, hint, toKeyLambda, toValueLambda, opts...);
+	}
+
+
+	template<class TFactory>
+	template<class K, class V, class... Options>
+	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, OverloadTo<V> getValue, size_t hint) const
+		-> DictionaryType<decay_t<K>, decay_t<V>, Options...>
+	{
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<decay_t<K>, decay_t<V>>(etor, hint, getKey, getValue, Options {}...);
+	}
+
+	template<class TFactory>
+	template<class K, class V, class... Options>
+	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, OverloadTo<V> getValue, size_t hint, const Options&... opts) const
+		-> DictionaryType<decay_t<K>, decay_t<V>, Options...>
+	{
+		TEnumerator etor = GetEnumeratorNoDebug();
+		return BuildDictObtainCache<decay_t<K>, decay_t<V>>(etor, hint, getKey, getValue, opts...);
 	}
 
 

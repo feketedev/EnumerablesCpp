@@ -199,9 +199,9 @@ namespace StlBinding {
 		using Container = typename VectorBindHelper<V, Options...>::type;
 
 		template <class V, class... Opts>
-		static auto	Init(size_t capacity, const Opts&... opts) -> typename VectorBindHelper<V, Opts...>::type
+		static Container<V, Opts...>		Init(size_t capacity, const Opts&... opts)
 		{
-			typename VectorBindHelper<V, Opts...>::type l (opts...);
+			Container<V, Opts...> l (opts...);
 			l.reserve(capacity);
 			return l;
 		}
@@ -308,7 +308,7 @@ namespace StlBinding {
 		template <class K, class V, class... Options>
 		static Container<K, V, Options...> Init(size_t capacity, const Options&... opts)
 		{
-			Container<K, V, Options...> d (opts...);
+			Container<K, V, Options...> d (/*buckets:*/ 0u, opts...);
 			d.reserve(capacity);
 			return d;
 		}
