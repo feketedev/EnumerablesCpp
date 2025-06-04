@@ -36,6 +36,15 @@ namespace Def {
 	using CombinedT	= decltype(declval<Combiner>() (declval<V1>(), declval<V2>()));
 
 
+	/// Helper for aligned placement-move operations, for when sufficient space is ensured.
+	template <class T>
+	T* MoveToAligned(void* trg, T* source)
+	{
+		void* aligned = AlignFor<T>(trg);
+		return new (aligned) T { move(*source) };
+	}
+
+
 
 	#pragma region Iterator checks
 
@@ -182,6 +191,7 @@ namespace Def {
 		virtual SizeInfo		Measure()	const = 0;
 
 		// Technical virtual move ctor, related to inline buffer handling.
+		// Must align itself over the natural default of alignof(void*)!  (Capacity is ensured.)
 		virtual IEnumerator<T>* MoveTo(void* mem) = 0;
 
 		virtual ~IEnumerator();
@@ -204,7 +214,9 @@ namespace Def {
 		IEnumerator<T>*			ptr;
 
 #	if ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE > 0
-		static constexpr size_t buffAlign = alignof(void*);		// provided by ptr anyway
+		// NOTE: alignas requirement is not carried by decltype(buffer)!
+		// void*: minimum for vtable (provided by "ptr" field anyway)
+		static constexpr size_t buffAlign = alignof(void*);
 
 
 		alignas(buffAlign) char	fixBuffer[ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE];
@@ -217,12 +229,19 @@ namespace Def {
 		}
 
 
+		template <class Factory>
+		void* InlineTarget()
+		{
+			using Etor = InvokeResultT<Factory>;
+			void* aligned = AlignFor<Etor>(fixBuffer);
+			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Etor));
+			return aligned;
+		}
+
+
 		template <class Et>
 		static constexpr bool SureFitsInline()
 		{
-			// Caution: seems that decltype does not carry alignas requirement!!
-			using Buff = decltype(InterfacedEnumerator::fixBuffer);
-
 			static_assert (alignof(Et) % buffAlign == 0, "Alignment not power of 2?");
 
 			// size_t req = alignof(Et);
@@ -231,8 +250,8 @@ namespace Def {
 			// return slack + sizeof(Et) <= sizeof(Buff);
 
 			return (buffAlign >= alignof(Et))
-				? (sizeof(Buff) >= sizeof(Et))
-				: (alignof(Et) - buffAlign + sizeof(Et) <= sizeof(Buff));
+				? (sizeof(fixBuffer) >= sizeof(Et))
+				: (alignof(Et) - buffAlign + sizeof(Et) <= sizeof(fixBuffer));
 		}
 #	else
 		bool					IsOnHeap() const	{ return true; }
@@ -264,7 +283,7 @@ namespace Def {
 
 		template <class NestedFactory>
 		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<SureFitsInline<InvokeResultT<NestedFactory>>()>* = nullptr)
-			: ptr { (new (fixBuffer) TypeHelpers::RvoEmplacer<NestedFactory> { fact })->GetPtr() }
+			: ptr { (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr() }
 		{
 		}
 
@@ -592,7 +611,7 @@ namespace Def {
 		}
 
 		SizeInfo			Measure()   const override	{ return Boundedness::Unbounded; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) SequenceEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		SequenceEnumerator(const V& start, const Stepper& step) : curr { ForwardParams, start }, step { step }  {}
 		SequenceEnumerator(SequenceEnumerator&&) = default;
@@ -639,7 +658,7 @@ namespace Def {
 
 
 		SizeInfo			Measure()   const override	{ return TryGetIterDistance(curr, end); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) IteratorEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 
 		IteratorEnumerator(const TIter& beg, const TIter& end) : curr { beg },	end { end }  {}
@@ -695,7 +714,7 @@ namespace Def {
 
 		IEnumerator<TElem>*  MoveTo(void* mem) override
 		{
-			return new (mem) ContainerEnumerator { std::move(*this) };
+			return MoveToAligned(mem, this);
 		}
 
 
@@ -746,7 +765,7 @@ namespace Def {
 
 		TElem				Current()		  override	{ return source.Current(); }
 		SizeInfo			Measure()   const override	{ return source.Measure().Filtered(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FilterEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		FilterEnumerator(Factory&& getSource, const TPred& pred) : source { getSource() }, pred { pred }  {}
@@ -820,7 +839,7 @@ namespace Def {
 			return source.Current();
 		}
 		SizeInfo			Measure()   const override	{ return source.Measure().Filtered(mode != FilterMode::SkipUntil); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FilterUntilEnumerator { std::move(*this) };     }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		FilterUntilEnumerator(Factory&& getSource, const TPred& pred, FilterMode mode) : source { getSource() }, pred { pred }, mode { mode }  {}
@@ -868,7 +887,7 @@ namespace Def {
 		}
 
 		TElem				Current()		  override	{ return source.Current(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) SetFilterEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class SrcFactory, class OpFactory>
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
@@ -945,7 +964,7 @@ namespace Def {
 
 		IEnumerator<TElem>*	MoveTo(void* mem) override
 		{
-			return new (mem) CounterEnumerator { std::move(*this) };
+			return MoveToAligned(mem, this);
 		}
 
 
@@ -992,7 +1011,7 @@ namespace Def {
 		}
 
 		SizeInfo				Measure()   const override	{ return source.Measure().Filtered(); }
-		IEnumerator<TWanted>*	MoveTo(void* mem) override	{ return new (mem) TypeFilterEnumerator { std::move(*this) }; }
+		IEnumerator<TWanted>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		TypeFilterEnumerator(Factory&& getSource) : source { getSource() }  {}
@@ -1033,7 +1052,7 @@ namespace Def {
 					   "Requested type is not reference-compatible with source element - could return reference to a temporary.");
 
 		TResult					Current()		  override	{ return this->source.Current(); }
-		IEnumerator<TResult>*	MoveTo(void* mem) override	{ return new (mem) ConverterEnumerator { std::move(*this) }; }
+		IEnumerator<TResult>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 	};
 
 
@@ -1046,7 +1065,7 @@ namespace Def {
 					   "No reference-compatibility between source and target type - could return reference to a temporary.");
 
 		TCasted					Current()		  override	{ return static_cast<TCasted>(this->source.Current()); }
-		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return new (mem) CastingEnumerator { std::move(*this) }; }
+		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 	};
 
 
@@ -1056,7 +1075,7 @@ namespace Def {
 		using ConverterEnumeratorBase<Source, TCasted>::ConverterEnumeratorBase;
 
 		TCasted					Current()		  override	{ return dynamic_cast<TCasted>(this->source.Current()); }
-		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return new (mem) DynCastingEnumerator { std::move(*this) }; }
+		IEnumerator<TCasted>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 	};
 
 
@@ -1072,7 +1091,7 @@ namespace Def {
 		bool				FetchNext()		  override	{ return source.FetchNext(); }
 		TElem				Current()		  override	{ return map(source.Current()); }
 		SizeInfo			Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) MapperEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		MapperEnumerator(Factory&& getSource, const Mapper& map) : source { getSource() }, map { map }  {}
@@ -1097,7 +1116,7 @@ namespace Def {
 
 		TElem				Current()		  override	{ return { index, source.Current() }; }
 		SizeInfo			Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) IndexerEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		IndexerEnumerator(Factory&& getSource) : source { getSource() }  {}
@@ -1148,7 +1167,7 @@ namespace Def {
 		// NOTE: This implementation is non-monotonic in conjunction with ContainerEnumerator (Exact, N - 1) -> (Bound, N)
 		//		 but Measure() during enumeration is just a nice to have.
 		SizeInfo			Measure()	const override	{ return source.Measure().Subtract(!prev.IsInitialized()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) CombinerEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		CombinerEnumerator(Factory&& getSource, const Combiner& binop) : source { getSource() }, binop { binop }  {}
@@ -1169,7 +1188,7 @@ namespace Def {
 		TElem				Current()		  override	{ return zip(source1.Current(), source2.Current());  }
 		bool				FetchNext()		  override	{ return source1.FetchNext() && source2.FetchNext(); }
 		SizeInfo			Measure()   const override	{ return source1.Measure().Limit(source2.Measure()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) ZipperEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Fact1, class Fact2>
 		ZipperEnumerator(Fact1&& getSource1, Fact2&& getSource2, const Zipper& zip) :
@@ -1207,7 +1226,7 @@ namespace Def {
 
 		TElem				Current()		  override	{ return sourceDepleted ? continuation.Current() : source.Current(); }
 		SizeInfo			Measure()   const override	{ return source.Measure().Add(continuation.Measure()); }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) ConcatEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class SrcFact, class ContFact>
 		ConcatEnumerator(SrcFact&& getSource, ContFact&& getContinuation) : source { getSource() }, continuation { getContinuation() }  {}
@@ -1248,7 +1267,7 @@ namespace Def {
 
 		TElem				Current()		  override	{ return nestedEnumerator->Current(); }
 		SizeInfo			Measure()   const override	{ return { Boundedness::Unknown }; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) FlattenerEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		template <class Factory>
 		FlattenerEnumerator(Factory&& getSource) : ebSource { getSource() }  {}
@@ -1312,7 +1331,7 @@ namespace Def {
 
 		IEnumerator<TElem>*	MoveTo(void* mem) override
 		{
-			return new (mem) ReplayEnumerator { std::move(*this) };
+			return MoveToAligned(mem, this);
 		}
 
 
@@ -1393,7 +1412,7 @@ namespace Def {
 	class ScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, Reassignable> {
 	public:
 		bool				FetchNext()		  override	{ return this->CombineNext(); }
-		IEnumerator<TAcc>*	MoveTo(void* mem) override	{ return new (mem) ScannerEnumerator { std::move(*this) }; }
+		IEnumerator<TAcc>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 		using ScannerEnumerator::ScannerBase::ScannerBase;
 
@@ -1463,7 +1482,12 @@ namespace Def {
 			return any;
 		}
 
-		IEnumerator<TAcc>*	MoveTo(void* mem) override	{ return new (mem) FetchFirstScannerEnumerator { std::move(*this) };		}
+
+		IEnumerator<TAcc>*	MoveTo(void* mem) override
+		{ 
+			return MoveToAligned(mem, this);
+		}
+
 
 		template <class Fact>
 		FetchFirstScannerEnumerator(Fact&& getSource, const Combiner& combiner, const InitAccMapper& initializer = {}) :
@@ -1501,7 +1525,7 @@ namespace Def {
 		}
 
 		SizeInfo				Measure()   const override	{ return source.Measure(); }
-		IEnumerator<TElem>* 	MoveTo(void* mem) override	{ return new (mem) SorterEnumerator { std::move(*this) }; }
+		IEnumerator<TElem>* 	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
 
 		template <class Factory>
@@ -1561,7 +1585,7 @@ namespace Def {
 
 		IEnumerator<TElem>* MoveTo(void* mem) override
 		{
-			return new (mem) MinSeekEnumerator { std::move(*this) };
+			return MoveToAligned(mem, this);
 		}
 
 

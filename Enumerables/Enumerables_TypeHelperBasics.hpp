@@ -267,6 +267,16 @@ namespace TypeHelpers {
 						  void >>>>;
 
 
+	/// Simplified, unchecked version of std::align.
+	template <class T>
+	void* AlignFor(void* trg)
+	{
+		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
+		size_t offs = miss ? alignof(T) - miss : 0u;
+		return static_cast<char*>(trg) + offs;
+	}
+
+
 
 	// ===== Function detections ======================================================================================
 
