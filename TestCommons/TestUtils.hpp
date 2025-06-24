@@ -5,6 +5,7 @@
 #include <utility>
 
 
+#define CPP23_ENABLED (__cplusplus >= 202300L)
 
 #define ASSERT_TYPE(T, expr)		static_assert (std::is_same<T, decltype(expr)>(), "Type assertion failed.")
 

@@ -844,8 +844,11 @@ namespace EnumerableTests {
 		using Pair = std::pair<int, char>;
 
 		static_assert(is_same<int   Pair::* const,					ConstValueT<decltype(&Pair::first)>>(),	"Err");
+#if !CPP23_ENABLED
 		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
-	
+#else
+		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<void (Pair::*)(Pair&) noexcept>>(),	"Err");
+#endif
 	}
 
 

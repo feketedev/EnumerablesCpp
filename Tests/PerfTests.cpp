@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iomanip>
+#include <ranges>
 #include <string>
 
 #ifdef __clang__
@@ -58,6 +59,7 @@ namespace EnumerableTests {
 			std::vector<Pair> input;
 			input.reserve(size);
 			for (int i = 0; i < size; i++) {
+				// TODO: Ensure some repetitions for .Minimums series
 				int r = std::rand();
 				input.emplace_back(r - RAND_MAX / 2, 'a' + (char)(r % ('z' - 'a')));
 			}
@@ -77,6 +79,7 @@ namespace EnumerableTests {
 	struct DirectCopy : public PairTestBase {
 		static constexpr const char Name[] = "Small POD iteration";
 
+
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t /*resHint*/)
 		{
 			std::vector<Pair> cpy;	// = in;  would produce some optimized assembly, but...
@@ -90,6 +93,13 @@ namespace EnumerableTests {
 			return cpy;
 		}
 
+
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			return in | std::views::all;
+		}
+
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in);
@@ -101,6 +111,7 @@ namespace EnumerableTests {
 	struct ConversionCopy : public ScalarTestBase<int, double> {
 		static constexpr const char Name[] = "Convert: int -> double";
 
+
 		static std::vector<double> RunClassic(const std::vector<int>& in, size_t /*resHint*/)
 		{
 			std::vector<double> cpy;
@@ -111,6 +122,13 @@ namespace EnumerableTests {
 
 			return cpy;
 		}
+
+
+		static auto CreateRange(const std::vector<int>& in)
+		{
+			return in | std::views::transform([](int i) -> double { return i; });
+		}
+
 
 		static auto CreateQuery(const std::vector<int>& in)
 		{
@@ -148,6 +166,13 @@ namespace EnumerableTests {
 			return res;
 		}
 
+
+		static auto CreateRange(const std::unordered_map<int, char>& in)
+		{
+			return in | std::views::values;
+		}
+
+
 		static auto CreateQuery(const std::unordered_map<int, char>& in)
 		{
 			return Enumerate(in).Select(FUN(kv,  kv.second));
@@ -161,6 +186,7 @@ namespace EnumerableTests {
 	struct Squares : public ScalarTestBase<N> {
 		static const char Name[];
 
+
 		static std::vector<N> RunClassic(const std::vector<N>& in, size_t /*resHint*/ = 0)
 		{
 			std::vector<N> res;
@@ -169,6 +195,13 @@ namespace EnumerableTests {
 				res.push_back(n * n);
 			return res;
 		}
+
+
+		static auto CreateRange(const std::vector<N>& in)
+		{
+			return in | std::views::transform([](N n) { return n * n; });
+		}
+
 
 		static auto CreateQuery(const std::vector<N>& in)
 		{
@@ -184,13 +217,14 @@ namespace EnumerableTests {
 	struct SubrangeFiltered : public ScalarTestBase<int> {
 		static constexpr const char Name[] = "Subrange of filtered";
 
+
 		static std::vector<int> RunClassic(const std::vector<int>& in, size_t resHint = 0)
 		{
 			std::vector<int> cpy;
 			cpy.reserve(resHint);
 
 			const size_t skip = SkipCount(in.size());
-			const size_t take = RangeLen(in.size());
+			const size_t take = TakenLen(in.size());
 
 			unsigned found = 0;
 			for (const int& e : in) {
@@ -204,17 +238,28 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<int>& in)
+		{
+			const size_t s = SkipCount(in.size());
+			const size_t t = TakenLen(in.size());
+
+			return in | std::views::filter(&IsAccepted)
+					  | std::views::drop(s)
+					  | std::views::take(t);
+		}
+
+
 		static auto CreateQuery(const std::vector<int>& in)
 		{
 			const size_t s = SkipCount(in.size());
-			const size_t t = RangeLen(in.size());
+			const size_t t = TakenLen(in.size());
 
 			return Enumerate(in).Where(&IsAccepted).Skip(s).Take(t);
 		}
 
 	private:
-		static size_t SkipCount(size_t inp) { return inp / 5;	}
-		static size_t RangeLen(size_t inp)  { return inp / 6; }
+		static size_t SkipCount(size_t inp)	{ return inp / 5; }
+		static size_t TakenLen(size_t inp)	{ return inp / 6; }
 		static bool IsAccepted(int n)		{ return n % 47 < 21; }
 	};
 
@@ -229,6 +274,15 @@ namespace EnumerableTests {
 			std::vector<int> res = in;
 			std::sort(res.begin(), res.end());
 			return res;
+		}
+
+
+		static auto CreateRange(const std::vector<int>& in)
+		{
+			// Not fully equivalent - works eagerly, like Classic
+			std::vector<int> copy = in;
+			std::ranges::sort(copy);
+			return copy;
 		}
 
 
@@ -287,6 +341,16 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<double>& in)
+		{
+			auto accepted = in | std::views::filter([](double x) { return x > 0; });
+
+			// Not fully equivalent - not a lazy/updateable view from here
+			auto minVal = std::ranges::min(accepted);
+			return in | std::views::filter([=](double x) { return x == minVal; });
+		}
+
+
 		static auto CreateQuery(const std::vector<double>& in)
 		{
 			// by prvalue: exercise ObtainCachedResults (avoid copy)
@@ -300,6 +364,7 @@ namespace EnumerableTests {
 	struct NeighborDiffs : public ScalarTestBase<N> {
 		static const char Name[];
 
+
 		static std::vector<N> RunClassic(const std::vector<N>& in, size_t /*resHint*/ = 0)
 		{
 			std::vector<N> res;
@@ -309,6 +374,14 @@ namespace EnumerableTests {
 			return res;
 		}
 
+#if CPP23_ENABLED
+		static auto CreateRange(const std::vector<N>& in)
+		{
+			return in | std::views::pairwise_transform([](auto&& p, auto&& n) { 
+							return n - p;
+						});
+		}
+#endif
 
 		static auto CreateQuery(const std::vector<N>& in)
 		{
@@ -345,6 +418,15 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			// Not fully equivalent - can't sort within pipeline
+			auto copy = in;
+			std::ranges::sort(copy, std::less<>(), &Pair::first);
+			return std::move(copy) | std::views::values;
+		}
+
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in).OrderBy(&Pair::first)
@@ -378,6 +460,12 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			return in | std::views::filter([](const Pair& p) { return p.first > 0; });
+		}
+
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in).Where(FUN(p, p.first > 0));
@@ -401,6 +489,15 @@ namespace EnumerableTests {
 					res.push_back(p.second);
 			}
 			return res;
+		}
+
+		
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			return in | std::views::filter([](const Pair& p) {
+							return (p.second + p.first) % 3 == 0;
+						})
+					  | std::views::transform(&Pair::second);
 		}
 
 
@@ -456,6 +553,20 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			// Not fully equivalent - not a lazy/updateable view
+			auto filtered = in | std::views::filter([](const Pair& p) { return p.first > 0; });
+			int  min	  = std::ranges::min(filtered | std::views::transform(&Pair::first));
+			auto wanted	  = filtered | std::views::filter([=](const Pair& p) { return p.first == min; });
+			
+			// TODO: make testcase valid, can have only 1 minimum!
+			std::vector<Pair> sorted (wanted.begin(), wanted.end());
+			std::ranges::sort(sorted, std::less<>(), &Pair::second);
+			return sorted;
+		}
+
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in).Where		(FUN(p, p.first > 0))
@@ -497,6 +608,15 @@ namespace EnumerableTests {
 		}
 
 
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			// Not fully equivalent - not a lazy/updateable view
+			auto filtered = in | std::views::filter([](const Pair& p) { return p.first > 0; });
+			int  min	  = std::ranges::min(filtered | std::views::transform(&Pair::first));
+			return filtered | std::views::filter([=](const Pair& p) { return p.first == min; });
+		}
+
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in).Where		(FUN(p, p.first > 0))
@@ -529,10 +649,18 @@ namespace EnumerableTests {
 			return minimums;
 		}
 
+		
+		static auto CreateRange(const std::vector<Pair>& in)
+		{
+			// Not fully equivalent - not a lazy/updateable view
+			int min = std::ranges::min(in, std::less<>(), &Pair::first).first;
+			return in | std::views::filter([=](const Pair& p) { return p.first == min; });
+		}
+
 
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
-			return Enumerate<Pair>(in).MinimumsBy(FUN(p, p.first));
+			return Enumerate<Pair>(in).MinimumsBy(&Pair::first);
 		}
 	};
 
@@ -558,9 +686,10 @@ namespace EnumerableTests {
 			return s;
 		}
 
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
-			return Enumerate(in).Select(FUN(p, p.first));
+			return Enumerate(in).Select(&Pair::first);
 		}
 
 		template <class Query>
@@ -568,6 +697,20 @@ namespace EnumerableTests {
 		{
 			return q.template Sum<long long>();
 		}
+
+#if CPP23_ENABLED
+		static auto& CreateRange(const std::vector<Pair>& in)
+		{
+			return in;
+		}
+
+		static auto AggregateRange(const std::vector<Pair>& in)
+		{
+			return std::ranges::fold_left(in | std::views::transform(&Pair::first),
+										  0,
+										  std::plus<>());
+		}
+#endif
 	};
 
 
@@ -600,6 +743,19 @@ namespace EnumerableTests {
 		{
 			return q.template Sum<long long>();
 		}
+
+
+#if CPP23_ENABLED
+		static auto& CreateRange(const std::vector<int>& in)
+		{
+			return in;
+		}
+
+		static auto AggregateRange(const std::vector<int>& in)
+		{
+			return std::ranges::fold_left(in, 0, std::plus<>());
+		}
+#endif
 	};
 
 
@@ -629,13 +785,22 @@ namespace EnumerableTests {
 		template <class Query>
 		static double Aggregate(const Query& q)
 		{
-			// .Sum() provides compensated summation, doing manually
-			double s = 0;
-			for (const double& d : q)
-				s += d;
-
-			return s;
+			// .Sum() provides compensated summation!
+			return q.Aggregate(std::plus<>());
 		}
+
+
+#if CPP23_ENABLED
+		static auto AggregateRange(const std::vector<double>& in)
+		{
+			return std::ranges::fold_left(in, 0, std::plus<>());
+		}
+
+		static auto& CreateRange(const std::vector<double>& in)
+		{
+			return in;
+		}
+#endif
 	};
 
 
@@ -677,6 +842,9 @@ namespace EnumerableTests {
 
 #pragma region Main Templates
 
+	using Enumerables::TypeHelpers::None;
+
+
 	// common part of sceleton for every perftest
 	template <class TestCase, bool UseInterface = false>
 	struct Test {
@@ -686,15 +854,20 @@ namespace EnumerableTests {
 		using InCollection	= decltype(TestCase::GenerateInput(1u));
 		using Res			= decltype(TestCase::RunClassic(std::declval<InCollection>(), 0u));
 
-		static InCollection	GenerateInput(size_t s)							{ return TestCase::GenerateInput(s); }
-		static Res			RunClassic(const InCollection& in, size_t s)	{ return TestCase::RunClassic(in, s); }
+		static constexpr bool	HasRanges  = requires (const InCollection& in) { TestCase::CreateRange(in); };
+
+		static InCollection	GenerateInput(size_t s)									{ return TestCase::GenerateInput(s);  }
+		static Res			RunClassic(const InCollection& in, size_t s)			{ return TestCase::RunClassic(in, s); }
+		static auto			CreateRange(const InCollection& in)	requires(HasRanges)	{ return TestCase::CreateRange(in);   }
+		static None			CreateRange(const InCollection& in)	requires(!HasRanges);
 		static auto			CreateQuery(const InCollection& in)
 		{
 			if constexpr (UseInterface)		return TestCase::CreateQuery(in).ToInterfaced();
 			else							return TestCase::CreateQuery(in);
 		}
 
-		using Query	= decltype(CreateQuery(std::declval<InCollection>()));
+		using Range = decltype(CreateRange(std::declval<InCollection>()));
+		using Query = decltype(CreateQuery(std::declval<InCollection>()));
 	};
 
 
@@ -704,11 +877,41 @@ namespace EnumerableTests {
 	struct ListingTest : public Test<TestCase, UseInterface>  {
 		using typename Test<TestCase, UseInterface>::InCollection;
 		using typename Test<TestCase, UseInterface>::Query;
+		using typename Test<TestCase, UseInterface>::Range;
 		using typename Test<TestCase, UseInterface>::Res;
 		using ResElem = std::decay_t<Enumerables::TypeHelpers::IterableT<Res>>;
 
+		using Test<TestCase, UseInterface>::HasRanges;
+
 		// Fun fact: this line crashes VS2022 compiler - fine on 2015.
 		// using ResElem = typename Res::value_type;
+
+
+		static std::vector<ResElem>   ExecuteRange(Range&& r, size_t allocHint) requires(HasRanges)
+		{
+			using std::ranges::size;
+
+			std::vector<ResElem> v;
+
+			// Mimic having proper ranges::to<std::vector> from C++23
+			if constexpr (requires { size(r); })
+				v.reserve(std::max(size(r), allocHint));
+			else
+				v.reserve(allocHint);
+			
+			// Sticking to conventional iteration!
+			for (auto&& elem : r )
+				v.push_back(elem);
+
+			// NOTE: Interesting performance deviations:
+			//		 The below form leads to great improvement for vector-based inputs [even 80%!],
+			//		 but serious drops [2x time] with more composed algorithms (along with allocations)!
+			//
+			//	auto adapted = r | std::views::common;
+			//	v.assign(adapted.begin(), adapted.end());
+
+			return v;
+		}
 
 
 		static std::vector<ResElem>   ExecuteQuery(const Query& q, size_t allocHint)
@@ -746,12 +949,20 @@ namespace EnumerableTests {
 	struct AggregationTest : public Test<TestCase, UseInterface> {
 		using typename Test<TestCase, UseInterface>::InCollection;
 		using typename Test<TestCase, UseInterface>::Query;
+		using typename Test<TestCase, UseInterface>::Range;
 		using typename Test<TestCase, UseInterface>::Res;
+
+		using Test<TestCase, UseInterface>::HasRanges;
 
 
 		static Res ExecuteQuery(const Query& q, size_t /*hint*/ = 0)
 		{
 			return TestCase::Aggregate(q);
+		}
+
+		static Res ExecuteRange(Range&& r, size_t /*hint*/ = 0) requires(HasRanges)
+		{
+			return TestCase::AggregateRange(std::forward<Range>(r));
 		}
 
 
@@ -890,15 +1101,33 @@ namespace EnumerableTests {
 
 	struct PerfComparison {
 		std::string		testCase;
+		bool			isValidComparison = true;
 		PerfResult		classic;
+		PerfResult		ranges;
 		PerfResult		enumerate;
 		PerfResult		constructAndEnumerate;
 
+		Microseconds	RangesOverhead()	const	{ return ranges.runtime - classic.runtime; }
 		Microseconds	EnumerateOverhead() const	{ return enumerate.runtime - classic.runtime; }
 		Microseconds	TotalOverhead()		const	{ return constructAndEnumerate.runtime - classic.runtime; }
 
+		double	RangesOverheadPercent()	   const	{ return 100.0 * RangesOverhead().count() / classic.runtime.count(); }
 		double	EnumerateOverheadPercent() const	{ return 100.0 * EnumerateOverhead().count() / classic.runtime.count(); }
 		double	TotalOverheadPercent()	   const	{ return 100.0 * TotalOverhead().count() / classic.runtime.count(); }
+
+		PerfComparison& operator +=(const PerfComparison& add)
+		{
+			classic				  += add.classic;
+			ranges				  += add.ranges;
+			enumerate			  += add.enumerate;
+			constructAndEnumerate += add.constructAndEnumerate;
+			return *this;
+		}
+
+		bool HasRangesRun() const
+		{
+			return ranges.runtime > Microseconds::zero();
+		}
 	};
 
 
@@ -944,7 +1173,7 @@ namespace EnumerableTests {
 
 
 	template <class TestCase>
-	static PerfComparison RunTestcase(TableWriter<5>& tab, size_t elements, unsigned cycles, size_t allocForResults = 0, unsigned tries = MeasurementCount)
+	static PerfComparison RunTestcase(TableWriter<6>& tab, size_t elements, unsigned cycles, size_t allocForResults = 0, unsigned tries = MeasurementCount)
 	{
 		using Output = typename TestCase::Res;
 
@@ -969,6 +1198,24 @@ namespace EnumerableTests {
 			auto	testStep = [&]() { return TestCase::RunClassic(input, allocForResults); };
 			return	MeasureQuery(testStep, TestCase::MixBack, input, referenceOutput, cycles);
 		});
+
+		PerfResult  rangesResult {};
+		if constexpr (TestCase::HasRanges && !TestCase::Interfaced) {
+			rangesResult = MeasureBest(tries, tab, [&]()
+			{
+				auto	input = gendInput;
+				Output	output;
+
+				auto testStep = [&]() { return TestCase::ExecuteRange(TestCase::CreateRange(input), allocForResults); };
+				PerfResult pr = MeasureQuery(testStep, TestCase::MixBack, input, output, cycles);
+
+				ASSERT_EQ (referenceOutput, output);
+				return pr;
+			});
+		}
+		else {
+			tab.PutCell("-");
+		}
 
 		PerfResult execOnlyResult = MeasureBest(tries, tab, [&]()
 		{
@@ -999,17 +1246,24 @@ namespace EnumerableTests {
 		std::cout << std::fixed << std::setprecision(1);
 		tab.PutCell("overhead:");
 		tab.PutCell('-');
+		const Microseconds diffR = rangesResult.runtime - classicResult.runtime;
 		const Microseconds diffE = execOnlyResult.runtime - classicResult.runtime;
 		const Microseconds diffC = createExecResult.runtime - classicResult.runtime;
+		if (rangesResult.runtime > Microseconds::zero())
+			tab.PutCell(100.0 * diffR.count() / classicResult.runtime.count(), " %");
+		else
+			tab.PutCell("-");
 		tab.PutCell(100.0 * diffE.count() / classicResult.runtime.count(), " %");
 		tab.PutCell(100.0 * diffC.count() / classicResult.runtime.count(), " %");
-		if (classicResult.allocations > 1 || execOnlyResult.allocations > 1 || createExecResult.allocations > 1) {
+		if (classicResult.allocations > 1 || rangesResult.allocations > 1 || execOnlyResult.allocations > 1 || createExecResult.allocations > 1) {
 			tab.PutCell("mallocs:");
 			tab.PutCell(classicResult.allocations);
+			tab.PutCell(rangesResult.allocations);
 			tab.PutCell(execOnlyResult.allocations);
 			tab.PutCell(createExecResult.allocations);
 		}
-		return { caseName, classicResult, execOnlyResult, createExecResult };
+		bool validComparison = !TestCase::Interfaced;
+		return { caseName, validComparison, classicResult, rangesResult, execOnlyResult, createExecResult };
 	}
 
 #pragma endregion
@@ -1023,11 +1277,11 @@ namespace EnumerableTests {
 		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
 				  << " Cycles: " << cyclesTxt << std::endl;
 
-		TableWriter<5> tb { 5, 34, 16, 15, 20 };
+		TableWriter<6> tb { 5, 34, 12, 12, 14, 20 };
 
 		std::cout << std::endl << std::right;
-		tb.PutRow("", "Handwritten", "Enumerable", "    Enumerable   ");
-		tb.PutRow("", "",			  "  query   ", "construct + query");
+		tb.PutRow("", "Handwritten", "Ranges", "Enumerable", "    Enumerable   ");
+		tb.PutRow("", "",			 "",	   "  query   ", "construct + query");
 
 		std::vector<PerfComparison> results;
 
@@ -1074,12 +1328,13 @@ namespace EnumerableTests {
 	// csv-like output to diff/collect
 	static void							PrintCompact(const std::vector<PerfComparison>& res)
 	{
-		TableWriter<6> tb { 5, 36, 15, 17, 17, 13 };
+		TableWriter<7> tb { 5, 36, 15, 17, 17, 17, 13 };
 
 		std::cout << std::left;
-		tb.PutRow("Testcase", "  Baseline [us]", "  Query ovrhd [%]", "  Total ovrhd [%]", "  Malloc diff");
+		tb.PutRow("Testcase", "  Baseline [us]", " Ranges ovrhd [%]",  "  Query ovrhd [%]", "  Total ovrhd [%]", "  Malloc diff");
 
-		PerfComparison sum { "TOTALs" };
+		PerfComparison sum		 { "TOTALs" };
+		PerfComparison rangesSum { "Ranges TOTALs" };
 
 		for (const PerfComparison& r : res) {
 			std::cout << std::left;
@@ -1092,6 +1347,10 @@ namespace EnumerableTests {
 			tb.PutCell(r.classic.runtime);
 
 			std::cout << std::fixed << std::setprecision(1);
+			if (r.HasRangesRun())
+				tb.PutCell(r.RangesOverheadPercent());
+			else
+				tb.PutCell("-");
 			tb.PutCell(r.EnumerateOverheadPercent());
 			tb.PutCell(r.TotalOverheadPercent());
 
@@ -1103,9 +1362,10 @@ namespace EnumerableTests {
 			tb.PutCell((double)extraMallocs);
 			std::cout << std::noshowpos;
 
-			sum.classic               += r.classic;
-			sum.enumerate             += r.enumerate;
-			sum.constructAndEnumerate += r.constructAndEnumerate;
+			if (r.isValidComparison)
+				sum += r;
+			if (r.HasRangesRun())
+				rangesSum += r;
 		}
 		std::cout << std::endl;
 
@@ -1115,19 +1375,40 @@ namespace EnumerableTests {
 		auto extraMallocs = (long long)sum.constructAndEnumerate.allocations
 						  - (long long)sum.classic.allocations;
 
-		tb.PutCell("ALL:");
+		auto extraMallocsRanges = (long long)rangesSum.constructAndEnumerate.allocations
+								- (long long)rangesSum.ranges.allocations;
+
+		tb.PutCell("ALL comparable:");
 		tb.PutCell(duration_cast<Millis>(sum.classic.runtime),				 " ms");
+		tb.PutCell("-");
 		tb.PutCell(duration_cast<Millis>(sum.enumerate.runtime),			 " ms");
 		tb.PutCell(duration_cast<Millis>(sum.constructAndEnumerate.runtime), " ms");
-		std::cout << std::showpos << std::setprecision(0);
+		std::cout << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
 		tb.PutCell((double)extraMallocs);
 
-		std::cout << std::noshowpos << std::fixed << std::setprecision(1);
+		std::cout << std::noshowpos << std::setprecision(1);
+		tb.PutCell("ALL with ranges:");
+		tb.PutCell(duration_cast<Millis>(rangesSum.classic.runtime),			   " ms");
+		tb.PutCell(duration_cast<Millis>(rangesSum.ranges.runtime),				   " ms");
+		tb.PutCell(duration_cast<Millis>(rangesSum.enumerate.runtime),			   " ms");
+		tb.PutCell(duration_cast<Millis>(rangesSum.constructAndEnumerate.runtime), " ms");
+		tb.CloseRow();
+
 		tb.PutCell("Overhead:");
 		tb.PutCell("-");
+		tb.PutCell(rangesSum.RangesOverheadPercent(), " %");
 		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
 		tb.PutCell(sum.TotalOverheadPercent(), " %");
 		tb.CloseRow();
+
+		tb.PutCell("Against ranges:");
+		tb.PutCell(-100.0 * rangesSum.RangesOverhead().count() / rangesSum.ranges.runtime.count(), " %");
+		tb.PutCell("-");
+		tb.PutCell(100.0 * (rangesSum.EnumerateOverhead() - rangesSum.RangesOverhead()).count() / rangesSum.ranges.runtime.count(), " %");
+		tb.PutCell(100.0 * (rangesSum.TotalOverhead() - rangesSum.RangesOverhead()).count() / rangesSum.ranges.runtime.count(), " %");
+		std::cout << std::fixed << std::setprecision(0) << (extraMallocsRanges ? std::showpos : std::noshowpos);
+		tb.PutCell((double)extraMallocsRanges);
+		std::cout << std::noshowpos << std::setprecision(1);
 	}
 
 
@@ -1139,16 +1420,16 @@ namespace EnumerableTests {
 		auto results1 = RunAllWith(DefaultComplexity, DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ---------------------------------------------------------------------------------------");
+		Greet("  ---------------------------------------------------------------------------------------------");
 		Greet("  Short sequences...");
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ===================================================================================================");
+		Greet("  ====================================================================================================================");
 		Greet("  Long sequences summary:");
 		PrintCompact(results1);
 		std::cout << std::endl;
-		Greet("  ---------------------------------------------------------------------------------------------------");
+		Greet("  --------------------------------------------------------------------------------------------------------------------");
 		Greet("  Short sequences summary:");
 		PrintCompact(results2);
 	}
