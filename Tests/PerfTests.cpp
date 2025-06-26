@@ -17,7 +17,7 @@
 namespace EnumerableTests {
 
 
-	constexpr unsigned MeasurementCount  = 4;
+	constexpr unsigned MeasurementCount  = 6;
 	constexpr size_t   DefaultComplexity = 50000;
 #ifdef _DEBUG
 	constexpr char	   GreetTxt[]    = "Performance [Debug]";
@@ -59,7 +59,6 @@ namespace EnumerableTests {
 			std::vector<Pair> input;
 			input.reserve(size);
 			for (int i = 0; i < size; i++) {
-				// TODO: Ensure some repetitions for .Minimums series
 				int r = std::rand();
 				input.emplace_back(r - RAND_MAX / 2, 'a' + (char)(r % ('z' - 'a')));
 			}
@@ -73,6 +72,47 @@ namespace EnumerableTests {
 			nextInput.second = res.second;
 		}
 	};
+
+
+	
+	template <bool PosFiltered = false>
+	struct PairMinimumsTestBase : public PairTestBase {
+
+		// ensure multiple minima, in some non-leading location
+		static std::vector<Pair> GenerateInput(size_t size)
+		{
+			std::vector<Pair> input = PairTestBase::GenerateInput(size);
+
+			const size_t trgCount = 2 + size / 7;
+			const int	 minValue = PosFiltered ? 2
+				: std::minmax(input.begin(), input.end(), [](const auto& l, const auto& r) {
+					return l->first < r->first;
+				  }).first->first;
+
+			// 1st is not to contain minValue => exercise .Minimums()
+			size_t slice = size / (trgCount + 1);
+			for (size_t i = 0, j = slice + slice / 2; i < slice && j < size; i++) {
+				if (input[i].first == minValue) {
+					while (j + 1 < size && input[j].first == minValue)
+						j++;
+					input[i].swap(input[j++]);
+				}
+			}
+
+			// make result less trivial
+			for (size_t i = 0; PosFiltered && i < size; i++) {
+				int& n = input[i].first;
+				n += (n == 1) ? 5 : 0;
+			}
+
+			// implant some minimums
+			for (size_t c = 1; c <= trgCount; c++)
+				input[c * slice].first = minValue;
+
+			return input;
+		}
+	};
+
 
 
 
@@ -139,7 +179,7 @@ namespace EnumerableTests {
 
 
 	struct CopyFromDict {
-		static constexpr const char Name[] = "Dictionary iter.";
+		static constexpr const char Name[] = "HashMap iteration";
 
 
 		static std::unordered_map<int, char> GenerateInput(size_t size)
@@ -215,7 +255,7 @@ namespace EnumerableTests {
 
 
 	struct SubrangeFiltered : public ScalarTestBase<int> {
-		static constexpr const char Name[] = "Subrange of filtered";
+		static constexpr const char Name[] = "Subrange of filtered int";
 
 
 		static std::vector<int> RunClassic(const std::vector<int>& in, size_t resHint = 0)
@@ -518,7 +558,7 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimumsOrdered : public PairTestBase {
+	struct PositiveMinimumsOrdered : public PairMinimumsTestBase<true> {
 		static constexpr const char Name[] = "Pos.Min. a, OrderBy b";
 
 
@@ -560,7 +600,6 @@ namespace EnumerableTests {
 			int  min	  = std::ranges::min(filtered | std::views::transform(&Pair::first));
 			auto wanted	  = filtered | std::views::filter([=](const Pair& p) { return p.first == min; });
 			
-			// TODO: make testcase valid, can have only 1 minimum!
 			std::vector<Pair> sorted (wanted.begin(), wanted.end());
 			std::ranges::sort(sorted, std::less<>(), &Pair::second);
 			return sorted;
@@ -577,8 +616,8 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimums : public PairTestBase {
-		static constexpr const char Name[] = "Positive Minimums";
+	struct PositiveMinimums : public PairMinimumsTestBase<true> {
+		static constexpr const char Name[] = "Pos. Minimums by field";
 
 
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t resHint = 0)
@@ -625,8 +664,8 @@ namespace EnumerableTests {
 	};
 
 
-	struct MinSearch : public PairTestBase {
-		static constexpr const char Name[] = "Simple Minimum search";
+	struct MinSearch : public PairMinimumsTestBase<false> {
+		static constexpr const char Name[] = "Minimums by field";
 
 
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t resHint = 0)
@@ -889,6 +928,11 @@ namespace EnumerableTests {
 
 		static std::vector<ResElem>   ExecuteRange(Range&& r, size_t allocHint) requires(HasRanges)
 		{
+			// some algorithms require a copy by their own (e.g. sort), avoid duplicated copy
+			if constexpr (std::is_same<Range, std::vector<ResElem>>()) {
+				return std::move(r);
+			}
+
 			using std::ranges::size;
 
 			std::vector<ResElem> v;
@@ -900,7 +944,7 @@ namespace EnumerableTests {
 				v.reserve(allocHint);
 			
 			// Sticking to conventional iteration!
-			for (auto&& elem : r )
+			for (auto&& elem : r)
 				v.push_back(elem);
 
 			// NOTE: Interesting performance deviations:
@@ -1091,6 +1135,11 @@ namespace EnumerableTests {
 		Microseconds	runtime		= Microseconds::zero();
 		size_t			allocations = 0;
 
+		bool HasRun() const
+		{
+			return runtime > Microseconds::zero();
+		}
+
 		void operator += (const PerfResult& part)
 		{
 			runtime		+= part.runtime;
@@ -1122,11 +1171,6 @@ namespace EnumerableTests {
 			enumerate			  += add.enumerate;
 			constructAndEnumerate += add.constructAndEnumerate;
 			return *this;
-		}
-
-		bool HasRangesRun() const
-		{
-			return ranges.runtime > Microseconds::zero();
 		}
 	};
 
@@ -1258,7 +1302,10 @@ namespace EnumerableTests {
 		if (classicResult.allocations > 1 || rangesResult.allocations > 1 || execOnlyResult.allocations > 1 || createExecResult.allocations > 1) {
 			tab.PutCell("mallocs:");
 			tab.PutCell(classicResult.allocations);
-			tab.PutCell(rangesResult.allocations);
+			if (rangesResult.HasRun())
+				tab.PutCell(rangesResult.allocations);
+			else
+				tab.PutCell('-');
 			tab.PutCell(execOnlyResult.allocations);
 			tab.PutCell(createExecResult.allocations);
 		}
@@ -1277,7 +1324,7 @@ namespace EnumerableTests {
 		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
 				  << " Cycles: " << cyclesTxt << std::endl;
 
-		TableWriter<6> tb { 5, 34, 12, 12, 14, 20 };
+		TableWriter<6> tb { 5, 35, 12, 12, 14, 20 };
 
 		std::cout << std::endl << std::right;
 		tb.PutRow("", "Handwritten", "Ranges", "Enumerable", "    Enumerable   ");
@@ -1308,16 +1355,16 @@ namespace EnumerableTests {
 		results.push_back(RunTestcase<ListingTest<IntSort2>>				(tb, complexity / 10, cycles));
 		results.push_back(RunTestcase<ListingTest<OrderByOtherField>>		(tb, complexity / 10, cycles));
 
-		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, 2 * cycles));
+		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, 2 * cycles));
 		results.push_back(RunTestcase<ListingTest<PositiveMinimums>>		 (tb, complexity, cycles));   // from refs => needs copy
 		results.push_back(RunTestcase<ListingTest<PositiveMinimums, true>>	 (tb, complexity, cycles));
 		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums>>		 (tb, complexity, cycles));   // from values => optimized
 		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums, true>>(tb, complexity, cycles));
 		results.push_back(RunTestcase<ListingTest<PositiveMinimumsOrdered>>	 (tb, complexity, cycles));
 
-		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, cycles));
-		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, 2 * cycles));
+		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, 4 * cycles));
 		results.push_back(RunTestcase<AggregationTest<SumDoubles>>	(tb, complexity, cycles));
 		results.push_back(RunTestcase<AggregationTest<SumDoubles2>>	(tb, complexity, cycles));
 
@@ -1328,7 +1375,7 @@ namespace EnumerableTests {
 	// csv-like output to diff/collect
 	static void							PrintCompact(const std::vector<PerfComparison>& res)
 	{
-		TableWriter<7> tb { 5, 36, 15, 17, 17, 17, 13 };
+		TableWriter<7> tb { 5, 37, 15, 17, 17, 17, 13 };
 
 		std::cout << std::left;
 		tb.PutRow("Testcase", "  Baseline [us]", " Ranges ovrhd [%]",  "  Query ovrhd [%]", "  Total ovrhd [%]", "  Malloc diff");
@@ -1347,7 +1394,7 @@ namespace EnumerableTests {
 			tb.PutCell(r.classic.runtime);
 
 			std::cout << std::fixed << std::setprecision(1);
-			if (r.HasRangesRun())
+			if (r.ranges.HasRun())
 				tb.PutCell(r.RangesOverheadPercent());
 			else
 				tb.PutCell("-");
@@ -1364,7 +1411,7 @@ namespace EnumerableTests {
 
 			if (r.isValidComparison)
 				sum += r;
-			if (r.HasRangesRun())
+			if (r.ranges.HasRun())
 				rangesSum += r;
 		}
 		std::cout << std::endl;
@@ -1420,16 +1467,16 @@ namespace EnumerableTests {
 		auto results1 = RunAllWith(DefaultComplexity, DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ---------------------------------------------------------------------------------------------");
+		Greet("  ----------------------------------------------------------------------------------------------");
 		Greet("  Short sequences...");
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ====================================================================================================================");
+		Greet("  =====================================================================================================================");
 		Greet("  Long sequences summary:");
 		PrintCompact(results1);
 		std::cout << std::endl;
-		Greet("  --------------------------------------------------------------------------------------------------------------------");
+		Greet("  ---------------------------------------------------------------------------------------------------------------------");
 		Greet("  Short sequences summary:");
 		PrintCompact(results2);
 	}
