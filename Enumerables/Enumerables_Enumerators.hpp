@@ -317,7 +317,7 @@ namespace Def {
 	/// Adapts an Enumerator for usage inside range-based for (mimicking a legacy iterator).
 	template <class TEnumerator>
 	class EnumeratorAdapter {
-		// TODO 17: optional initialization is required until c++17, as begin(), end() must have the same type.
+		// Optional initialization is required until c++17, as begin(), end() must have the same type.
 		union {
 			TEnumerator enumerator;
 		};
@@ -622,8 +622,6 @@ namespace Def {
 
 
 	#pragma region Container Enumerators
-
-	// TODO 17: Support for different TBegin and TEnd (instead of TIter)
 
 	/// An Enumerator to wrap legacy C++ iterators.
 	template <class TIter, class ForcedResult/* = void*/>

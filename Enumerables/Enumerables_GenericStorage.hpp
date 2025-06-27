@@ -265,7 +265,7 @@ namespace TypeHelpers {
 
 #pragma region GenericStorage Strategies
 
-	// The conventional way			// TODO 17: No need from c++17
+	// The conventional way	- from c++17, having laundry, unions suffice.
 	template <class T>
 	class BytesHolder final {
 

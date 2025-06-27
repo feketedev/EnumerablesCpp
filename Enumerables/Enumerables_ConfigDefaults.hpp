@@ -456,8 +456,7 @@ namespace Enumerables {
 
 	// NOTE: To improve performance by enabling size hints,
 	//		 GetSize for further containers can be introduced by client code to namespace Enumerables.
-	//		 Just like HasValue, to enable the .ValuesOnly() shorthand for multiple types. (Requires an operator* too.)
-	// TODO 17: std::size
+	//		 Just like HasValue to enable the .ValuesOnly() shorthand for multiple types. (Requires an operator* too.)
 
 
 }	// namespace Enumerables
