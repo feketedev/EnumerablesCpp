@@ -101,6 +101,17 @@ namespace TypeHelpers {
 	using NoDeduce = OverrideT<T, void>;
 
 
+	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.
+	/// @tparam H: Mandatory head elem to be aliased -> can be used to ensure an argument-dependent result!
+	template <class H, class... Ts>
+	struct IfMultipleTypes {};
+
+	template <class H, class S, class... T>
+	struct IfMultipleTypes<H, S, T...> {
+		using type = H;
+	};
+
+
 
 	// ===== Ref/ptr tools ============================================================================================
 

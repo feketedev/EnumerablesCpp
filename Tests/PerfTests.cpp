@@ -974,7 +974,7 @@ namespace EnumerableTests {
 
 	struct PerfComparison {
 		std::string		testCase;
-		bool			isValidComparison = true;
+		bool			isValidComparison;
 		PerfResult		classic;
 		PerfResult		enumerate;
 		PerfResult		constructAndEnumerate;

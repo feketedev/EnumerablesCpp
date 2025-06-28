@@ -845,7 +845,7 @@ namespace Def {
 	};
 
 
-
+	
 	// for cases when the operand can't be readily captured as a SetType<T>
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
@@ -861,6 +861,12 @@ namespace Def {
 		{
 			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be quite lucky anyway
 			return ObtainCachedResults<SetOperations, S>(etor, 0, opts...);
+		}
+
+		// NOTE: Avoids MSVC 2015 bug: expanding SetOptions... within ctor initializer-block results in C2226.
+		static SetType<S, SetOptions...>   CreateOperandDefaultOpts(OpSource&& etor)
+		{
+			return ObtainCachedResults<SetOperations, S>(etor, 0, SetOptions {}...);
 		}
 
 	public:
@@ -887,19 +893,20 @@ namespace Def {
 		TElem				Current()		  override	{ return source.Current(); }
 		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
-		template <class SrcFactory, class OpFactory>
-		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
-			source    { getSource() },
-			intersect { intersect },
-			operand   { CreateOperand(getOpSource(), SetOptions {}...) }
-		{
-		}
 
-		template <class SrcFactory, class OpFactory, bool NeedOptions = 0 < sizeof...(SetOptions), class = enable_if_t<NeedOptions>>
+		template <class SrcFactory, class OpFactory>
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, const SetOptions&... opts, bool intersect) :
 			source    { getSource() },
 			intersect { intersect },
 			operand   { CreateOperand(getOpSource(), opts...) }
+		{
+		}
+
+		template <class SrcFactory, class OpFactory, class = typename IfMultipleTypes<OpFactory, SetOptions...>::type>
+		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
+			source    { getSource() },
+			intersect { intersect },
+			operand   { CreateOperandDefaultOpts(getOpSource()) }
 		{
 		}
 
