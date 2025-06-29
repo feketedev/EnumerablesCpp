@@ -88,18 +88,18 @@ namespace TypeHelpers {
 
 
 	/// Access stored instance as lvalue
-	template <class V>	V&			Revive(const RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&			Revive(RefHolder<V>& stored)			{ return stored.Get(); }
-	template <class V>	V&			Revive(V& stored)						{ return stored; }
+	template <class V>	V&			Revive(const RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>	V&			Revive(RefHolder<V>& stored)			noexcept  { return stored.Get(); }
+	template <class V>	V&			Revive(V& stored)						noexcept  { return stored; }
 
 	/// Access stored instance forcing constness even on referenced object
-	template <class V>	const V&	ReviveConst(const RefHolder<V>& stored)	{ return stored.Get(); }
-	template <class V>	const V&	ReviveConst(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>  const V&	ReviveConst(const V& stored)			{ return stored; }
+	template <class V>	const V&	ReviveConst(const RefHolder<V>& stored)	noexcept  { return stored.Get(); }
+	template <class V>	const V&	ReviveConst(RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>  const V&	ReviveConst(const V& stored)			noexcept  { return stored; }
 
 	/// Get final access to the stored entity, if possible as an rvalue
-	template <class V>	V&			PassRevived(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&&			PassRevived(V& stored)					{ return move(stored); }
+	template <class V>	V&			PassRevived(RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>	V&&			PassRevived(V& stored)					noexcept  { return move(stored); }
 
 #pragma endregion
 

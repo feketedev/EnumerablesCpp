@@ -50,7 +50,7 @@ namespace Enumerables {
 // ==== Macros ==============================================================================================
 
 #ifndef ENUMERABLES_NOINLINE
-#	ifdef _MSC_VER
+#	if defined(_MSC_VER) && !defined(__clang__)
 #		define ENUMERABLES_NOINLINE __declspec(noinline)
 #	else
 #		define ENUMERABLES_NOINLINE __attribute__((noinline))

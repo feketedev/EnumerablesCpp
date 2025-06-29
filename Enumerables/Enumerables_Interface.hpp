@@ -407,10 +407,10 @@ namespace Def {
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
 
-		template <class ForcedAcc, class Init, class Combiner>
+		template <class ForcedAcc, class Init>
 		using IfInitByValue   = enable_if_t<IsAccuInit<TElem, Init, ForcedAcc>::byValue,   int>;
 
-		template <class ForcedAcc, class Init, class Combiner>
+		template <class ForcedAcc, class Init>
 		using IfInitByMapping = enable_if_t<IsAccuInit<TElem, Init, ForcedAcc>::byMapping, int>;
 
 		using DeduceAccumulator = AccuDeducer<TElem>;
@@ -625,14 +625,14 @@ namespace Def {
 
 		/// [N calls for length N;  use given value to initialize the accumulator.]
 		template <class ForcedAcc = void, class InAcc, class F>
-		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>, F> = 0)	const &
+		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>> = 0)	const &
 		{
 			using Acc = typename DeduceAccumulator::template ForDirectInit<InAcc, F, ForcedAcc>;
 			return Chain<ScannerEnumerator, Acc>(SteadyParams(StoreAllowingRef<InAcc, Acc>(firstAccValue)), CombinerL<Acc, F>(combiner));
 			// SteadyParams: Acc is passed explicitly, don't repeat
 		}
 		template <class ForcedAcc = void, class InAcc, class F>
-		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>, F> = 0)	&&
+		auto Scan(InAcc&& firstAccValue, F&& combiner, IfInitByValue<ForcedAcc, decay_t<InAcc>> = 0)	&&
 		{
 			using Acc = typename DeduceAccumulator::template ForDirectInit<InAcc, F, ForcedAcc>;
 			return MvChain<ScannerEnumerator, Acc>(SteadyParams(StoreAllowingRef<InAcc, Acc>(firstAccValue)), CombinerL<Acc, F>(combiner));
@@ -643,13 +643,13 @@ namespace Def {
 		/// @remarks
 		///		Citation needed? Can't find the page where I met this idea.
 		template <class ForcedAcc = void, class AccInitMap, class F>
-		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap, F> = 0)	const &
+		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap> = 0)	const &
 		{
 			using Acc = typename DeduceAccumulator::template ForMappingInit<AccInitMap, F, ForcedAcc>;
 			return Chain<FetchFirstScannerEnumerator, Acc>(CombinerL<Acc, F>(combiner), FreeMapper<AccInitMap>(init));
 		}
 		template <class ForcedAcc = void, class AccInitMap, class F>
-		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap, F> = 0)	&&
+		auto Scan(AccInitMap&& init, F&& combiner, IfInitByMapping<ForcedAcc, AccInitMap> = 0)	&&
 		{
 			using Acc = typename DeduceAccumulator::template ForMappingInit<AccInitMap, F, ForcedAcc>;
 			return MvChain<FetchFirstScannerEnumerator, Acc>(CombinerL<Acc, F>(combiner), FreeMapper<AccInitMap>(init));
@@ -743,7 +743,7 @@ namespace Def {
 		/// @throws				on empty input
 		/// @returns			Acc, determined by initMapper in implicit case
 		template <class Acc = void, class M, class F>
-		decltype(auto) Aggregate(M&& initMapper, F&& combiner, IfInitByMapping<Acc, M, F> = 0) const
+		decltype(auto) Aggregate(M&& initMapper, F&& combiner, IfInitByMapping<Acc, M> = 0) const
 		{
 			return ToReferenced().template Scan<Acc>(forward<M>(initMapper), forward<F>(combiner)).Last();
 		}
@@ -753,7 +753,7 @@ namespace Def {
 		/// @param initVal: the initial value for accumulator
 		/// @returns		initVal directly in case of an empty sequence
 		template <class Acc = void, class Init, class F>
-		decltype(auto) Aggregate(Init&& initVal, F&& combiner, IfInitByValue<Acc, Init, F> = 0) const
+		decltype(auto) Aggregate(Init&& initVal, F&& combiner, IfInitByValue<Acc, Init> = 0) const
 		{
 			// CONSIDER: Separate implementation could avoid Init copy - along with its whole copyable requirement, which is naturally set by Scan.
 			return ToReferenced()
