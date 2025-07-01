@@ -22,6 +22,7 @@ namespace EnumerableTests {
 	void TestFiltration();
 	void TestArithmetics();
 	void TestMisc();
+	void TestCollectionCustomizability();
 
 	void TestFeatures17();
 
@@ -40,6 +41,7 @@ namespace EnumerableTests {
 		TestLambdaUsage();
 		TestArithmetics();
 		TestMisc();
+		TestCollectionCustomizability();
 		TestFeatures17();
 
 		NewPerfTests();

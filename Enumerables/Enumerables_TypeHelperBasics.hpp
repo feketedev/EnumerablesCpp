@@ -131,6 +131,17 @@ namespace Enumerables::TypeHelpers {
 	using NoDeduce = OverrideT<T, void>;
 
 
+	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.
+	/// @tparam H: Mandatory head elem to be aliased -> can be used to ensure an argument-dependent result!
+	template <class H, class... Ts>
+	struct IfMultipleTypes {};
+
+	template <class H, class S, class... T>
+	struct IfMultipleTypes<H, S, T...> {
+		using type = H;
+	};
+
+
 
 	// ===== Ref/ptr tools ============================================================================================
 
@@ -294,6 +305,16 @@ namespace Enumerables::TypeHelpers {
 						  conditional_t< is_convertible_v<Sec, BaseT<Pri>>,
 										 BaseT<Pri>,
 						  void >>>>;
+
+
+	/// Simplified, unchecked version of std::align.
+	template <class T>
+	void* AlignFor(void* trg)
+	{
+		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
+		size_t offs = miss ? alignof(T) - miss : 0u;
+		return static_cast<char*>(trg) + offs;
+	}
 
 
 

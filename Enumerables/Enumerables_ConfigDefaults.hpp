@@ -52,7 +52,7 @@ namespace Enumerables {
 // ==== Macros ==============================================================================================
 
 #ifndef ENUMERABLES_NOINLINE
-#	ifdef _MSC_VER
+#	if defined(_MSC_VER) && !defined(__clang__)
 #		define ENUMERABLES_NOINLINE __declspec(noinline)
 #	else
 #		define ENUMERABLES_NOINLINE __attribute__((noinline))
@@ -176,24 +176,92 @@ namespace Enumerables::StlBinding {
 #define ENUMERABLES_LIST_BINDING  StlBinding::ListOperations
 
 	struct ListOperations {
-		template <class V>	using Container = std::vector<V>;
 
-		template <class V>
-		static Container<V>	Init(size_t capacity)
+		// NOTE: This little helper is necessitated by a clang limitation (bug?) in using ellipsis with template aliases.
+		//		 Is it standard? (Resembles Core lang issue #1430, but we don't expand packs into non-pack alias params!)
+		//		 Interestingly though, the same problem is not presented with unordered_map (SetOperations),
+		//		 nor is it reproducible at all using MSVC or GCC.
+		//
+		//		 Rationale of using ellipsis:
+		//			- keep library headers generic, any required customization in config
+		//			- automatically use default (type) arguments of the given container itself
+		//
+		//		In case of further errors, the same trcick is applicable to other bindings.
+		template <class V, class... Options>
+		struct VectorBindHelper
 		{
-			Container<V> l;
+			using type = std::vector<V, Options...>;
+		};
+
+
+
+		// Custom container type with arbitrary user-provided type-arguments.
+		template <class V, class... Options>
+		using Container = typename VectorBindHelper<V, Options...>::type;
+
+		template <class V, class... Opts>
+		static Container<V, Opts...>		Init(size_t capacity, const Opts&... opts)
+		{
+			Container<V, Opts...> l (opts...);
 			l.reserve(capacity);
 			return l;
 		}
 
-		template <class V, class Vin>
-		static void			Add(Container<V>& l, Vin&& val)		{ l.push_back(std::forward<Vin>(val)); }
 
-		template <class V>
-		static void			Clear(Container<V>& l)				{ l.clear();	/* keep capacity! */   }
 
+		// TODO: Could these initializations be simplified?
+		//		 (Full benefit will come with builder-syntax for allocators.)
+
+		// Similar to Init, but these overloads explicitly take an allocator designated for the container.
+		//	* Should Container accept further parameters from the user in customizable contexts,
+		//	  those are to be forwarded after capacity and alloc, as well.
+		//	* A user-specified custom allocator should take precedence over the designated one.
+		//	  [e.g.: ToList<int, MyAlloc>()]	This is solved by 2 overloads for std::vector.
+		//	* The exact result type is not assumed at call places.
+		template <class V, class Alloc>
+		static Container<V, Alloc>			InitWithAllocator(const Alloc& alloc, size_t capacity)
+		{
+			return Init<V, Alloc>(capacity, alloc);
+		}
+
+		template <class V, class Alloc, class DirectAlloc>
+		static Container<V, DirectAlloc>	InitWithAllocator(const Alloc&, size_t capacity, const DirectAlloc& alloc)
+		{
+			return Init<V, DirectAlloc>(capacity, alloc);
+		}
+
+
+
+		// Init_list overloads:
+		// Required solely by direct Enumerate({ a, b, c }) syntax, only for List, no custom parameters.
 		template <class V>
-		static V&			Access(Container<V>& l, size_t i)	{ return l[i];}
+		static Container<V>			Init(std::initializer_list<V> initList)
+		{
+			return std::vector<V> (initList);
+		}
+		
+		template <class V, class Alloc>
+		static Container<V, Alloc>	InitWithAllocator(const Alloc& a, std::initializer_list<V> initList)
+		{
+			return { initList, a };
+		}
+
+
+
+		// Argument deduction won't work through a depentend type, only with a direct alias.
+		// Fortunately, deduced arguments don't trigger the (supposed) clang bug.
+		template <class V, class... Options>
+		using DeducibleContainer = std::vector<V, Options...>;
+
+
+		template <class V, class... Opts, class Vin>
+		static void		Add(DeducibleContainer<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
+
+		template <class V, class... Opts>
+		static void		Clear(DeducibleContainer<V, Opts...>& l)			{ l.clear();	/* keep capacity! */   }
+
+		template <class V, class... Opts>
+		static V&		Access(DeducibleContainer<V, Opts...>& l, size_t i)	{ return l[i];}
 	};
 
 #endif
@@ -204,21 +272,22 @@ namespace Enumerables::StlBinding {
 #define ENUMERABLES_SET_BINDING   StlBinding::SetOperations
 
 	struct SetOperations {
-		template <class V>	using Container = std::unordered_set<V>;
+		template <class V, class... Options>
+		using Container = std::unordered_set<V, Options...>;
 
-		template <class V>
-		static Container<V>	Init(size_t capacity)
+		template <class V, class... Opts>
+		static Container<V, Opts...>	Init(size_t capacity, const Opts&... options)
 		{
-			Container<V> s;
+			Container<V, Opts...> s (0u, options...);
 			s.reserve(capacity);
 			return s;
 		}
 
-		template <class V>
-		static bool			Contains(const Container<V>& s, const V& elem)	{ return s.find(elem) != s.end(); }
+		template <class V, class... Opts>
+		static bool			Contains(const Container<V, Opts...>& s, const V& elem)	{ return s.find(elem) != s.end(); }
 
-		template <class V, class Vin>
-		static void			Add(Container<V>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
+		template <class V, class... Opts, class Vin>
+		static void			Add(Container<V, Opts...>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
 	};
 
 #endif
@@ -229,24 +298,27 @@ namespace Enumerables::StlBinding {
 #define ENUMERABLES_DICTIONARY_BINDING	StlBinding::DictionaryOperations
 
 	struct DictionaryOperations {
-		template <class K, class V>		using Container = std::unordered_map<K, V>;
+		template <class K, class V, class... Options>	using Container = std::unordered_map<K, V, Options...>;
 
-		template <class K, class V>
-		static Container<K, V> Init(size_t capacity)
+		template <class K, class V, class... Options>
+		static Container<K, V, Options...> Init(size_t capacity, const Options&... opts)
 		{
-			Container<K, V> d;
+			Container<K, V, Options...> d (/*buckets:*/ 0u, opts...);
 			d.reserve(capacity);
 			return d;
 		}
 
-		template <class K, class V>
-		static bool		Contains(const Container<K, V>& d, const K& key)	{ return d.find(key) != d.end(); }
+		template <class K, class V, class... Opts>
+		static bool		Contains(const Container<K, V, Opts...>& d, const K& key)	{ return d.find(key) != d.end(); }
 
-		template <class K, class V, class Kin, class Vin>
-		static void		Add(Container<K, V>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
+		template <class K, class V, class... Opts, class Kin, class Vin>
+		static void		Add(Container<K, V, Opts...>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
 
-		//template <class K, class V, class Kin, class Vin>
-		//static void	Upsert(Container<K, V>& d, K&& key, Vin&& val)		{ d.insert_or_assign(std::forward<Kin>(key), std::forward<Vin>(val)); }
+		//template <class K, class V, class... Opts, class Kin, class Vin>
+		//static void	Upsert(Container<K, V, Opts...>& d, K&& key, Vin&& val)		{ d.insert_or_assign(std::forward<Kin>(key), std::forward<Vin>(val)); }
+
+		template <class K, class V, class... Opts>
+		static V&		Access(Container<K, V, Opts...>& d, const K& key)			{ return d[key]; }
 	};
 
 #endif
@@ -303,24 +375,28 @@ namespace Enumerables::DefaultBinding {
 	};
 
 
-	// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
-	// - hence only a ListOp. fallback is provided, but the below code presents the way to utilize such type from your favorite library.
-	struct FallbackSmallListOperations {
-		template <class V, size_t InlineCap>
-		using Container = ListOperations::Container<V>;
+		// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
+		// - hence only a ListOp. fallback is provided, but the below code presents the way to utilize such type from your favorite library.
+		struct FallbackSmallListOperations {
+			template <class V, size_t InlineCap, class... Options>
+			using Container = ListOperations::Container<V, Options...>;
 
-		template <class V, size_t N>
-		static Container<V, N>	Init(size_t capacity = N)		{ return ListOperations::Init<V>(capacity); }
 
-		template <class V, size_t N = 0, class Vin>
-		static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
+			template <class V, size_t N, class... Options>
+			static Container<V, N, Options...>	Init(size_t capacity = N, const Options&... opts)
+			{ 
+				return ListOperations::Init<V>(capacity, opts...);
+			}
 
-		template <class V, size_t N = 0>
-		static void		Clear(Container<V, N>& l)				{ ListOperations::Clear(l); }
+			template <class List, class Vin>
+			static void		Add(List& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
 
-		template <class V, size_t N = 0>
-		static V&		Access(Container<V, N>& l, size_t i)	{ return ListOperations::Access(l, i); }
-	};
+			template <class List>
+			static void		Clear(List& l)				{ ListOperations::Clear(l); }
+
+			template <class List>
+			static auto&	Access(List& l, size_t i)	{ return ListOperations::Access(l, i); }
+		};
 
 }	// namespace Enumerables::DefaultBinding
 
@@ -346,12 +422,13 @@ namespace Enumerables {
 #endif
 
 
+
 	// Establish container type aliases
-	template <class V>				using ListType		 = typename ListOperations::Container<V>;
-	template <class V, size_t N>	using SmallListType  = typename SmallListOperations::Container<V, N>;
-	template <class V>				using SetType		 = typename SetOperations::Container<V>;
-	template <class K, class V>		using DictionaryType = typename DictOperations::Container<K, V>;
-	template <class V>				using Optional		 = typename OptionalOperations::Container<V>;
+	template <class V, class... Opts>			using ListType		 = typename ListOperations::Container<V, Opts...>;
+	template <class V, size_t N, class... Opts>	using SmallListType  = typename SmallListOperations::Container<V, N, Opts...>;
+	template <class V, class... Opts>			using SetType		 = typename SetOperations::Container<V, Opts...>;
+	template <class K, class V, class... Opts>	using DictionaryType = typename DictOperations::Container<K, V, Opts...>;
+	template <class V>							using Optional		 = typename OptionalOperations::Container<V>;
 
 }	// namespace Enumerables
 

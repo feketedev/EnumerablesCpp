@@ -211,18 +211,24 @@ namespace EnumerableTests {
 		}
 
 
-		// The results of a query can be saved to a container [of preconfigured type] just like in .Net:
+		// The results of a query can be saved to a container (of preconfigured type) just like in .Net:
 		{
 			Enumerable<int&> approved = numbers.Where(FUN(x,  x > 2));
 			
 			std::vector<int>		list = approved.ToList();			// Decays element automatically
-			std::unordered_set<int> set  = approved.ToHashSet();		//
+			std::unordered_set<int> set  = approved.ToSet();			//
 			
 			ASSERT	  (Enumerables::AreEqual({ 5, 3, 3 },	list));
 			ASSERT_EQ ((std::unordered_set<int>{ 5, 3 }),	set);
 
 			// The container bindings (Enumerables::ListType, Enumerables::SetType) can be set 
 			// in your Enumerables.hpp, before the inclusion of library implementation.
+
+			// Custom construction arguments (hasher, allocator etc.) can be passed through .To*** methods.
+			// e.g.		vector<int, MyAllocator> l1 = numbers.ToList<MyAllocator>();	// default-construct
+			//		or	vector<int, MyAllocator> l2 = numbers.ToList(myAlloc);			// deduce
+			//
+			// For details --> CustomizedCollectionsTests.cpp
 		}
 
 

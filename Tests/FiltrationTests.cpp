@@ -139,6 +139,29 @@ namespace EnumerableTests {
 			ASSERT_EQ (Obj('a', 1),			common.First());
 			ASSERT_EQ (Obj('b', 1),			remaining.First());
 		}
+		// Same with non-set operands
+		{
+			Obj				 subsetArr[] = { { 'c',  2 }, { 'a',  1 }, { 'c',  2 } };
+			std::vector<Obj> subsetVec	 = { { 'c',  2 }, { 'a',  1 }, { 'c',  2 } };
+
+			auto common1    = Enumerate(objList).Intersect(subsetArr);
+			auto common2    = Enumerate(objList).Intersect(subsetVec);
+			auto remaining1 = Enumerate(objList).Except(subsetArr);
+			auto remaining2 = Enumerate(objList).Except(subsetVec);
+
+			ASSERT_EQ (3,					common2.Count());
+			ASSERT_EQ (3,					common1.Count());
+			ASSERT_EQ (objList.size() - 3,	remaining1.Count());
+			ASSERT_EQ (objList.size() - 3,	remaining2.Count());
+			ASSERT_EQ (Obj('a', 1),			common1.Last());
+			ASSERT_EQ (Obj('a', 1),			common2.Last());
+			ASSERT_EQ (Obj('a', 5),			remaining1.Last());
+			ASSERT_EQ (Obj('a', 5),			remaining2.Last());
+			ASSERT_EQ (Obj('a', 1),			common1.First());
+			ASSERT_EQ (Obj('a', 1),			common2.First());
+			ASSERT_EQ (Obj('b', 1),			remaining1.First());
+			ASSERT_EQ (Obj('b', 1),			remaining2.First());
+		}
 
 		// T& -> T* sequence -> filter by Set<T*>
 		// (Probably best to stay explicit working with .Addresses())
@@ -156,6 +179,29 @@ namespace EnumerableTests {
 			ASSERT_EQ (&objList.back(),		remaining.Last());
 			ASSERT_EQ (&objList.front(),	common.First());
 			ASSERT_EQ (&objList[1],			remaining.First());
+		}
+		// Same with non-set operands
+		{
+			Obj*			  subsetArr[] = { &objList[2], &objList[0] };
+			std::vector<Obj*> subsetVec   = { &objList[2], &objList[0] };
+
+			auto common1    = Enumerate(objList).Addresses().Intersect(subsetArr);
+			auto common2    = Enumerate(objList).Addresses().Intersect(subsetVec);
+			auto remaining1 = Enumerate(objList).Addresses().Except(subsetArr);
+			auto remaining2 = Enumerate(objList).Addresses().Except(subsetVec);
+
+			ASSERT_EQ (2,					common2.Count());
+			ASSERT_EQ (2,					common1.Count());
+			ASSERT_EQ (objList.size() - 2,	remaining1.Count());
+			ASSERT_EQ (objList.size() - 2,	remaining2.Count());
+			ASSERT_EQ (&objList[2],			common1.Last());
+			ASSERT_EQ (&objList[2],			common2.Last());
+			ASSERT_EQ (&objList.back(),		remaining1.Last());
+			ASSERT_EQ (&objList.back(),		remaining2.Last());
+			ASSERT_EQ (&objList.front(),	common1.First());
+			ASSERT_EQ (&objList.front(),	common2.First());
+			ASSERT_EQ (&objList[1],			remaining1.First());
+			ASSERT_EQ (&objList[1],			remaining2.First());
 		}
 	}
 

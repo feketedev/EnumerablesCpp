@@ -2,6 +2,7 @@
 #include "TestUtils.hpp"
 #include "Enumerables_TypeHelpers.hpp"
 #include <cmath>
+#include <tuple>
 #include <vector>
 #include <memory>
 
@@ -413,6 +414,94 @@ namespace EnumerableTests {
 			static_assert(is_same<int&,			decltype(Revive(nums.front()))>(), "type check");
 			static_assert(is_same<const int&,	decltype(ReviveConst(nums[1]))>(), "type check");
 			static_assert(is_same<int&&,		decltype(PassRevived(nums[2]))>(), "type check");
+		}
+
+
+		// Note that the following tests require proper STL implementation of pair comparison operators,
+		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
+		// (Didn't compile on old MSVC.)
+
+		// RefHolder transparent equality
+		{
+			std::pair<int, char> obj1 { 1, 'a' };		// type with templated op==
+			std::pair<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::pair<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::pair<int, char>> ref1 = obj1;
+
+			ASSERT (ref1 == cpy1);
+			ASSERT (ref1 != obj2);
+			ASSERT (cpy1 == ref1);
+			ASSERT (obj2 != ref1);
+
+			ASSERT (ref1.operator==({ 1, 'a'}));		// edge-case of default type argument
+
+
+			RefHolder<std::pair<int, char>> ref2   = obj2;
+			RefHolder<std::pair<int, char>> refcpy = ref1;
+
+			ASSERT (ref1 != ref2);
+			ASSERT (ref1 == refcpy);
+
+			// holding different, but equatable type
+			std::pair<int&, char&> refPair { obj1.first, obj1.second };
+
+			ASSERT (refPair == obj1);
+			ASSERT (obj1 == refPair);
+
+			RefHolder<std::pair<int&, char&>> refPairRef = refPair;
+
+			ASSERT (refPairRef == refPair);
+			ASSERT (refPairRef == obj1);
+			ASSERT (refPair	== refPairRef);
+			ASSERT (obj1	== refPairRef);
+
+			int*			ptr	   = &obj1.first;
+			RefHolder<int*> ptrRef = ptr;
+
+			ASSERT (ptrRef != nullptr);
+			ASSERT (nullptr != ptrRef);
+		}
+
+
+		// RefHolder transparent compare (for tree-sets)
+		{
+			std::pair<int, char> obj1 { 1, 'a' };		// type with templated op<
+			std::pair<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::pair<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::pair<int, char>> ref1 = obj1;
+
+			ASSERT_EQ (false, obj1 < cpy1);
+			ASSERT_EQ (true,  obj1 < obj2);
+
+			ASSERT_EQ (false, ref1 < cpy1);
+			ASSERT_EQ (false, cpy1 < ref1);
+			ASSERT_EQ (true,  ref1 < obj2);
+			ASSERT_EQ (false, obj2 < ref1);
+
+			ASSERT (ref1.operator<({1, 'b'}));			// edge-case of default type argument
+
+
+			RefHolder<std::pair<int, char>> ref2   = obj2;
+			RefHolder<std::pair<int, char>> refcpy = ref1;
+
+			ASSERT_EQ (true,  ref1 < ref2);
+			ASSERT_EQ (false, ref1 < refcpy);
+
+			// holding different, but comparable type
+			std::pair<int&, char&> refPair { obj1.first, obj1.second };
+
+			ASSERT_EQ (true,  refPair < obj2);
+			ASSERT_EQ (false, refPair < obj1);
+			ASSERT_EQ (false, obj1 < refPair);
+
+			RefHolder<std::pair<int&, char&>> refPairRef = refPair;
+
+			ASSERT_EQ (false, refPairRef < refPair);
+			ASSERT_EQ (true,  refPairRef < obj2);
+			ASSERT_EQ (false, refPair	 < refPairRef);
+			ASSERT_EQ (false, obj2		 < refPairRef);
 		}
 
 
@@ -846,6 +935,37 @@ namespace EnumerableTests {
 		static_assert(is_same<int   Pair::* const,					ConstValueT<decltype(&Pair::first)>>(),	"Err");
 		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
 	
+	}
+
+
+
+	namespace TestHashTypes {				// static test
+
+		// RefHolder with hash-enabled type
+		static_assert (std::is_default_constructible<std::hash<RefHolder<long>>>::value, "Err");
+		static_assert (std::is_copy_constructible<std::hash<RefHolder<long>>>::value,	 "Err");
+		static_assert (std::is_move_constructible<std::hash<RefHolder<long>>>::value,	 "Err");
+		static_assert (std::is_copy_assignable<std::hash<RefHolder<long>>>::value,		 "Err");
+		static_assert (std::is_move_assignable<std::hash<RefHolder<long>>>::value,		 "Err");
+
+		ASSERT_TYPE (size_t, std::hash<RefHolder<long>> {}(declval<RefHolder<long>>()));
+		ASSERT_TYPE (size_t, std::hash<RefHolder<long>> {}(declval<const RefHolder<long>&>()));
+
+		static_assert (noexcept(std::hash<long> {}(5l)) == noexcept(std::hash<RefHolder<long>> {}(declval<RefHolder<long>>())),			"Err");
+		static_assert (noexcept(std::hash<long> {}(5l)) == noexcept(std::hash<RefHolder<long>> {}(declval<const RefHolder<long>&>())),	"Err");
+
+
+		// RefHolder with hash-disabled type  (2015 STL didn't have SFINAE-friendly implementation)
+#if !defined(_MSC_VER) || (_MSC_VER > 1900)
+		using Tup = std::tuple<int, long>;
+
+		static_assert (!std::is_default_constructible<std::hash<RefHolder<Tup>>>::value, "Err");
+		static_assert (!std::is_copy_constructible<std::hash<RefHolder<Tup>>>::value,	 "Err");
+		static_assert (!std::is_move_constructible<std::hash<RefHolder<Tup>>>::value,	 "Err");
+		static_assert (!std::is_copy_assignable<std::hash<RefHolder<Tup>>>::value,		 "Err");
+		static_assert (!std::is_move_assignable<std::hash<RefHolder<Tup>>>::value,		 "Err");
+#endif
+
 	}
 
 

@@ -15,10 +15,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)TestAllocator.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)Tests.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)ArithmeticTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)CustomizedCollectionsTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)ConstructionTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)FeatureTests17.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)FiltrationTests.cpp" />

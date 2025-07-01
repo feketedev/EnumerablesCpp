@@ -125,6 +125,26 @@ namespace Enumerables::Def {
 
 	#pragma endregion
 
+
+
+	#pragma region Collection config helpers
+
+		// List with default (or user-specified) allocator
+		template <class V, class Alloc = None, class = std::enable_if_t<IsNone<Alloc>>, class... Args>
+		ListType<V>   CreateListWithAllocator(const Alloc&, Args&&... args)
+		{ 
+			return ListOperations::Init<V>(std::forward<Args>(args)...); 
+		}
+
+		// List with designated (or user-overridden) allocator
+		template <class V, class Alloc, class = std::enable_if_t<!IsNone<Alloc>>, class... Args>
+		auto		  CreateListWithAllocator(const Alloc& alloc, Args&&... args)
+		{
+			return ListOperations::InitWithAllocator<V, Alloc>(alloc, std::forward<Args>(args)...);
+		}
+
+	#pragma endregion
+
 #pragma endregion
 
 
@@ -171,7 +191,12 @@ namespace Enumerables::Def {
 		IEnumerator<T>*			ptr;
 
 #	if ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE > 0
-		alignas(void*) char		fixBuffer[ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE];
+		// NOTE: alignas requirement is not carried by decltype(buffer)!
+		// void*: minimum for vtable (provided by "ptr" field anyway)
+		static constexpr size_t buffAlign = alignof(void*);
+
+
+		alignas(buffAlign) char	fixBuffer[ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE];
 
 
 		bool IsOnHeap() const
@@ -181,17 +206,24 @@ namespace Enumerables::Def {
 		}
 
 
+		template <class Factory>
+		void* InlineTarget()
+		{
+			using Etor = InvokeResultT<Factory>;
+			void* aligned = AlignFor<Etor>(fixBuffer);
+			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Etor));
+			return aligned;
+		}
+
+
 		template <class Et>
 		static constexpr bool SureFitsInline()
 		{
-			using Buff = decltype(InterfacedEnumerator::fixBuffer);
-
-			static_assert (alignof(Et) % alignof(Buff) == 0, "Alignment not power of 2?");
+			static_assert (alignof(Et) % buffAlign == 0, "Alignment not power of 2?");
 
 			size_t req = alignof(Et);
-			size_t sat = alignof(Buff);
-			size_t slack = (req <= sat) ? 0 : req - sat;
-			return slack + sizeof(Et) <= sizeof(Buff);
+			size_t slack = (req <= buffAlign) ? 0 : req - buffAlign;
+			return slack + sizeof(Et) <= sizeof(fixBuffer);
 		}
 #	else
 		bool					IsOnHeap() const	{ return true; }
@@ -224,7 +256,7 @@ namespace Enumerables::Def {
 		InterfacedEnumerator(NestedFactory&& fact)
 		{
 			if constexpr (SureFitsInline<InvokeResultT<NestedFactory>>())
-				ptr = (new (fixBuffer) TypeHelpers::RvoEmplacer<NestedFactory> { fact })->GetPtr();
+				ptr = (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr();
 			else
 				ptr = new InvokeResultT<NestedFactory> { fact() };
 		}
@@ -284,7 +316,7 @@ namespace Enumerables::Def {
 
 	#pragma region Caching operations Fundamentals
 
-	/// Abstract Enumerator for multi-pass algorithms run deffered on first Fetch.
+	/// Abstract Enumerator for multi-pass algorithms run deferred on first Fetch.
 	/// Results container as a whole can be obtained as an optimization.
 	/// @remarks
 	///		Implementors and ObtainCachedResults calls should use the same alias:
@@ -293,7 +325,7 @@ namespace Enumerables::Def {
 	///		have different RTTI.
 	template <class V, template <class> class Container>
 	class CachingEnumerator : public IEnumerator<V> {
-	protected:
+	public:
 		using TCache = Container<StorableT<V>>;
 
 	private:
@@ -355,8 +387,8 @@ namespace Enumerables::Def {
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
 		template <class V, template <class> class C>
-		static auto GetCache(CachingEnumerator<V, C>&& source)	{ return source.CalcResults(); }
-		static None GetCache(...)								{ return None {}; }
+		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return {}; }
+		static None GetCache(...)																 { return None {}; }
 
 	public:
 		using TCache = decltype(GetCache(declval<Enumerator>()));
@@ -371,10 +403,10 @@ namespace Enumerables::Def {
 	/// Obtain results in the desired container type - by the least copy/conversion possible, expecting a potential CachingEnumerator as Source.
 	/// @param  hint:	for manual hints (e.g. .ToList(n))
 	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
-	template < class ContainerOps, class R, size_t... N,
-			   class Cont = typename ContainerOps::template Container<R, N...>,
+	template < class ContainerOps, class R, size_t... N, class... ContOptions,
+			   class Cont = typename ContainerOps::template Container<R, N..., ContOptions...>,
 			   class Source >
-	Cont ObtainCachedResults(Source& etor, size_t hint)
+	Cont ObtainCachedResults(Source& etor, size_t hint, const ContOptions&... options)
 	{
 		if constexpr (HasConvertibleCache<Source, Cont, R>::asWhole) {
 			// CachingEnumerator:  Direct convert / pass results if possible
@@ -385,7 +417,7 @@ namespace Enumerables::Def {
 			auto cached = etor.CalcResults();
 			size_t size = GetSize(cached);
 
-			Cont res = ContainerOps::template Init<R, N...>(size);
+			Cont res = ContainerOps::template Init<R, N...>(size, options...);
 			for (auto& e : cached)
 				ContainerOps::Add(res, PassRevived(e));		// StorableT!
 
@@ -397,9 +429,8 @@ namespace Enumerables::Def {
 
 			SizeInfo si  = etor.Measure();
 			size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
-
-			Cont res = ContainerOps::template Init<R, N...>(cap);
-			while (etor.FetchNext())
+			Cont res = ContainerOps::template Init<R, N...>(cap, options...);
+		while (etor.FetchNext())
 				ContainerOps::Add(res, etor.Current());
 
 			return res;
@@ -410,15 +441,17 @@ namespace Enumerables::Def {
 #if ENUMERABLES_EMPLOY_DYNAMICCAST
 
 	// NOTE: SmallList<T, N> is not supported currently. Solve if any CachingEnumerator<T, SmallList> will exist.
-	template <class ContainerOps, class R, template <class> class ContTempl = ContainerOps::template Container>
-	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<IfPRValue<R>>& etor, size_t hint)
+	template <class ContainerOps, class R, class... ContOptions,
+			  template <class...> class ContTempl = ContainerOps::template Container,
+			  class T = R>
+	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<T>& etor, size_t hint, const ContOptions&... options)
 	{
-		using ET = CachingEnumerator<R, ContTempl>;
+		using ET = CachingEnumerator<T, ContTempl>;
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)
-			return ObtainCachedResults<ContainerOps, R>(etor.WrappedInterface(), hint);
+			return ObtainCachedResults<ContainerOps, R>(etor.WrappedInterface(), hint, options...);
 		else
-			return ObtainCachedResults<ContainerOps, R>(*caching, hint);
+			return ObtainCachedResults<ContainerOps, R>(*caching, hint, options...);
 	}
 
 #endif
@@ -512,6 +545,9 @@ namespace Enumerables::Def {
 
 	public:
 		using typename IteratorEnumerator::IEnumerator::TElem;
+
+		static_assert (!is_reference<ForcedResult>() || HasConstValue<ForcedResult> || !HasConstValue<PointedT<TBegin>>,
+					   "The explicitly requested reference type loses const qualifier.");
 
 		static_assert (!is_reference<ForcedResult>() || IsRefCompatible<ForcedResult, PointedT<TBegin>>,
 					   "The explicitly requested type is not reference-compatible with elements - could return reference to a temporary.");
@@ -720,16 +756,29 @@ namespace Enumerables::Def {
 	};
 
 
-
+	
 	// for cases when the operand can't be readily captured as a SetType<T>
-	template <class Source, class OpSource>
+	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 
 		using S = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
 
-		Source			source;
-		SetType<S>		operand;
-		const bool		intersect;	// == !subtract
+		Source						source;
+		SetType<S, SetOptions...>	operand;
+		const bool					intersect;	// == !subtract
+
+
+		static SetType<S, SetOptions...>   CreateOperand(OpSource&& etor, const SetOptions&... opts)
+		{
+			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be quite lucky anyway
+			return ObtainCachedResults<SetOperations, S>(etor, 0, opts...);
+		}
+
+		// NOTE: Avoids MSVC 2015 bug: expanding SetOptions... within ctor initializer-block results in C2226.
+		static SetType<S, SetOptions...>   CreateOperandDefaultOpts(OpSource&& etor)
+		{
+			return ObtainCachedResults<SetOperations, S>(etor, 0, SetOptions {}...);
+		}
 
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
@@ -739,7 +788,7 @@ namespace Enumerables::Def {
 		bool	FetchNext()	override
 		{
 			while (source.FetchNext()) {
-				bool inOper = SetOperations::Contains(operand, source.Current());
+				bool inOper = SetOperations::Contains<S>(operand, source.Current());
 				if (inOper == intersect)
 					return true;
 			}
@@ -757,13 +806,19 @@ namespace Enumerables::Def {
 
 
 		template <class SrcFactory, class OpFactory>
+		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, const SetOptions&... opts, bool intersect) :
+			source    { getSource() },
+			intersect { intersect },
+			operand   { CreateOperand(getOpSource(), opts...) }
+		{
+		}
+
+		template <class SrcFactory, class OpFactory, class = typename IfMultipleTypes<OpFactory, SetOptions...>::type>
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
 			source    { getSource() },
-			intersect { intersect }
+			intersect { intersect },
+			operand   { CreateOperandDefaultOpts(getOpSource()) }
 		{
-			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be really extreme anyway
-			auto etor = getOpSource();
-			operand   = ObtainCachedResults<SetOperations, S>(etor, 0);
 		}
 	};
 
@@ -1013,7 +1068,7 @@ namespace Enumerables::Def {
 		//		 but Measure() during enumeration is just a nice to have.
 		SizeInfo  Measure()	const override
 		{
-			return source.Measure().Subtract(!prev.IsInitialized()); 
+			return source.Measure().Subtract(!prev.IsInitialized());
 		}
 
 		template <class Factory>

@@ -16,7 +16,7 @@
 namespace EnumerableTests {
 
 
-	constexpr unsigned MeasurementCount  = 4;
+	constexpr unsigned MeasurementCount  = 6;
 	constexpr size_t   DefaultComplexity = 50000;
 #ifdef _DEBUG
 	constexpr char	   GreetTxt[]    = "Performance [Debug]";
@@ -57,7 +57,7 @@ namespace EnumerableTests {
 		{
 			std::vector<Pair> input;
 			input.reserve(size);
-			for (int i = 0; i < size; i++) {
+			for (size_t i = 0; i < size; i++) {
 				int r = std::rand();
 				input.emplace_back(r - RAND_MAX / 2, 'a' + (char)(r % ('z' - 'a')));
 			}
@@ -73,9 +73,51 @@ namespace EnumerableTests {
 	};
 
 
+	
+	template <bool PosFiltered = false>
+	struct PairMinimumsTestBase : public PairTestBase {
+
+		// ensure multiple minima, in some non-leading location
+		static std::vector<Pair> GenerateInput(size_t size)
+		{
+			std::vector<Pair> input = PairTestBase::GenerateInput(size);
+
+			const size_t trgCount = 2 + size / 7;
+			const int	 minValue = PosFiltered ? 2
+				: std::minmax(input.begin(), input.end(), [](const auto& l, const auto& r) {
+					return l->first < r->first;
+				  }).first->first;
+
+			// 1st is not to contain minValue => exercise .Minimums()
+			size_t slice = size / (trgCount + 1);
+			for (size_t i = 0, j = slice + slice / 2; i < slice && j < size; i++) {
+				if (input[i].first == minValue) {
+					while (j + 1 < size && input[j].first == minValue)
+						j++;
+					input[i].swap(input[j++]);
+				}
+			}
+
+			// make result less trivial
+			for (size_t i = 0; PosFiltered && i < size; i++) {
+				int& n = input[i].first;
+				n += (n == 1) ? 5 : 0;
+			}
+
+			// implant some minimums
+			for (size_t c = 1; c <= trgCount; c++)
+				input[c * slice].first = minValue;
+
+			return input;
+		}
+	};
+
+
+
 
 	struct DirectCopy : public PairTestBase {
 		static constexpr const char Name[] = "Small POD iteration";
+
 
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t /*resHint*/)
 		{
@@ -90,6 +132,7 @@ namespace EnumerableTests {
 			return cpy;
 		}
 
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
 			return Enumerate(in);
@@ -100,6 +143,7 @@ namespace EnumerableTests {
 
 	struct ConversionCopy : public ScalarTestBase<int, double> {
 		static constexpr const char Name[] = "Convert: int -> double";
+
 
 		static std::vector<double> RunClassic(const std::vector<int>& in, size_t /*resHint*/)
 		{
@@ -112,6 +156,7 @@ namespace EnumerableTests {
 			return cpy;
 		}
 
+
 		static auto CreateQuery(const std::vector<int>& in)
 		{
 			return Enumerate(in).As<double>();
@@ -121,7 +166,7 @@ namespace EnumerableTests {
 
 
 	struct CopyFromDict {
-		static constexpr const char Name[] = "Dictionary iter.";
+		static constexpr const char Name[] = "HashMap iteration";
 
 
 		static std::unordered_map<int, char> GenerateInput(size_t size)
@@ -148,6 +193,7 @@ namespace EnumerableTests {
 			return res;
 		}
 
+
 		static auto CreateQuery(const std::unordered_map<int, char>& in)
 		{
 			return Enumerate(in).Select(FUN(kv,  kv.second));
@@ -161,6 +207,7 @@ namespace EnumerableTests {
 	struct Squares : public ScalarTestBase<N> {
 		static const char Name[];
 
+
 		static std::vector<N> RunClassic(const std::vector<N>& in, size_t /*resHint*/ = 0)
 		{
 			std::vector<N> res;
@@ -169,6 +216,7 @@ namespace EnumerableTests {
 				res.push_back(n * n);
 			return res;
 		}
+
 
 		static auto CreateQuery(const std::vector<N>& in)
 		{
@@ -182,7 +230,8 @@ namespace EnumerableTests {
 
 
 	struct SubrangeFiltered : public ScalarTestBase<int> {
-		static constexpr const char Name[] = "Subrange of filtered";
+		static constexpr const char Name[] = "Subrange of filtered int";
+
 
 		static std::vector<int> RunClassic(const std::vector<int>& in, size_t resHint = 0)
 		{
@@ -190,7 +239,7 @@ namespace EnumerableTests {
 			cpy.reserve(resHint);
 
 			const size_t skip = SkipCount(in.size());
-			const size_t take = RangeLen(in.size());
+			const size_t take = TakenLen(in.size());
 
 			unsigned found = 0;
 			for (const int& e : in) {
@@ -207,14 +256,14 @@ namespace EnumerableTests {
 		static auto CreateQuery(const std::vector<int>& in)
 		{
 			const size_t s = SkipCount(in.size());
-			const size_t t = RangeLen(in.size());
+			const size_t t = TakenLen(in.size());
 
 			return Enumerate(in).Where(&IsAccepted).Skip(s).Take(t);
 		}
 
 	private:
-		static size_t SkipCount(size_t inp) { return inp / 5;	}
-		static size_t RangeLen(size_t inp)  { return inp / 6; }
+		static size_t SkipCount(size_t inp)	{ return inp / 5; }
+		static size_t TakenLen(size_t inp)	{ return inp / 6; }
 		static bool IsAccepted(int n)		{ return n % 47 < 21; }
 	};
 
@@ -299,6 +348,7 @@ namespace EnumerableTests {
 	template <class N>
 	struct NeighborDiffs : public ScalarTestBase<N> {
 		static const char Name[];
+
 
 		static std::vector<N> RunClassic(const std::vector<N>& in, size_t /*resHint*/ = 0)
 		{
@@ -421,7 +471,7 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimumsOrdered : public PairTestBase {
+	struct PositiveMinimumsOrdered : public PairMinimumsTestBase<true> {
 		static constexpr const char Name[] = "Pos.Min. a, OrderBy b";
 
 
@@ -466,8 +516,8 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimums : public PairTestBase {
-		static constexpr const char Name[] = "Positive Minimums";
+	struct PositiveMinimums : public PairMinimumsTestBase<true> {
+		static constexpr const char Name[] = "Pos. Minimums by field";
 
 
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t resHint = 0)
@@ -505,8 +555,8 @@ namespace EnumerableTests {
 	};
 
 
-	struct MinSearch : public PairTestBase {
-		static constexpr const char Name[] = "Simple Minimum search";
+	struct MinSearch : public PairMinimumsTestBase<false> {
+		static constexpr const char Name[] = "Minimums by field";
 
 
 		static std::vector<Pair> RunClassic(const std::vector<Pair>& in, size_t resHint = 0)
@@ -532,7 +582,7 @@ namespace EnumerableTests {
 
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
-			return Enumerate<Pair>(in).MinimumsBy(FUN(p, p.first));
+			return Enumerate<Pair>(in).MinimumsBy(&Pair::first);
 		}
 	};
 
@@ -558,9 +608,10 @@ namespace EnumerableTests {
 			return s;
 		}
 
+
 		static auto CreateQuery(const std::vector<Pair>& in)
 		{
-			return Enumerate(in).Select(FUN(p, p.first));
+			return Enumerate(in).Select(&Pair::first);
 		}
 
 		template <class Query>
@@ -629,12 +680,8 @@ namespace EnumerableTests {
 		template <class Query>
 		static double Aggregate(const Query& q)
 		{
-			// .Sum() provides compensated summation, doing manually
-			double s = 0;
-			for (const double& d : q)
-				s += d;
-
-			return s;
+			// .Sum() provides compensated summation!
+			return q.Aggregate(std::plus<>());
 		}
 	};
 
@@ -880,6 +927,11 @@ namespace EnumerableTests {
 		Microseconds	runtime		= Microseconds::zero();
 		size_t			allocations = 0;
 
+		bool HasRun() const
+		{
+			return runtime > Microseconds::zero();
+		}
+
 		void operator += (const PerfResult& part)
 		{
 			runtime		+= part.runtime;
@@ -890,6 +942,7 @@ namespace EnumerableTests {
 
 	struct PerfComparison {
 		std::string		testCase;
+		bool			isValidComparison = true;
 		PerfResult		classic;
 		PerfResult		enumerate;
 		PerfResult		constructAndEnumerate;
@@ -899,6 +952,14 @@ namespace EnumerableTests {
 
 		double	EnumerateOverheadPercent() const	{ return 100.0 * EnumerateOverhead().count() / classic.runtime.count(); }
 		double	TotalOverheadPercent()	   const	{ return 100.0 * TotalOverhead().count() / classic.runtime.count(); }
+
+		PerfComparison& operator +=(const PerfComparison& add)
+		{
+			classic				  += add.classic;
+			enumerate			  += add.enumerate;
+			constructAndEnumerate += add.constructAndEnumerate;
+			return *this;
+		}
 	};
 
 
@@ -1009,7 +1070,8 @@ namespace EnumerableTests {
 			tab.PutCell(execOnlyResult.allocations);
 			tab.PutCell(createExecResult.allocations);
 		}
-		return { caseName, classicResult, execOnlyResult, createExecResult };
+		bool validComparison = !TestCase::Interfaced;
+		return { caseName, validComparison, classicResult, execOnlyResult, createExecResult };
 	}
 
 #pragma endregion
@@ -1023,7 +1085,7 @@ namespace EnumerableTests {
 		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
 				  << " Cycles: " << cyclesTxt << std::endl;
 
-		TableWriter<5> tb { 5, 34, 16, 15, 20 };
+		TableWriter<5> tb { 5, 35, 16, 15, 20 };
 
 		std::cout << std::endl << std::right;
 		tb.PutRow("", "Handwritten", "Enumerable", "    Enumerable   ");
@@ -1054,16 +1116,16 @@ namespace EnumerableTests {
 		results.push_back(RunTestcase<ListingTest<IntSort2>>				(tb, complexity / 10, cycles));
 		results.push_back(RunTestcase<ListingTest<OrderByOtherField>>		(tb, complexity / 10, cycles));
 
-		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, cycles));
-		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, cycles));
+		results.push_back(RunTestcase<ListingTest<MinSearch>>				 (tb, complexity, 2 * cycles));
+		results.push_back(RunTestcase<ListingTest<MinSearch, true>>			 (tb, complexity, 2 * cycles));
 		results.push_back(RunTestcase<ListingTest<PositiveMinimums>>		 (tb, complexity, cycles));   // from refs => needs copy
 		results.push_back(RunTestcase<ListingTest<PositiveMinimums, true>>	 (tb, complexity, cycles));
 		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums>>		 (tb, complexity, cycles));   // from values => optimized
 		results.push_back(RunTestcase<ListingTest<DblPositiveMinimums, true>>(tb, complexity, cycles));
 		results.push_back(RunTestcase<ListingTest<PositiveMinimumsOrdered>>	 (tb, complexity, cycles));
 
-		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, cycles));
-		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, cycles));
+		results.push_back(RunTestcase<AggregationTest<SumField>>	(tb, complexity, 2 * cycles));
+		results.push_back(RunTestcase<AggregationTest<SumInts>>		(tb, complexity, 4 * cycles));
 		results.push_back(RunTestcase<AggregationTest<SumDoubles>>	(tb, complexity, cycles));
 		results.push_back(RunTestcase<AggregationTest<SumDoubles2>>	(tb, complexity, cycles));
 
@@ -1074,7 +1136,7 @@ namespace EnumerableTests {
 	// csv-like output to diff/collect
 	static void							PrintCompact(const std::vector<PerfComparison>& res)
 	{
-		TableWriter<6> tb { 5, 36, 15, 17, 17, 13 };
+		TableWriter<6> tb { 5, 37, 15, 17, 17, 13 };
 
 		std::cout << std::left;
 		tb.PutRow("Testcase", "  Baseline [us]", "  Query ovrhd [%]", "  Total ovrhd [%]", "  Malloc diff");
@@ -1103,9 +1165,8 @@ namespace EnumerableTests {
 			tb.PutCell((double)extraMallocs);
 			std::cout << std::noshowpos;
 
-			sum.classic               += r.classic;
-			sum.enumerate             += r.enumerate;
-			sum.constructAndEnumerate += r.constructAndEnumerate;
+			if (r.isValidComparison)
+				sum += r;
 		}
 		std::cout << std::endl;
 
@@ -1115,11 +1176,11 @@ namespace EnumerableTests {
 		auto extraMallocs = (long long)sum.constructAndEnumerate.allocations
 						  - (long long)sum.classic.allocations;
 
-		tb.PutCell("ALL:");
+		tb.PutCell("ALL comparable:");
 		tb.PutCell(duration_cast<Millis>(sum.classic.runtime),				 " ms");
 		tb.PutCell(duration_cast<Millis>(sum.enumerate.runtime),			 " ms");
 		tb.PutCell(duration_cast<Millis>(sum.constructAndEnumerate.runtime), " ms");
-		std::cout << std::showpos << std::setprecision(0);
+		std::cout << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
 		tb.PutCell((double)extraMallocs);
 
 		std::cout << std::noshowpos << std::fixed << std::setprecision(1);
@@ -1144,11 +1205,11 @@ namespace EnumerableTests {
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ===================================================================================================");
+		Greet("  ====================================================================================================");
 		Greet("  Long sequences summary:");
 		PrintCompact(results1);
 		std::cout << std::endl;
-		Greet("  ---------------------------------------------------------------------------------------------------");
+		Greet("  ----------------------------------------------------------------------------------------------------");
 		Greet("  Short sequences summary:");
 		PrintCompact(results2);
 	}
