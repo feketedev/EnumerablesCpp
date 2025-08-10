@@ -2,47 +2,47 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *										 Enumerables for C++   v2.0.2a										  *
-	 *																											  *
+	 *  									  Enumerables for C++   v2.0.3										  *
+	 *  																										  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
-	 *																											  *
-	 *	Copyright 2024 Norbert Fekete 							   Released under MIT licencse [see LICENSE.txt]  *
+	 *  																										  *
+	 *  Copyright 2024 Norbert Fekete 							   Released under MIT licencse [see LICENSE.txt]  *
 	 *  --------------------------------------------------------------------------------------------------------  *
-	 *																											  *
-	 *									[Outdated but fun nostalgic disclaimer]									  *
-	 *																											  *
+	 *  																										  *
+	 *  								[Outdated but fun nostalgic disclaimer]									  *
+	 *  																										  *
 	 *  Similar concepts are spreading across various languages, including:										  *
 	 *  - .Net LINQ:         https://msdn.microsoft.com/en-us/library/bb308959.aspx								  *
 	 *  - Java Streams:      http://www.oracle.com/technetwork/articles/java/ma14-java-se-8-streams-2177646.html  *
 	 *  - D ranges (Phobos): https://dlang.org/phobos/std_range.html											  *
-	 *																											  *
+	 *  																										  *
 	 *  Noting one interesting implementational difference here:												  *
 	 *  .Net's IEnumerable<T> is a factory that creates IEnumerator<T> objects, while a D range is rather like	  *
 	 *  an iterator-pair, needs to be cloned explicitly in case the iteration is required multiple times.		  *
 	 *  The reason might be easier compiler optimizations, but for now we're going with the factory variant to	  *
 	 *  face less unexpected errors - while on the level of Enumerators, still blend templates with interfaces,	  *
 	 *  similarly to Phobos.																					  *
-	 *																											  *
+	 *  																										  *
 	 *  In case of warning 4503 encountered:																	  *
-	 *		- It's safe to issue a warning(disable : 4503) in your cpp											  *
-	 *		- In headers it can be avoided by breaking the chain of nested templated							  *
-	 *		  Enumerators at some points using their interfaces (see .ToInterfaced()).							  *
-	 *																											  *
+	 *  	- It's safe to issue a warning(disable : 4503) in your cpp											  *
+	 *  	- In headers it can be avoided by breaking the chain of nested templated							  *
+	 *  	  Enumerators at some points using their interfaces (see .ToInterfaced()).							  *
+	 *  																										  *
 	 *  --------------------------------------------------------------------------------------------------------  *
 	 *  This file contains the main interface of Enumerables, consisting of:									  *
-	 * 		- class AutoEnumerable<F>																			  *
-	 * 			The generic template implementation, to be used only with implicit typing (auto).				  *
-	 * 		- typedef for its interfaced subcase: Enumerable<T>													  *
-	 * 			To be used as explicitly, like in C#. Provides type-erasure, applicable for interfaces.			  *
-	 * 		- free creator functions																			  *
-	 * 			To wrap containers or take a range of numbers.													  *
-	 * 		- some famous macros to have FUN.																	  *
-	 * 																											  *
+	 *  	- class AutoEnumerable<F>																			  *
+	 *  		The generic template implementation, to be used only with implicit typing (auto).				  *
+	 *  	- typedef for its interfaced subcase: Enumerable<T>													  *
+	 *  		To be used as explicitly, like in C#. Provides type-erasure, applicable for interfaces.			  *
+	 *  	- free creator functions																			  *
+	 *  		To wrap containers or take a range of numbers.													  *
+	 *  	- some famous macros to have FUN.																	  *
+	 *  																										  *
 	 *  Users should interact only with parts published to the Enumerables namespace by the end of this file,	  *
 	 *  along with helpers defined in Enumerables_InterfaceTypes.hpp.											  *
-	 *																											  *
-	 *	To instantiate the library inlude		Enumerables_Implementation.hpp									  *
+	 *  																										  *
+	 *  To instantiate the library inlude		Enumerables_Implementation.hpp									  *
 	 *  For available cofiguration options see	Enumerables_ConfigDefaults.hpp									  *
 	 *  --------------------------------------------------------------------------------------------------------  */
 
@@ -147,14 +147,14 @@ namespace Def {
 	/// Common Enumerable implementation.
 	/// @remarks
 	///		By default, creates directly nested, templated enumerators.
-	///		Can be upgraded to Enumerable<V> on demand, which cuts the chain of template nesting 
+	///		Can be upgraded to Enumerable<V> on demand, which cuts the chain of template nesting
 	///		by producing interfaced IEnumerator<V>, and provides type-erasure for the factory too.
 	///		Practically immutable, as queries should be repeatable in general.
 	template <class TFactory>
 	class AutoEnumerable {
 		template <class>	friend class AutoEnumerable;
 
-		/// Factory object of Enumerators. Serves as a direct container 
+		/// Factory object of Enumerators. Serves as a direct container
 		/// for any dependencies, including nested (upstream) factories.
 		/// @remarks
 		///		The AutoEnumerable class is merely a builder-style wrapper for this factory-chain.
@@ -241,7 +241,7 @@ namespace Def {
 								&& is_same<TEnumerator, InterfacedEnumerator<TElem>>::value>
 		>
 		AutoEnumerable(Container& c) :
-			AutoEnumerable { [&c]() { 
+			AutoEnumerable { [&c]() {
 				return InterfacedEnumerator<TElem> { [&c]() { return CreateEnumeratorFor<TElem>(c); } };
 			}, true }
 		{
@@ -998,10 +998,10 @@ namespace Def {
 		///								!This conversion is debatable!
 		///		Mimicks standard compiler behaviour for const refs, however, we need to "Materialize"
 		///		the sequence here, to extend the lifetime of every element (causing heap allocation).
-		/// 
+		///
 		///		Morover, it is rather unexpected that the referred elements won't survive the Enumerable.
-		/// 
-		///		This makes Enumerable<const V&> parameters kind of universal, but 
+		///
+		///		This makes Enumerable<const V&> parameters kind of universal, but
 		///		for small types Enumerable<V> should be preferred on consumer side.
 		template <
 			class V = TElem,
@@ -1284,7 +1284,7 @@ namespace Def {
 	/// Taking a created pair of iterators.
 	/// @remarks
 	///		Not preferred for containers, since
-	///		 * increases capture size 
+	///		 * increases capture size
 	///		   (~ the chances of malloc by std::function if converted to interfaced Enumerable<T>)
 	///		 * iterators can invalidate on a simple Push/Add/Delete...
 	///		 * a container itself is an iterator-factory
@@ -1310,14 +1310,14 @@ namespace Def {
 	{
 		static_assert (!is_reference<R>::value, "Enumerables internal error.");
 
-		return Enumerate<R>(CreateListWithAllocator<I, A>(alloc, init));
+		return Enumerate<R>(BracedInitWithOptionalAlloc(init, alloc));
 	}
 
 	template <class R, class A, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
 	auto InitEnumerable(std::initializer_list<V*>&& init, const A& alloc)
 	{
 		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
-		return Enumerate<RB*>(CreateListWithAllocator<V*, A>(alloc, init)).Dereference();
+		return Enumerate<RB*>(BracedInitWithOptionalAlloc(init, alloc)).Dereference();
 	}
 
 
@@ -1425,7 +1425,7 @@ namespace Def {
 
 
 	// NOTE: Inline braced-init-list syntax can be handy to append/prepend some fixed elements - but requires explicit overloads.
-	//		 Those are kindly provided for up to 3(+) parameters. Otherwise Concat(Enumerate({...}), ...), or named (and moved) 
+	//		 Those are kindly provided for up to 3(+) parameters. Otherwise Concat(Enumerate({...}), ...), or named (and moved)
 	//		 "auto" variables can be used. (Unfortunately parameter packs can only be deduced at the end of parameter list.)
 
 	template <class TForced = void, class... Containers>

@@ -372,12 +372,14 @@ namespace EnumerableTests {
 		AllocationCounter heapAllocs;
 
 		std::aligned_storage_t<sizeof(int*), alignof(int*)>  buffer[12];
-		TestAllocator<int*, 3> fixedAlloc { buffer };
-
+		TestAllocator<int*, 3>	fixedPtrAlloc  { buffer };
+		TestAllocator<int, 3>	fixedIntAlloc  { fixedPtrAlloc };
+		TestAllocator<Base*, 3>	fixedBaseAlloc { fixedPtrAlloc };
+		
 		{
 			Enumerable<int> ints = Empty<int>();
 			{
-				auto localInts = Enumerate({ 1, 2, 3, 4 }, fixedAlloc);
+				auto localInts = Enumerate({ 1, 2, 3, 4 }, fixedIntAlloc);
 				ints = localInts;
 				ASSERT_ELEM_TYPE (int, localInts);
 			}
@@ -385,9 +387,9 @@ namespace EnumerableTests {
 			ASSERT_EQ (1, ints.First());
 			ASSERT_EQ (4, ints.Last());
 
-			// Forced type disambiguites the initializer
+			// Forced type disambiguates the initializer
 			{
-				ints = Enumerate<int>({ 1, 2u, 3, '4' }, fixedAlloc);
+				ints = Enumerate<int>({ 1, 2u, 3, '4' }, fixedIntAlloc);
 			}
 			ASSERT_EQ (4,	ints.Count());
 			ASSERT_EQ (1,	ints.First());
@@ -399,7 +401,7 @@ namespace EnumerableTests {
 		{
 			// "Capture-syntax" is supported to enumerate references of objects
 			// - currently only for inline (rvalue) initializers!
-			auto ints2 = Enumerate({ &c, &b, &a }, fixedAlloc);
+			auto ints2 = Enumerate({ &c, &b, &a }, fixedPtrAlloc);
 			ASSERT_ELEM_TYPE (int&, ints2);
 			ASSERT_EQ		 (3, ints2.Count());
 			ASSERT_EQ		 (7, ints2.First());
@@ -410,21 +412,21 @@ namespace EnumerableTests {
 
 		{
 			// with explicit type
-			auto ints3 = Enumerate<int&>({ &c, &b, &a }, fixedAlloc);
-			auto ints4 = Enumerate<const int&>({ &c, &b, &a }, fixedAlloc);
+			auto ints3 = Enumerate<int&>({ &c, &b, &a }, fixedPtrAlloc);
+			auto ints4 = Enumerate<const int&>({ &c, &b, &a }, fixedPtrAlloc);
 			ASSERT_ELEM_TYPE (int&, ints3);
 			ASSERT_ELEM_TYPE (const int&, ints4);
 			ints3.First() = 1;
 			ASSERT_EQ (1, ints4.First());
 
-			// auto bad1 = Enumerate<int&>({ 1, 2, 3, 4 }, fixedAlloc);		// CTE
-			// auto bad2 = Enumerate<int>({ &c, &b, &a }, fixedAlloc);		// CTE
+			// auto bad1 = Enumerate<int&>({ 1, 2, 3, 4 }, fixedIntAlloc);	// CTE
+			// auto bad2 = Enumerate<int>({ &c, &b, &a }, fixedPtrAlloc);	// CTE
 		}
 		heapAllocs.AssertFreshCount(0);
 
 		{
 			// explicit type can override "capture-syntax" to keep simple pointers :)
-			auto ptrs = Enumerate<int*>({ &c, &b, &a }, fixedAlloc);
+			auto ptrs = Enumerate<int*>({ &c, &b, &a }, fixedPtrAlloc);
 			ASSERT_ELEM_TYPE (int*, ptrs);
 			ASSERT_EQ (&a, ptrs.Last());
 
@@ -433,7 +435,7 @@ namespace EnumerableTests {
 			DerivedA	derA { 20, 5.5 };
 			DerivedB	derB { 33, 'e' };
 
-			auto mixedList = Enumerate<Base&>({ &base, &derA, &derB }, fixedAlloc);
+			auto mixedList = Enumerate<Base&>({ &base, &derA, &derB }, fixedBaseAlloc);
 			ASSERT_ELEM_TYPE (Base&, mixedList);
 			ASSERT_EQ		 (3, mixedList.Count());
 			ASSERT_EQ		 (&base, &mixedList.First());
@@ -766,7 +768,7 @@ namespace EnumerableTests {
 
 	void TestConstruction()
 	{
-		Greet("Source constructions");
+		Greet("Construction");
 
 		SeededConstruction();
 		CollectionBasics();

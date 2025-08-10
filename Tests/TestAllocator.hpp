@@ -1,4 +1,5 @@
 #include "TestUtils.hpp"
+#include <algorithm>
 #include <memory>
 
 

@@ -283,11 +283,16 @@ namespace EnumerableTests {
 
 				NO_MORE_HEAP;
 
-				std::aligned_storage_t<sizeof(Person), alignof(Person)>  buffer[30];
-				TestAllocator<Person, 10> fixedAlloc { buffer };
+				std::aligned_storage_t<sizeof(Person*), alignof(Person*)>  buffer[80];
+				TestAllocator<const Person*, 10> fixedAlloc { buffer };
 
 				auto diff2 = Enumerate(groupA).Except(groupB, hashLambda, std::equal_to<>{}, fixedAlloc);
 				auto isec2 = Enumerate(groupA).Intersect(groupB, hashLambda, std::equal_to<>{}, fixedAlloc);
+
+				// Algorithms over T& Enumerations store an internal wrapper RefHolder, thus rebind the allocator accordingly.
+				// The forced convention is to pass an allocator for T* instead.
+				ASSERT_ELEM_TYPE (const Person&, diff2);
+				ASSERT_ELEM_TYPE (const Person&, isec2);
 
 				ASSERT (AreEqual(expectDiff, diff2.Addresses()));
 				ASSERT (AreEqual(expectIsec, isec2.Addresses()));
@@ -445,7 +450,7 @@ namespace EnumerableTests {
 		{
 			NO_MORE_HEAP;
 
-			using KVPair = std::pair<unsigned, Person>;
+			using KVPair = std::pair<const unsigned, Person>;
 
 			std::aligned_storage_t<sizeof(KVPair), alignof(KVPair)>  buffer[30];
 			TestAllocator<KVPair, 10> fixedAlloc { buffer };

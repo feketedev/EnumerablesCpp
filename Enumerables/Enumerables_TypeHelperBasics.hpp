@@ -23,6 +23,7 @@ namespace TypeHelpers {
 	using std::conditional_t;
 	using std::remove_pointer_t;
 	using std::remove_reference_t;
+	using std::void_t;
 	using std::is_abstract;
 	using std::is_assignable;
 	using std::is_const;
@@ -94,11 +95,27 @@ namespace TypeHelpers {
 
 	/// For optionally specified 1st type arguments: any non-void type overrides Default.
 	template <class Override, class Default>
-	using OverrideT = conditional_t<is_void<Override>::value || IsNone<Override>, Default, Override>;
+	using OverrideT = conditional_t<is_void<Override>::value || is_same<Override, None>::value, Default, Override>;
+
+	// NOTE: utilizing IsNone here -----------------------------^
+	//		 causes old MSVC to complain about (C2970) internal linkage
+	//		 vs non-type argument when invoked under OverrideOp::Apply!
+	
+	template <class Override>
+	struct OverrideOp {
+		template <class Default>
+		using Apply = OverrideT<Override, Default>;
+	};
+
 
 	/// Intentionally prevent implicit deduction of a function argument.
 	template <class T>
 	using NoDeduce = OverrideT<T, void>;
+
+
+	/// Make T a dependent-type on some arbitrary template parameter to enable SFINAE.
+	template <class FakeDep, class T>
+	using AsDependentT = conditional_t<is_void<FakeDep>::value, T, T>;
 
 
 	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.
@@ -252,8 +269,8 @@ namespace TypeHelpers {
 		using Type = void;
 	};
 	template <class T, class U>
-	struct CommonOrVoid<T, U, std::void_t< decltype(false ? declval<T>() : declval<U>()),		// hardened SFINAE for old STL (VS2015)
-										   std::common_type_t<T, U>						  >> {
+	struct CommonOrVoid<T, U, void_t< decltype(false ? declval<T>() : declval<U>()),	// hardened SFINAE for old STL (VS2015)
+									  std::common_type_t<T, U>						>> {
 		using Type = std::common_type_t<T, U>;
 	};
 
@@ -286,6 +303,104 @@ namespace TypeHelpers {
 		size_t offs = miss ? alignof(T) - miss : 0u;
 		return static_cast<char*>(trg) + offs;
 	}
+
+
+
+	// ===== Container Binding helpers ================================================================================
+
+	template <size_t... Values>
+	struct SizeList {
+		static constexpr size_t dim = sizeof...(Values);
+	};
+
+
+	template <class...>
+	struct TypeList {
+		static constexpr size_t size = 0;
+	};
+	template <class U>
+	struct TypeList<U> {
+		using first = U;
+		using last  = U;
+		static constexpr size_t size = 1;
+	};
+	template <class H, class S, class... Tail>
+	struct TypeList<H, S, Tail...> {
+		using first = H;
+		using last  = typename TypeList<S, Tail...>::last;
+		static constexpr size_t size = 2 + sizeof...(Tail);
+	};
+
+
+	template <class NewHead, class Tail>
+	struct PrependType;
+	template <class H, class... Ts>
+	struct PrependType<H, TypeList<Ts...>> {
+		using typeList = TypeList<H, Ts...>;
+	};
+
+
+	template <class List, template <class> class Mapper>
+	struct MapTypeList;
+	template <template <class> class Mapper>
+	struct MapTypeList<TypeList<>, Mapper> {
+		using typeList = TypeList<>;
+	};
+	template <class H, class... Ts, template <class> class Mapping>
+	struct MapTypeList<TypeList<H, Ts...>, Mapping> {
+		using Tail     = typename MapTypeList<TypeList<Ts...>, Mapping>::typeList;
+		using typeList = typename PrependType<Mapping<H>, Tail>::typeList;
+	};
+	
+
+	/// Implementation of BindChangingNthT / ChangedNthArgT.
+	template <template <class...> class Trg, template <class> class Change, unsigned n, class ProcessedList, class... OrigArgs>
+	struct BindChangingNthArg;
+
+	// index reached -> change here! [Next is required to exist.]
+	template <template <class...> class Trg, template <class> class Change, class... Intact, class Next, class... Left>
+	struct BindChangingNthArg<Trg, Change, 0, TypeList<Intact...>, Next, Left...> {
+		using type = Trg<Intact..., Change<Next>, Left...>;
+	};
+	// end reached -> overindexed, finish silently
+	template <template <class...> class Trg, template <class> class Change, unsigned n, class... Intact>
+	struct BindChangingNthArg<Trg, Change, n, TypeList<Intact...>> {
+		using type = Trg<Intact...>;
+	};
+	// process next
+	template <template <class...> class Trg, template <class> class Change, unsigned n, class... Intact, class Next, class... Left>
+	struct BindChangingNthArg<Trg, Change, n, TypeList<Intact...>, Next, Left...> {
+		using type = typename BindChangingNthArg<Trg, Change, n - 1, TypeList<Intact..., Next>, Left...>::type;
+	};
+
+	/// Bind Trg<Args...> but with the modification of a given type argument as Arg -> Change<Arg>.
+	/// [Overindexing tolerated.]
+	template <template <class...> class Trg, template <class> class Change, unsigned n, class... Args>
+	using BindChangingNthT = typename BindChangingNthArg<Trg, Change, n, TypeList<>, Args...>::type;
+
+
+	/// Helper for ChangedNthArgT.
+	template <class Bound, unsigned n, template <class> class Change>
+	struct ChangeNthArg {
+		static_assert (n != n, "Unable to match the templated type. Have you given a bound template class as first argument?");
+	};
+	template <template <class...> class T, class... Originals, unsigned n, template <class> class Change>
+	struct ChangeNthArg<T<Originals...>, n, Change> {
+		static_assert (sizeof...(Originals) > n, "Index to change is larger than the last available parameter's!");
+
+		using type = BindChangingNthT<T, Change, n, Originals...>;
+	};
+
+	/// Rebind the given template type T<class...> with the modification of a single type argument,
+	/// i.e. Arg -> Change<Arg>.		[Overindexing disallowed; Non-type args unsupported.]
+	template <class Bound, unsigned n, template <class> class Change>
+	using ChangedNthArgT = typename ChangeNthArg<Bound, n, Change>::type;
+
+	/// Rebind the given template type T<class...> replacing a single type argument with Override,
+	/// provided it's not None or void.	[Overindexing disallowed; Non-type args unsupported.]
+	template <class Bound, unsigned n, class Override = None>
+	using OverriddenNthArgT = ChangedNthArgT<Bound, n, OverrideOp<Override>::template Apply>;
+
 
 
 
