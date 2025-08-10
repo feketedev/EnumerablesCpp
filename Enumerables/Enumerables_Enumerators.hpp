@@ -327,11 +327,11 @@ namespace Def {
 			TEnumerator enumerator;
 		};
 		const bool isEmptyMock;
-		bool	   hasNext;
+		bool	   hasCurrent;
 
 	public:
 		decltype(auto)	operator  *()	{ return enumerator.Current(); }
-		void			operator ++()	{ hasNext = enumerator.FetchNext(); }
+		void			operator ++()	{ hasCurrent = enumerator.FetchNext(); }
 
 		/// Hack, as value of 'end' is don't care.
 		/// Assuming end != beg won't get called (in line with the standard), end() returns a Null-Object.
@@ -339,12 +339,12 @@ namespace Def {
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (end.isEmptyMock, "EnumeratorAdapter is Intended for range-based for only!");
 			(void)end;
-			return hasNext;
+			return hasCurrent;
 		}
 
 		/// Represent an empty enumeration for end().
 		///	Unfortunately a separate type cannot be used until C++17.
-		EnumeratorAdapter() : isEmptyMock { true }, hasNext { false }
+		EnumeratorAdapter() : isEmptyMock { true }, hasCurrent { false }
 		{
 		}
 
@@ -352,14 +352,14 @@ namespace Def {
 		EnumeratorAdapter(const Fact& factory) : enumerator { factory() }, isEmptyMock { false }
 		{
 			// fresh enumerators point ahead the first element
-			hasNext = enumerator.FetchNext();
+			hasCurrent = enumerator.FetchNext();
 		}
 
 		// This type should only exist temporarily in for ( : ).
 		// Not even a move should be called, but its implementation is mandatory until c++17.
 		EnumeratorAdapter(const EnumeratorAdapter&) = delete;
 
-		EnumeratorAdapter(EnumeratorAdapter&& src) : isEmptyMock { src.isEmptyMock }, hasNext { src.hasNext }
+		EnumeratorAdapter(EnumeratorAdapter&& src) : isEmptyMock { src.isEmptyMock }, hasCurrent { src.hasCurrent }
 		{
 			if (!isEmptyMock)
 				new (&enumerator) TEnumerator { std::move(src.enumerator) };
@@ -465,7 +465,7 @@ namespace Def {
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
 		template <class V, class C>
-		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return {}; }
+		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return source.CalcResults(); }
 		static None GetCache(...)																 { return None {}; }
 
 	public:
@@ -479,8 +479,8 @@ namespace Def {
 
 
 	/// Obtain results in the desired container type - by the least copy/conversion possible, expecting a potential CachingEnumerator as Source.
-	/// @param  hint:	for manual hints (e.g. .ToList(n))
-	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
+	/// @param  hint:			for manual hints (e.g. .ToList(n))
+	/// @tparam ReqContainer:	bound container type to create or obtain
 	template <class ContainerOps, class R, class ReqContainer, class... ContArgs, class Source>
 	enable_if_t<HasConvertibleCache<Source, ReqContainer, R>::asWhole,
 			    ReqContainer>
@@ -524,7 +524,9 @@ namespace Def {
 	}
 
 
-	// wrapper for legacy calling format: more concise, less flexible
+	/// Wrapper overload for legacy calling format: more concise, less flexible.
+	/// @tparam R:		expected cached TElem
+	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
 	template < class ContainerOps, class R, size_t... N, class... ContOptions,
 		class Cont = typename ContainerOps::template Container<StorableT<R>, N..., ContOptions...>,
 		class Source >
@@ -615,10 +617,6 @@ namespace Def {
 
 		bool	FetchNext()	override
 		{
-			// CONSIDER 17: are non-movable types useful? Would require 2 alternating accumulators to do RVO.
-			//				e.g. curr2.AcceptRvo([this]() -> decltype(auto) { return step(*curr); });
-			//				Check also: ScannerBase
-
 			if (firstFetched)
 				curr = step(*curr);
 			else

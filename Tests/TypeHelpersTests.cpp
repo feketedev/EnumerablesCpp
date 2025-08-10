@@ -949,9 +949,9 @@ namespace EnumerableTests {
 		static_assert (is_same< int	(*)(char),	DeepConstT<int (*)(char)> >(),	"Err");
 
 		// member-pointers should pass intact
-		static_assert (is_same< char	std::pair<int, char>::*,		DeepConstT<decltype(&std::pair<int, char>::second)> >(), "Err");
-		static_assert (is_same< size_t	(std::vector<int>::*) () const,	DeepConstT<decltype(&std::vector<int>::size)>		>(), "Err");
-		static_assert (is_same< void	(std::vector<int>::*) (),		DeepConstT<decltype(&std::vector<int>::clear)>		>(), "Err");
+		static_assert (is_same< char	std::pair<int, char>::*,					DeepConstT<decltype(&std::pair<int, char>::second)> >(), "Err");
+		static_assert (is_same< size_t	(std::vector<int>::*) () const noexcept,	DeepConstT<decltype(&std::vector<int>::size)>		>(), "Err");
+		static_assert (is_same< void	(std::vector<int>::*) ()	   noexcept,	DeepConstT<decltype(&std::vector<int>::clear)>		>(), "Err");
 	}
 
 
@@ -1021,8 +1021,8 @@ namespace EnumerableTests {
 		//					But don't qualify the function itself!
 		using Pair = std::pair<int, char>;
 
-		static_assert(is_same<int   Pair::* const,			ConstValueT<decltype(&Pair::first)>>(),	"Err");
-		static_assert(is_same<void (Pair::* const)(Pair&),	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
+		static_assert(is_same<int   Pair::* const,					ConstValueT<decltype(&Pair::first)>>(),	"Err");
+		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
 	
 	}
 
