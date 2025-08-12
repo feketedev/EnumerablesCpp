@@ -231,7 +231,7 @@ namespace Def {
 	{
 		// Only List-Cachings exist so far -- see ObtainCachedResults notes
 		using AimedCache = ListOperations::Container<StorableT<T>>;
-		using ET		 = CachingEnumerator<T, AimedCache>;
+		using ET		 = CachingEnumerator<AimedCache>;
 
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)

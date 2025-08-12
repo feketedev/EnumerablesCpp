@@ -418,6 +418,41 @@ namespace EnumerableTests {
 		}
 
 
+		// Reverse StorableT type-transformation (static)
+		{
+			// identities - & stripped
+			static_assert(is_same<int,					RestorableT<int>>(),					"type check");
+			static_assert(is_same<int,					RestorableT<int&>>(),					"type check");
+			static_assert(is_same<const int,			RestorableT<const int>>(),				"type check");
+			static_assert(is_same<const int,			RestorableT<const int&>>(),				"type check");
+			static_assert(is_same<const volatile int,	RestorableT<const volatile int>>(),		"type check");
+			static_assert(is_same<const volatile int,	RestorableT<const volatile int&>>(),	"type check");
+
+			static_assert(is_same<int [],				RestorableT<int []>>(),					"type check");
+			static_assert(is_same<int [4],				RestorableT<int (&)[4]>>(),				"type check");
+			static_assert(is_same<int (*)(),			RestorableT<int (*)()>>(),				"type check");
+			static_assert(is_same<int (*)(),			RestorableT<int (*&)()>>(),				"type check");
+			static_assert(is_same<int (* const)(),		RestorableT<int (* const)()>>(),		"type check");
+			static_assert(is_same<int (* const)(),		RestorableT<int (* const &)()>>(),		"type check");
+
+
+			// Restore & - volatile RefHolder is unexpected
+			static_assert(is_same<int&,				RestorableT<RefHolder<int>>>(),				"type check");
+			static_assert(is_same<int&,				RestorableT<RefHolder<int>&>>(),			"type check");
+			static_assert(is_same<const int&,		RestorableT<RefHolder<const int>>>(),		"type check");
+			static_assert(is_same<const int&,		RestorableT<RefHolder<const int>&>>(),		"type check");
+			static_assert(is_same<volatile int&,	RestorableT<RefHolder<volatile int>>>(),	"type check");
+			static_assert(is_same<volatile int&,	RestorableT<RefHolder<volatile int>&>>(),	"type check");
+
+			static_assert(is_same<int&,				RestorableT<const RefHolder<int>>>(),			"type check");
+			static_assert(is_same<int&,				RestorableT<const RefHolder<int>&>>(),			"type check");
+			static_assert(is_same<const int&,		RestorableT<const RefHolder<const int>>>(),		"type check");
+			static_assert(is_same<const int&,		RestorableT<const RefHolder<const int>&>>(),	"type check");
+			static_assert(is_same<volatile int&,	RestorableT<const RefHolder<volatile int>>>(),	"type check");
+			static_assert(is_same<volatile int&,	RestorableT<const RefHolder<volatile int>&>>(),	"type check");
+		}
+
+
 		// In old MS STL, pair has no comparison operators for compatible (different) types,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
 		//
