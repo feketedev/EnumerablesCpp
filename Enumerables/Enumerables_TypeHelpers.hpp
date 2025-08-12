@@ -960,6 +960,134 @@ namespace Enumerables::TypeHelpers {
 #pragma endregion
 
 
+
+	
+#pragma region Collection Parametrization
+
+	/// Detect a custom AllocatedValueT for a given parametrization if defined in a container-binding.
+	template <class Binding, class ComponentList, class SizeList, class Enabler = void, class... Opts>
+	struct CustomAllocatedValue {
+		static_assert (sizeof...(Opts) != sizeof...(Opts), "Failed to match arguments. Make sure to"
+					   " use TypeList<...> and SizeList<...> for Component-/SizeList respectively! ");
+	};
+	template <class Binding, class... Components, size_t... Sizes, class... Opts>
+	struct CustomAllocatedValue<Binding, TypeList<Components...>, SizeList<Sizes...>,
+								void_t<typename Binding::template AllocatedValueT<Components..., Sizes..., Opts...>>,
+								Opts...																				> {
+		using type = typename Binding::template AllocatedValueT<Components..., Sizes..., Opts...>;
+	};
+	template <class Binding, class... Components, size_t... Sizes, class En, class... Opts>
+	struct CustomAllocatedValue<Binding, TypeList<Components...>, SizeList<Sizes...>, En, Opts...> {
+		using type = void;
+	};
+
+	/// Custom value-type for allocators as defined by Binding for a given parametrization of its Container type,
+	/// or void if plain element type should be used.
+	template <class Binding, class ComponentList, class SizeList, class... Options>
+	using CustomAllocatedT = typename CustomAllocatedValue<Binding, ComponentList, SizeList, void, Options...>::type;
+	
+	/// Required value-type for allocators for a given parametrization of Binding::Container.
+	/// [Defaults to last component (e.g. V of Dictionary<K, V>) if not customized in Binding.]
+	template <class Binding, class ComponentList, class SizeList, class... OptionArgs>
+	using RequiredAllocatedT = OverrideT<CustomAllocatedT<Binding, ComponentList, SizeList, OptionArgs...>,
+										 typename ComponentList::last									  >;
+
+
+
+	template <class T>
+	struct RefholderToPtr				{ using type = T;  };
+	template <class V>
+	struct RefholderToPtr<RefHolder<V>>	{ using type = V*; };
+
+	template <class T>
+	using RefholderToPtrT = typename RefholderToPtr<T>::type;
+
+
+	/// Opaque V* -> RefHolder<V> correction for user convenience + to hide internal wrapper.
+	template <class Alloc, class Binding, class ComponentList, class SizeList, class... OptArgs>
+	struct RebindForRefholder
+	{
+		using ReqValue	= RequiredAllocatedT<Binding, ComponentList, SizeList, OptArgs...>;
+		using type		= typename std::allocator_traits<Alloc>::template rebind_alloc<ReqValue>;
+		
+		// check to enforce V* convention (arbitrary but reasonable)
+		using OpaqueComps = typename MapTypeList<ComponentList, RefholderToPtrT>::typeList;
+		using OpaqueValue = RequiredAllocatedT<Binding, OpaqueComps, SizeList, OptArgs...>;
+
+		static_assert (is_same<typename Alloc::value_type, OpaqueValue>(),
+					   "Unexpected Allocator value_type. For [const] T& elems use [const] T* as a convention."
+					   " Will rebind it to an internal wrapper of same size. "
+					   "Some algorithms use decayed T in case of scalars, if don't need to retain identity.");
+	};
+
+
+	/// Rebind the allocator correctly for usage with a given container parametrization.
+	/// @tparam ComponentList:	Value-components/payload of the container (e.g. <K,V> for a Dictionary)
+	/// @tparam SizeList:		Optional size_t argument(s) for inline storage (e.g. SmallList<V, 5>)
+	/// @tparam Options...:		Further type arguments (e.g. hasher, comparer)
+	template <class Alloc, class ContainerBinding, class ComponentList, class SizeList, class... Options>
+	using AdjustedAllocatorT = typename RebindForRefholder<Alloc, ContainerBinding, ComponentList, SizeList, Options...>::type;
+
+
+
+	template <class Binding, class ComponentList, class SizeList, class OptionList>
+	struct BindContainer {
+		static_assert (!is_void<void_t<SizeList>>(), "Failed to match arguments. "
+					   "Make sure to use TypeList<...> as Component-/OptionList, and "
+					   "SizeList<...> as SizeList!");
+	};
+	template <class Binding, class... Components, size_t... Sizes, class... Options>
+	struct BindContainer<Binding, TypeList<Components...>, SizeList<Sizes...>, TypeList<Options...>> {
+		using type = typename Binding::template Container<Components..., Sizes..., Options...>;
+	};
+
+	template <class Binding, class ComponentList, class SizeList, class OptionList>
+	using BindContainerT = typename BindContainer<Binding, ComponentList, SizeList, OptionList>::type;
+
+
+
+	/// Correct the parametrization of a container, particularly the allocator.
+	/// @tparam CheckUserAlloc: Options contain a custom allocator AND adjusting it is allowed.
+	template <class Binding, bool CheckUserAlloc, class ComponentList, class SizeList, class... Options>
+	struct AdjustContainerOptions {
+		static_assert (CheckUserAlloc != CheckUserAlloc, "Failed to match arguments. Make sure to "
+					   "use TypeList<...> and SizeList<...> for Component-/SizeList respectively! ");
+	};
+	// no modification shortcut
+	template <class Binding, class... Components, size_t... Sizes, class... Options>
+	struct AdjustContainerOptions<Binding, false, TypeList<Components...>, SizeList<Sizes...>, Options...>  {
+		using type = typename Binding::template Container<Components..., Sizes..., Options...>;
+	};
+	// adjustment (rebind allocator) might be needed
+	template <class Binding, class ComponentList, class SizeList, class... Options>
+	struct AdjustContainerOptions<Binding, true, ComponentList, SizeList, Options...> {
+		template <class A>
+		using ToAdjusted = AdjustedAllocatorT<A, Binding, ComponentList, SizeList, Options...>;
+		using OptList	 = BindChangingNthT<TypeList, ToAdjusted, Binding::AllocatorOptionIdx, Options...>;
+		using type		 = BindContainerT<Binding, ComponentList, SizeList, OptList>;
+	};
+
+
+	// If present, rebind the user-given allocator correctly (e.g. for RefHolder items).
+	/// @tparam ComponentList:	Value components/payload of the container (e.g. <K,V> for a Dictionary)
+	/// @tparam SizeList:		Optional size_t argument(s) for inline storage (e.g. SmallList<V, 5>)
+	/// @tparam Options...:		further type arguments (e.g. hasher, Allocator)
+	template <class Binding, class ComponentList, class SizeList, class... Options>
+	using AdjustedComplexContainerT = typename AdjustContainerOptions<Binding,
+																	 (Binding::AllocatorOptionIdx < sizeof...(Options)),
+																	  ComponentList,
+																	  SizeList,
+																	  Options...>::type;
+	
+	/// If present, rebind the user-given allocator correctly (e.g. for RefHolder items).
+	/// @tparam Elem:		value type stored in container
+	/// @tparam Options:	further type arguments (e.g. hasher, Allocator)
+	template <class Binding, class Elem, class... Options>
+	using AdjustedContainerT = AdjustedComplexContainerT<Binding, TypeList<Elem>, SizeList<>, Options...>;
+
+	#pragma endregion
+
+
 }		// namespace Enumerables::TypeHelpers
 
 #endif	// ENUMERABLES_TYPEHELPERS_HPP

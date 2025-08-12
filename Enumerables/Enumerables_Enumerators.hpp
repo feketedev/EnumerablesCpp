@@ -129,19 +129,21 @@ namespace Enumerables::Def {
 
 	#pragma region Collection config helpers
 
-		// List with default (or user-specified) allocator
-		template <class V, class Alloc = None, class = std::enable_if_t<IsNone<Alloc>>, class... Args>
-		ListType<V>   CreateListWithAllocator(const Alloc&, Args&&... args)
-		{ 
-			return ListOperations::Init<V>(std::forward<Args>(args)...); 
-		}
+	template <class V, class... Args>
+	using AdjustedSet = AdjustedContainerT<SetOperations, V, Args...>;
 
-		// List with designated (or user-overridden) allocator
-		template <class V, class Alloc, class = std::enable_if_t<!IsNone<Alloc>>, class... Args>
-		auto		  CreateListWithAllocator(const Alloc& alloc, Args&&... args)
-		{
-			return ListOperations::InitWithAllocator<V, Alloc>(alloc, std::forward<Args>(args)...);
-		}
+	template <class V, class... Args>
+	using AdjustedList = AdjustedContainerT<ListOperations, V, Args...>;
+
+
+	template <class V, class Alloc = None>
+	auto BracedInitWithOptionalAlloc(std::initializer_list<V> init, const Alloc& alloc = {})
+	{
+		if constexpr (IsNone<Alloc>)
+			return BracedInitOperations::Init(init);
+		else
+			return BracedInitOperations::Init(init, alloc);
+	}
 
 	#pragma endregion
 
@@ -320,19 +322,20 @@ namespace Enumerables::Def {
 	/// Results container as a whole can be obtained as an optimization.
 	/// @remarks
 	///		Implementors and ObtainCachedResults calls should use the same alias:
-	///		- CachingEnumerator<T, ListType> vs
-	///		  CachingEnumerator<T, ListOperations::Container>
+	///		- CachingEnumerator<T, ListType<T>> vs
+	///		  CachingEnumerator<T, ListOperations::Container<T>>
 	///		have different RTTI.
-	template <class V, template <class> class Container>
+	template <class V, class Cache>
 	class CachingEnumerator : public IEnumerator<V> {
-	public:
-		using TCache = Container<StorableT<V>>;
+		
+		// TODO: Eliminate redundancy introcuded by bound Cache type having replaced template Container.
+		static_assert (is_same<StorableT<V>&, IterableT<Cache&>&>(), "Value type <-> cached item mismatch. "
+																	 "Has StorableT been correctly applied?");
 
-	private:
 		struct State {
-			TCache					results;
-			IteratorT<TCache>		current;
-			const IteratorT<TCache>	end;
+			Cache					results;
+			IteratorT<Cache>		current;
+			const IteratorT<Cache>	end;
 
 			bool HasMore() const	{ return current != end; }
 
@@ -343,7 +346,12 @@ namespace Enumerables::Def {
 		Deferred<State>  fetchState;
 
 	public:
-		virtual TCache CalcResults() = 0;
+		using TCache = Cache;
+
+
+		/// Calculate cached results as a whole.
+		virtual Cache CalcResults() = 0;
+
 
 		// CONSIDER: Switching to ConsumeCurrent() -- this method prevents move-only TElem here - despite no algorithmic reason.
 		//			 Enumerators already save the value of Current whenever needed to prevent duplicated calculations.
@@ -366,8 +374,12 @@ namespace Enumerables::Def {
 
 			return fetchState->HasMore();
 		}
+
+		~CachingEnumerator() override;
 	};
 
+	template <class V, class Cache>
+	CachingEnumerator<V, Cache>::~CachingEnumerator() = default;
 
 
 
@@ -386,8 +398,8 @@ namespace Enumerables::Def {
 		static_assert (!is_reference<TrgElem>(), "Use StorableT for reference targets!");
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
-		template <class V, template <class> class C>
-		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return {}; }
+		template <class V, class C>
+		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return source.CalcResults(); }
 		static None GetCache(...)																 { return None {}; }
 
 	public:
@@ -401,23 +413,21 @@ namespace Enumerables::Def {
 
 
 	/// Obtain results in the desired container type - by the least copy/conversion possible, expecting a potential CachingEnumerator as Source.
-	/// @param  hint:	for manual hints (e.g. .ToList(n))
-	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
-	template < class ContainerOps, class R, size_t... N, class... ContOptions,
-			   class Cont = typename ContainerOps::template Container<R, N..., ContOptions...>,
-			   class Source >
-	Cont ObtainCachedResults(Source& etor, size_t hint, const ContOptions&... options)
+	/// @param  hint:			for manual hints (e.g. .ToList(n))
+	/// @tparam ReqContainer:	bound container type to create or obtain
+	template <class ContainerOps, class R, class ReqContainer, class... ContArgs, class Source>
+	ReqContainer ObtainCachedResults(Source& etor, size_t hint, const ContArgs&... args)
 	{
-		if constexpr (HasConvertibleCache<Source, Cont, R>::asWhole) {
+		if constexpr (HasConvertibleCache<Source, ReqContainer, R>::asWhole) {
 			// CachingEnumerator:  Direct convert / pass results if possible
 			return etor.CalcResults();
 		}
-		else if constexpr (HasConvertibleCache<Source, Cont, R>::byElementOnly) {
+		else if constexpr (HasConvertibleCache<Source, ReqContainer, R>::byElementOnly) {
 			// CachingEnumerator:  Convert / pass by element if available cache is unconvertible
 			auto cached = etor.CalcResults();
 			size_t size = GetSize(cached);
 
-			Cont res = ContainerOps::template Init<R, N...>(size, options...);
+			auto res = ContainerOps::template Init<ReqContainer>(size, args...);
 			for (auto& e : cached)
 				ContainerOps::Add(res, PassRevived(e));		// StorableT!
 
@@ -425,12 +435,13 @@ namespace Enumerables::Def {
 		}
 		else {
 			// Not a CachingEnumerator: enumerate to create new container
-			static_assert (!HasConvertibleCache<Source, Cont, R>::byElement, "HasConvertibleCache internal error.");
+			static_assert (!HasConvertibleCache<Source, ReqContainer, R>::byElement, "HasConvertibleCache internal error.");
 
 			SizeInfo si  = etor.Measure();
 			size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
-			Cont res = ContainerOps::template Init<R, N...>(cap, options...);
-		while (etor.FetchNext())
+
+			auto res = ContainerOps::template Init<ReqContainer>(cap, args...);
+			while (etor.FetchNext())
 				ContainerOps::Add(res, etor.Current());
 
 			return res;
@@ -438,20 +449,36 @@ namespace Enumerables::Def {
 	}
 
 
+	/// Wrapper overload for legacy calling format: more concise, less flexible.
+	/// @tparam R:		expected cached TElem
+	/// @tparam N...:	[0..1] number, inline buffer size only for "Small" container types
+	template < class ContainerOps, class R, size_t... N, class... ContOptions,
+		class Cont = typename ContainerOps::template Container<StorableT<R>, N..., ContOptions...>,
+		class Source >
+	Cont ObtainCachedResults(Source& etor, size_t hint, const ContOptions&... options)
+	{
+		return ObtainCachedResults<ContainerOps, R, Cont>(etor, hint, options...);
+	}
+
+
 #if ENUMERABLES_EMPLOY_DYNAMICCAST
 
-	// NOTE: SmallList<T, N> is not supported currently. Solve if any CachingEnumerator<T, SmallList> will exist.
-	template <class ContainerOps, class R, class... ContOptions,
-			  template <class...> class ContTempl = ContainerOps::template Container,
-			  class T = R>
-	ContTempl<R>   ObtainCachedResults(InterfacedEnumerator<T>& etor, size_t hint, const ContOptions&... options)
+	template <class ContainerOps, class R, class ReqContainer, class... ContArgs, class T = R>
+	ReqContainer   ObtainCachedResults(InterfacedEnumerator<T>& etor, size_t hint, const ContArgs&... args)
 	{
-		using ET = CachingEnumerator<T, ContTempl>;
+		// NOTE: - Currently only List-caching enumerators exist.
+		//		 - Obtaining any cache is beneficial here to avoid repeated virtual calls during enumeration.
+		//		   - Moving items would be possible with ConsumeCurrent() on IEnumerable too.
+		//		 - Revise if any CachingEnumerator<T, SmallList> or CachingEnumerator<T, Set>
+		//		   or default allocator option will exist.
+		using AimedCache = ListOperations::Container<StorableT<T>>;
+
+		using ET = CachingEnumerator<T, AimedCache>;
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)
-			return ObtainCachedResults<ContainerOps, R>(etor.WrappedInterface(), hint, options...);
+			return ObtainCachedResults<ContainerOps, R, ReqContainer>(etor.WrappedInterface(), hint, args...);
 		else
-			return ObtainCachedResults<ContainerOps, R>(*caching, hint, options...);
+			return ObtainCachedResults<ContainerOps, R, ReqContainer>(*caching, hint, args...);
 	}
 
 #endif
@@ -513,9 +540,9 @@ namespace Enumerables::Def {
 
 		bool	FetchNext()	override
 		{
-			// CONSIDER 17: are non-movable types useful? Would require 2 alternating accumulators to do RVO.
-			//				e.g. curr2.AcceptRvo([this]() -> decltype(auto) { return step(*curr); });
-			//				Check also: ScannerBase
+			// CONSIDER: are non-movable types useful? Would require 2 alternating accumulators to do RVO.
+			//			 e.g. curr2.AcceptRvo([this]() -> decltype(auto) { return step(*curr); });
+			//			 Check also: ScannerBase
 
 			if (firstFetched)
 				curr = step(*curr);
@@ -761,23 +788,25 @@ namespace Enumerables::Def {
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 
-		using S = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
+		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
+		using S	   = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
+		using TSet = AdjustedSet<S, SetOptions...>;
 
-		Source						source;
-		SetType<S, SetOptions...>	operand;
-		const bool					intersect;	// == !subtract
+		Source		source;
+		TSet		operand;
+		const bool	intersect;	// == !subtract
 
 
-		static SetType<S, SetOptions...>   CreateOperand(OpSource&& etor, const SetOptions&... opts)
+		static TSet   CreateOperand(OpSource&& etor, const SetOptions&... opts)
 		{
 			// NOTE: S won't always match CalcResults' type, but getting a Set CachingEnumerator here would be quite lucky anyway
-			return ObtainCachedResults<SetOperations, S>(etor, 0, opts...);
+			return ObtainCachedResults<SetOperations, S, TSet>(etor, 0, opts...);
 		}
 
 		// NOTE: Avoids MSVC 2015 bug: expanding SetOptions... within ctor initializer-block results in C2226.
-		static SetType<S, SetOptions...>   CreateOperandDefaultOpts(OpSource&& etor)
+		static TSet   CreateOperandDefaultOpts(OpSource&& etor)
 		{
-			return ObtainCachedResults<SetOperations, S>(etor, 0, SetOptions {}...);
+			return ObtainCachedResults<SetOperations, S, TSet>(etor, 0, SetOptions {}...);
 		}
 
 	public:
@@ -902,7 +931,7 @@ namespace Enumerables::Def {
 					   "Please specify the desired pointer or reference type exactly for readability.");
 
 		bool	FetchNext()	override
-		{ 
+		{
 			current = nullptr;
 			while (current == nullptr && source.FetchNext()) {
 				E* elem = PointerOrRef<E*>::Translate(source.Current());
@@ -1226,7 +1255,7 @@ namespace Enumerables::Def {
 		ReplayEnumerator(Factory&& getSource, size_t n) :
 			source    { getSource() },
 			counter   { n },
-			headElems { SmallListOperations::Init<StorableT<TElem>, 1>(n) }
+			headElems { SmallListOperations::Init<decltype(headElems)>(n) }
 		{
 		}
 	};
@@ -1376,7 +1405,8 @@ namespace Enumerables::Def {
 #pragma region Chainable Caching Operations
 
 	template <class Source, class Ordering>
-	class SorterEnumerator final : public CachingEnumerator<EnumeratedT<Source>, ListOperations::Container> {
+	class SorterEnumerator final : public CachingEnumerator<EnumeratedT<Source>,
+															ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
 		Source			 source;
 		const Ordering&	 ordering;
 
@@ -1400,7 +1430,8 @@ namespace Enumerables::Def {
 
 
 	template <class Source, class Ordering>
-	class MinSeekEnumerator final : public CachingEnumerator<EnumeratedT<Source>, ListOperations::Container> {
+	class MinSeekEnumerator final : public CachingEnumerator<EnumeratedT<Source>,
+															 ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
 		Source			 source;
 		const Ordering&	 isLess;
 

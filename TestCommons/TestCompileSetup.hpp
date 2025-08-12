@@ -7,7 +7,3 @@
 #	endif
 #	define _ITERATOR_DEBUG_LEVEL 0
 #endif
-
-
-// TODO: find a convenient way - on master too
-#define _ENFORCE_MATCHING_ALLOCATORS 0

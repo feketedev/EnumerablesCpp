@@ -188,14 +188,14 @@ namespace Enumerables::Def {
 
 	// Build a Dictionary via 2 mapper functions, use Cache if available.
 	// (Core idea follows ObtainCachedResults.)
-	template <class K, class V,  class Source, class KeyMap, class ValMap, class... Options>
+	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
 	enable_if_t<HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
 	BuildDictObtainCache(Source& etor, size_t /*hint*/, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
 	{
 		auto cache = etor.CalcResults();
 
-		auto res = DictOperations::Init<K, V>(GetSize(cache), opts...);
+		auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(GetSize(cache), opts...);
 		for (auto& elem : cache) {
 			K key = toKey(Revive(elem));
 			DictOperations::Add(res, move(key), toValue(PassRevived(elem)));
@@ -203,7 +203,7 @@ namespace Enumerables::Def {
 		return res;
 	}
 
-	template <class K, class V,  class Source, class KeyMap, class ValMap, class... Options>
+	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
 	enable_if_t<!HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
 	BuildDictObtainCache(Source& etor, size_t hint, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
@@ -211,7 +211,7 @@ namespace Enumerables::Def {
 		SizeInfo si  = etor.Measure();
 		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
 
-		auto res = DictOperations::Init<K, V>(cap, opts...);
+		auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(cap, opts...);
 		while (etor.FetchNext()) {
 			auto&& elem = etor.Current();
 			K      key  = toKey(elem);
@@ -228,10 +228,9 @@ namespace Enumerables::Def {
 															KeyMap&& toKey, ValMap&& toValue,
 															const Options&... opts					  )
 	{
-		// NOTE: only List-Cachings exist so far, but
-		//		 - not even sure if it's worth to handle more just for devirtualization
-		//		 - moving items would be possible with ConsumeCurrent() on IEnumerable 
-		using ET = CachingEnumerator<T, ListOperations::Container>;
+		// Only List-Cachings exist so far -- see ObtainCachedResults notes
+		using AimedCache = ListOperations::Container<StorableT<T>>;
+		using ET		 = CachingEnumerator<T, AimedCache>;
 
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)
@@ -827,9 +826,9 @@ namespace Enumerables::Def {
 
 #if ENUMERABLES_USE_RESULTSVIEW
 
-	template <class T, class Factory>
+	template <class ResList, class Factory>
 	void FillEligibleResultBuffer(Factory& getEnumerator, bool isPure, bool autoCall,
-								  SmallListType<T, 4>& elements, const char*& status)
+								  ResList& elements,      const char*& status)
 	{
 		if (autoCall && (GetSize(elements) > 0 || status[0] == 'E'))
 			return;
@@ -839,7 +838,7 @@ namespace Enumerables::Def {
 			SizeInfo si  = et.Measure();
 			size_t	 cap = si.IsExact() ? si.value : 0u;
 
-			elements = SmallListOperations::template Init<T, 4>(cap);
+			elements = SmallListOperations::template Init<ResList>(cap);
 
 			size_t count = 0;
 			while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
@@ -869,7 +868,7 @@ namespace Enumerables::Def {
 				ENUMERABLES_CLIENT_BREAK ("Unsupported type - cannot build debug buffer.");
 		}
 		else {
-			FillEligibleResultBuffer<TDebugValue>(getEnumerator, isPure, autoCall, Elements, Status);
+			FillEligibleResultBuffer(getEnumerator, isPure, autoCall, Elements, Status);
 		}
 	}
 
