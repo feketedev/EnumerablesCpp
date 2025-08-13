@@ -1334,13 +1334,13 @@ namespace Def {
 
 	template <class ForcedResult, class I>
 	using IfInitDeducedRefs   = enable_if_t< is_pointer<I>::value &&
-											(	is_void<ForcedResult>::value
-											||	is_reference<ForcedResult>::value &&
+											 (	is_void<ForcedResult>::value
+											 ||	is_reference<ForcedResult>::value &&
 												is_convertible<remove_pointer_t<I>&, ForcedResult>::value),
-											int >;
+											 int >;
 	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t< !is_pointer<I>::value &&
-											 (is_void<ForcedResult>::value || is_convertible<I, ForcedResult>::value),
+	using IfInitDeducedValues = enable_if_t<	is_void<ForcedResult>::value && !is_pointer<I>::value
+											 ||	!is_scalar<ForcedResult>::value && is_convertible<I, ForcedResult>::value,
 											 int >;
 
 
@@ -1435,14 +1435,19 @@ namespace Def {
 	}
 
 	// NOTE: Concatenating init lists might be debatable - might be useful for template code.
-	template <class TForced = void, class... Is>
+	template <class TForced = void, class = IfNonScalar<TForced>, class... Is>
 	auto Concat(std::initializer_list<Is>&&... inits)
+	{
+		return ConcatInternal<TForced>(move(inits)...);
+	}
+	template <class TForced, class... Is>
+	auto Concat(std::initializer_list<OverrideT<TForced, Is>>&&... inits)
 	{
 		return ConcatInternal<TForced>(move(inits)...);
 	}
 
 
-	template <class TForced = void, class I1, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<Containers>(tail)...);
@@ -1454,7 +1459,7 @@ namespace Def {
 	}
 
 
-	template <class TForced = void, class C1, class I2, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class I2, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, std::initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(iList2), forward<Containers>(tail)...);
@@ -1467,7 +1472,7 @@ namespace Def {
 
 
 
-	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, C2&& cont2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), forward<C2>(cont2), move(ilist3), forward<Containers>(tail)...);
@@ -1479,7 +1484,7 @@ namespace Def {
 	}
 
 
-	template <class TForced = void, class I1, class I2, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class I2, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, std::initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
@@ -1490,7 +1495,7 @@ namespace Def {
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
 	}
 
-	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, std::initializer_list<I2>&& ilist2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(ilist2), move(ilist3), forward<Containers>(tail)...);
@@ -1502,7 +1507,7 @@ namespace Def {
 	}
 
 
-	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, C2&& cont2, std::initializer_list<I3>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<C2>(cont2), move(iList3), forward<Containers>(tail)...);

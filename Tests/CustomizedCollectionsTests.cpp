@@ -355,11 +355,8 @@ namespace EnumerableTests {
 			{ 5, "Dorothy",	44 },
 		};
 
-		auto uniqueIndices = Enumerate({ 0u, 1u, 2u, 4u });
+		auto uniqueIndices = Enumerate<unsigned>({ 0, 1, 2, 4 });
 		
-		// TODO: Investigate! Enumerate<unsigned>({ 0, 1, 2, 4 });	
-		//		 choses "deduced" overload, only clang emits warning for conversion!
-
 		// Basic usage
 		std::unordered_map<unsigned, Person> byId;
 		{

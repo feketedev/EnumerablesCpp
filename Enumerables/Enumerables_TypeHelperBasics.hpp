@@ -504,8 +504,8 @@ namespace TypeHelpers {
 
 	// ===== Enable_if shorthands =====================================================================================
 
-	template <class T>
-	using IfVoid = enable_if_t<is_void<T>::value>;
+	template <class T, class S = T>
+	using IfNonScalar = enable_if_t<!is_scalar<T>::value, S>;
 
 	template <class T, class S = T>
 	using IfPRValue = enable_if_t<!is_reference<T>::value, S>;

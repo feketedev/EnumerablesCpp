@@ -126,6 +126,34 @@ namespace EnumerableTests {
 		{
 		}
 	};
+	
+
+	template <class T>
+	struct CountedCopy final {
+		T			data;
+		unsigned	copyCount = 0;
+		unsigned	moveCount = 0;		// preserved cumulatively
+
+		const T&	operator *() const	{ return data; }
+		T&			operator *()		{ return data; }
+
+		template <class In, class = std::enable_if_t<!std::is_same<In&, CountedCopy&>::value>>
+		CountedCopy(In&& init) : data { std::forward<In>(init) } {}
+
+		CountedCopy(const CountedCopy& src) noexcept(noexcept(T(src.data))) :
+			data	  { src.data },
+			copyCount { src.copyCount + 1 },
+			moveCount { src.moveCount }
+		{
+		}
+
+		CountedCopy(CountedCopy&& src) noexcept(noexcept(T(std::move(src.data)))) :
+			data	  { std::move(src.data) },
+			copyCount { src.copyCount },
+			moveCount { src.moveCount + 1 }
+		{
+		}
+	};
 
 
 	template <class N>

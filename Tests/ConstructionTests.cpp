@@ -311,6 +311,68 @@ namespace EnumerableTests {
 		ASSERT_EQ (1,	ints.First());
 		ASSERT_EQ ('4', ints.Last());
 
+		// For scalars: Forced type takes precedence over deduction even in exact cases,
+		//				allowing only certain narrowing conversions defined by the standard.
+		{
+			short a = 2;
+			ints = Enumerate<int>({ a });			// widening
+			ASSERT_EQ (2, ints.Single());
+
+			ints = Enumerate<int>({ 'a', 'b' });	// widening
+			ASSERT_EQ ('a', ints.First());
+			ASSERT_EQ ('b', ints.Last());
+			
+			auto shorts = Enumerate<short>   ({ 0, 1, 2 });
+			auto uints  = Enumerate<unsigned>({ 0, 1, 2 });
+			ASSERT_EQ (0, shorts.First());
+			ASSERT_EQ (2, shorts.Last());
+			ASSERT_EQ (3, shorts.Count());
+			ASSERT (Enumerables::AreEqual(shorts, uints));
+
+		 // -- Importance:
+		 // Letting the initializer_list deduce freely, then converting its elements to the Forced type
+		 // would lack this static safety (but trigger narrowing warning in benign cases as well):
+		 // 
+		 //	auto shorts2 = Enumerate<short>({ 1, 200000 });		// CTE: constexpr does not fit
+		 //	auto uints   = Enumerate<unsigned>({ 1, 2, -3 });	// 
+		}
+
+
+		// For non-scalars (~class types), however, storing from freely
+		// deduced initializer_list is allowed to avoid unnecessary copies:
+		{
+			auto words = Enumerate<MoveOnly<std::string>>({ "apple", "pie" });
+
+			MoveOnly<std::string> w1 = words.First();
+			MoveOnly<std::string> w2 = words.Last();
+
+			ASSERT_EQ ("apple",	*w1);
+			ASSERT_EQ ("pie",	*w2);
+
+			// So whenever the deduction of a common element type succeeds:
+			// What is seen between the braces is what gets stored (still similarly to a capture block), then
+			// only during outputting elements, conversion to the requested type occurs (similarly to Enumerate<R>(container))!
+
+			// Equivalent elaborated version of the same would be
+			// [except having 1 small additional chained operation]:
+			auto words2 = Enumerate<const char*>({ "apple", "pie" }).As<MoveOnly<std::string>>();
+			ASSERT_EQ (std::string("apple"), *words2.First());
+			ASSERT_EQ (std::string("pie"),	 *words2.Last());
+
+
+			// Simulating the undesired scenario:
+			auto simExtraCopy = Enumerate(std::initializer_list<CountedCopy<std::string>> { "apple", "pie" });
+			ASSERT_EQ (2, simExtraCopy.First().copyCount);
+
+			// Which actually still can happen, whenever the item type is ambiguous:
+			std::string s3 = "constructed";
+			auto extraCopy = Enumerate<CountedCopy<std::string>>({ "apple", "pie", s3 });
+			ASSERT_EQ (2, simExtraCopy.First().copyCount);
+			
+			// NOTE: On it's own storing exactly the "Forced" type would be clearer, but that
+			//		 would render the MoveOnly example impossible / add 1 copy in workable cases,
+			//		 while the current mechanism seems to be in line with other overloads' logic!
+		}
 
 		// "Capture-syntax" is supported to enumerate references of objects
 		// - currently only for inline (rvalue) initializers!
@@ -337,6 +399,12 @@ namespace EnumerableTests {
 		auto ptrs = Enumerate<int*>({ &c, &b, &a });
 		ASSERT_ELEM_TYPE (int*, ptrs);
 		ASSERT_EQ (&a, ptrs.Last());
+
+		// Beware of c-strings! Implicitly stored: they are pointers -> interpreted as char& !
+		// (Shortcoming of the generally useful &-syntax here...)
+		auto letters = Enumerate({ "ant", "brick" });
+		ASSERT_ELEM_TYPE (const char&, letters);
+		ASSERT_EQ		 (2,   letters.Count());
 
 		// explicit allows the initializer to accept polymorphic objects too:
 		Base		base { 1 };
@@ -584,6 +652,36 @@ namespace EnumerableTests {
 			// auto s3c = Concat<int&>(r1, nums1);		// CTE
 		}
 
+		// Init-list conversion nuances - should follow singular Enumerate({ ... }) rules
+		{
+			// scalars: explicit type enforced to init-lists
+			auto ds1 = Concat<double>({ 2.0, 3.5 }, { 1 });
+			auto ds2 = Concat<double>({ 2.0, 3u },  { 1 });
+			auto ds3 = Concat<double>(nums1, { 2.0, 3u });
+			auto ds4 = Concat<double>(nums1, { 4u });
+
+			ASSERT (AreEqual({ 2.0, 3.5, 1.0 },			  ds1));
+			ASSERT (AreEqual({ 2.0, 3.0, 1.0 },			  ds2));
+			ASSERT (AreEqual({ 1.0, 2.0, 3.0, 2.0, 3.0 }, ds3));
+			ASSERT (AreEqual({ 1.0, 2.0, 3.0, 4.0 },	  ds4));
+
+			unsigned short ushortArr[] = { 1, 2 };
+
+			auto unsigneds  = Concat<unsigned>({ 3, 4 },  ushortArr);
+		 //	auto unsigneds2 = Concat<unsigned>({ 3, -4 }, ushortArr);	// CTE: narrowing literal
+
+			ASSERT (AreEqual({ 3, 4, 1, 2 }, unsigneds));
+
+
+			// classes: conversion still only takes place during enumeration
+			std::string wordsArr[] = { "eaten" };
+			auto words1 = Concat<MoveOnly<std::string>>({ "apple", "pie" }, { std::string("baked") });
+			auto words2 = Concat<MoveOnly<std::string>>({ "apple", "pie" }, wordsArr);
+
+			ASSERT (AreEqual({ "apple", "pie", "baked" }, words1.Dereference()));
+			ASSERT (AreEqual({ "apple", "pie", "eaten" }, words2.Dereference()));
+		}
+
 		// Concat with fluent syntax
 		{
 			NO_MORE_HEAP;
@@ -704,7 +802,8 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (const Base&, siblingsAndBasesDC2);
 		}
 
-		// with init lists - note that those get stored into the Enumerable as an ListType
+		// with init lists - note that those get stored into the Enumerable as a ListType
+		//					 [or the container configured by ENUMERABLES_BRACEDINIT_BINDING]
 		{
 			DerivedA d1 { 50, 2.5 };
 			DerivedB b1 { 65, 'b' };

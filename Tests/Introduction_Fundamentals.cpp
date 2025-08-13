@@ -648,7 +648,8 @@ namespace EnumerableTests {
 			}
 		}
 
-		// ii) Braced initializer [as a compact notation to store a short Enumerables::ListType]
+		// ii) Braced initializer [as a compact notation to store a short Enumerables::ListType
+		//						   - or other container configured by the appropriate binding]
 		{
 			// Intended as a quick way to form a sequence of few simple elements - VALUE capture
 			{
@@ -681,7 +682,7 @@ namespace EnumerableTests {
 
 			}
 				
-			// Often sequencing a few l-value objects are needed.
+			// Often sequencing a few l-value objects is needed.
 			// Sequence of their references can be formed via "capture-syntax" - i.e. pointers :)
 			{
 				Vector2D<double> v1 { 5.0, 1.5 };

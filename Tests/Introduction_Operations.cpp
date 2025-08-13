@@ -286,7 +286,7 @@ namespace EnumerableTests {
 				auto refSuffix = Concat(arrX, { &x });			// "capture-syntax", see Enumerate({...})
 																// Braced-init is implemented for first 3 params!
 				
-				auto doubles = Concat<double>({ 2.0, 3.5 }, { 1 });		// Value-conversion must be exact
+				auto doubles = Concat<double>({ 2.0, 3.5 }, { 1 });		// Value-conversion
 
 				ASSERT_ELEM_TYPE (int&,			all);
 				ASSERT_ELEM_TYPE (int&,			repeated);
