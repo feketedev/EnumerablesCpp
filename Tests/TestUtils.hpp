@@ -40,6 +40,8 @@
 
 namespace EnumerableTests {
 
+	std::pair<bool, std::string>  FindCmdOption(char letter, int argc, const char* argv[]);
+
 	void Greet(const char* testName);
 
 	void PrintFail	(const char* errorTxt, const char* file, long line);
