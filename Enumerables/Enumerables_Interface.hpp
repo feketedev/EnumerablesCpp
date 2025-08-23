@@ -55,6 +55,8 @@
 
 
 
+#pragma region Fun
+
 // FUN macros: Getting as close as possible to simple arrow-lambda syntax.
 // If they're not welcome:  defining ENUMERABLES_NO_FUN before including the library should hide them.
 
@@ -76,14 +78,18 @@
 
 /// General shorthand for lambda (similar to C# => arrow)
 /// - Value capture for locals, ref for members [this].
-#define FUNV(...) ENUMERABLES_EXPAND_VARARGS (ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1, 0)(__VA_ARGS__))
+#define FUNV(...) ENUMERABLES_EXPAND_VARARGS(ENUMERABLES_GET_MACRO(__VA_ARGS__, FUNV3, FUNV2, FUNV1, 0)(__VA_ARGS__))
 
 #define FUNV1(x, expression)		[=](auto&& x)						-> decltype(auto)	{ return (expression); }
 #define FUNV2(x, y, expression)		[=](auto&& x, auto&& y)				-> decltype(auto)	{ return (expression); }
 #define FUNV3(x, y, z, expression)	[=](auto&& x, auto&& y, auto&& z)	-> decltype(auto)	{ return (expression); }
 
+#pragma endregion
 
 
+
+
+#pragma region Predeclaration + Technical
 
 // Def is an internal namespace of the library to be freely polluted by helper stuff -
 // Client code should use its subset exported to ::Enumerables.
@@ -123,6 +129,8 @@ namespace Def {
 #endif
 
 }
+
+
 namespace TypeHelpers {
 
 	/// This trait disambiguates between Enumerables and containers
@@ -139,6 +147,11 @@ namespace TypeHelpers {
 	};
 
 }
+
+#pragma endregion
+
+
+
 namespace Def {
 
 	using namespace Enumerables::TypeHelpers;
