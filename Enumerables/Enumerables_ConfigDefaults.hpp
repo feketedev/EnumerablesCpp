@@ -207,6 +207,38 @@ namespace Enumerables {
 #define ENUMERABLES_LIST_BINDING  StlBinding::ListOperations
 
 	namespace StlBinding {
+
+#	ifndef __clang__
+		struct ListOperations {
+
+			/// Custom container type with arbitrary user-provided type-arguments.
+			template <class V, class... Options>
+			using Container = std::vector<V, Options...>;
+
+			/// Allocator's position within Container's "Options..."
+			static constexpr unsigned AllocatorOptionIdx = 0;
+
+
+			/// Create a new Container, preallocating the given capacity if supported.
+			template <class TContainer, class... Opts>
+			static TContainer	Init(size_t capacity, const Opts&... options)
+			{
+				TContainer list (options...);
+				list.reserve(capacity);
+				return list;
+			}
+
+
+			template <class V, class... Opts, class Vin>
+			static void		Add(Container<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
+
+			template <class V, class... Opts>
+			static void		Clear(Container<V, Opts...>& l)				{ l.clear();	/* keep capacity! */   }
+
+			template <class V, class... Opts>
+			static V&		Access(Container<V, Opts...>& l, size_t i)	{ return l[i];}
+		};
+#	else
 		struct ListOperations {
 
 			// NOTE: This little helper is necessitated by a clang limitation (bug?) in using ellipsis with template aliases.
@@ -228,17 +260,14 @@ namespace Enumerables {
 			using DeducibleContainer = std::vector<V, Options...>;
 
 
-		// --- From here manifests the "Container Binding" concept ---
+			// --- From here manifests the usual "Container Binding" concept ---
 
-			/// Custom container type with arbitrary user-provided type-arguments.
 			template <class V, class... Options>
 			using Container = typename BindHelper<V, Options...>::type;
 
-			/// Allocator's position within Container's "Options..."
 			static constexpr unsigned AllocatorOptionIdx = 0;
 
 
-			/// Create a new Container, preallocating the given capacity if supported.
 			template <class TContainer, class... Opts>
 			static TContainer	Init(size_t capacity, const Opts&... options)
 			{
@@ -257,8 +286,12 @@ namespace Enumerables {
 			template <class V, class... Opts>
 			static V&		Access(DeducibleContainer<V, Opts...>& l, size_t i)	{ return l[i];}
 		};
+#	endif
+
 	}	// namespace StlBinding
 
+	/// Size of a ListOperations::Container.
+	/// Each bound type is required to have an Enumerables::GetSize overload.
 	template <class... Args>
 	size_t GetSize(const std::vector<Args...>& v)  { return v.size(); }
 
