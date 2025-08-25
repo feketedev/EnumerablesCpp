@@ -439,7 +439,12 @@ namespace EnumerableTests {
 	{
 		AllocationCounter heapAllocs;
 
-		std::aligned_storage_t<sizeof(int*), alignof(int*)>  buffer[12];
+		// only this time, be strict and let's understand the difference for 32 bit...
+		constexpr size_t allocBytes	  = 3 * 4 * sizeof(int);					// backing vectors' buffer
+		constexpr size_t bookingBytes = 2 * sizeof(int) + 4 * sizeof(int*);		// TestAllocator internal
+		constexpr size_t pwords = (allocBytes + bookingBytes) / sizeof(int*);
+
+		std::aligned_storage_t<sizeof(int*), alignof(int*)>  buffer[pwords];
 		TestAllocator<int*, 3>	fixedPtrAlloc  { buffer };
 		TestAllocator<int, 3>	fixedIntAlloc  { fixedPtrAlloc };
 		TestAllocator<Base*, 3>	fixedBaseAlloc { fixedPtrAlloc };
@@ -463,7 +468,8 @@ namespace EnumerableTests {
 			ASSERT_EQ (1,	ints.First());
 			ASSERT_EQ ('4', ints.Last());
 		}
-		heapAllocs.AssertFreshCount(2);		// 2 x type-erasure, not for lists
+		heapAllocs.AssertMaxFreshCount(2);	// 2 x type-erasure, not for lists
+											// (depends on std::function impl)
 
 		int a = 5, b = 6, c = 7;
 		{

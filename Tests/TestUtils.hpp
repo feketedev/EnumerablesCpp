@@ -82,6 +82,10 @@ namespace EnumerableTests {
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
 							  long			line   = 0			  );
+		
+		void AssertMaxFreshCount(size_t		 maxExpected,
+							     const char* file   = "unspecified",
+							     long		 line   = 0			   );
 	};
 
 

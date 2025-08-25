@@ -40,6 +40,14 @@ namespace EnumerableTests {
 	}
 
 
+	void AllocationCounter::AssertMaxFreshCount(size_t maxExpected, const char* file, long line)
+	{
+		if (EnableAsserts)
+			Assert(maxExpected >= Count(), "Allocation count exceeded", file, line);
+		Reset();
+	}
+
+
 	std::pair<bool, std::string> FindCmdOption(char letter, int argc, const char* argv[])
 	{
 		std::string trg1 = "-";
