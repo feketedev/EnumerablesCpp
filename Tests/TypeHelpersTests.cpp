@@ -978,11 +978,11 @@ namespace EnumerableTests {
 	namespace TestHashTypes {				// static test
 
 		// RefHolder with hash-enabled type
-		static_assert (std::is_default_constructible<std::hash<RefHolder<long>>>::value, "Err");
-		static_assert (std::is_copy_constructible<std::hash<RefHolder<long>>>::value,	 "Err");
-		static_assert (std::is_move_constructible<std::hash<RefHolder<long>>>::value,	 "Err");
-		static_assert (std::is_copy_assignable<std::hash<RefHolder<long>>>::value,		 "Err");
-		static_assert (std::is_move_assignable<std::hash<RefHolder<long>>>::value,		 "Err");
+		static_assert (std::is_default_constructible<std::hash<RefHolder<long>>>(),	"Err");
+		static_assert (std::is_copy_constructible<std::hash<RefHolder<long>>>(),	"Err");
+		static_assert (std::is_move_constructible<std::hash<RefHolder<long>>>(),	"Err");
+		static_assert (std::is_copy_assignable<std::hash<RefHolder<long>>>(),		"Err");
+		static_assert (std::is_move_assignable<std::hash<RefHolder<long>>>(),		"Err");
 
 		ASSERT_TYPE (size_t, std::hash<RefHolder<long>> {}(declval<RefHolder<long>>()));
 		ASSERT_TYPE (size_t, std::hash<RefHolder<long>> {}(declval<const RefHolder<long>&>()));
@@ -991,17 +991,14 @@ namespace EnumerableTests {
 		static_assert (noexcept(std::hash<long> {}(5l)) == noexcept(std::hash<RefHolder<long>> {}(declval<const RefHolder<long>&>())),	"Err");
 
 
-		// RefHolder with hash-disabled type  (2015 STL didn't have SFINAE-friendly implementation)
-#if !defined(_MSC_VER) || (_MSC_VER > 1900)
+		// RefHolder with hash-disabled type  [Requires SFINAE-friendly STL implementation]
 		using Tup = std::tuple<int, long>;
 
-		static_assert (!std::is_default_constructible<std::hash<RefHolder<Tup>>>::value, "Err");
-		static_assert (!std::is_copy_constructible<std::hash<RefHolder<Tup>>>::value,	 "Err");
-		static_assert (!std::is_move_constructible<std::hash<RefHolder<Tup>>>::value,	 "Err");
-		static_assert (!std::is_copy_assignable<std::hash<RefHolder<Tup>>>::value,		 "Err");
-		static_assert (!std::is_move_assignable<std::hash<RefHolder<Tup>>>::value,		 "Err");
-#endif
-
+		static_assert (!std::is_default_constructible<std::hash<RefHolder<Tup>>>(),	"Err");
+		static_assert (!std::is_copy_constructible<std::hash<RefHolder<Tup>>>(),	"Err");
+		static_assert (!std::is_move_constructible<std::hash<RefHolder<Tup>>>(),	"Err");
+		static_assert (!std::is_copy_assignable<std::hash<RefHolder<Tup>>>(),		"Err");
+		static_assert (!std::is_move_assignable<std::hash<RefHolder<Tup>>>(),		"Err");
 	}
 
 

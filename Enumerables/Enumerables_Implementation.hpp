@@ -189,35 +189,31 @@ namespace Enumerables::Def {
 	// Build a Dictionary via 2 mapper functions, use Cache if available.
 	// (Core idea follows ObtainCachedResults.)
 	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
-	enable_if_t<HasConvertibleCache<Source, void, V>::byElement,
-				DictionaryType<K, V, Options...>>
-	BuildDictObtainCache(Source& etor, size_t /*hint*/, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
-	{
-		auto cache = etor.CalcResults();
-
-		auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(GetSize(cache), opts...);
-		for (auto& elem : cache) {
-			K key = toKey(Revive(elem));
-			DictOperations::Add(res, move(key), toValue(PassRevived(elem)));
-		}
-		return res;
-	}
-
-	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
-	enable_if_t<!HasConvertibleCache<Source, void, V>::byElement,
-				DictionaryType<K, V, Options...>>
+	DictionaryType<K, V, Options...>
 	BuildDictObtainCache(Source& etor, size_t hint, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
 	{
-		SizeInfo si  = etor.Measure();
-		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
+		if constexpr (HasConvertibleCache<Source, void, V>::byElement) {
+			auto cache = etor.CalcResults();
 
-		auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(cap, opts...);
-		while (etor.FetchNext()) {
-			auto&& elem = etor.Current();
-			K      key  = toKey(elem);
-			DictOperations::Add(res, move(key), toValue(forward<decltype(elem)>(elem)));
+			auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(GetSize(cache), opts...);
+			for (auto& elem : cache) {
+				K key = toKey(Revive(elem));
+				DictOperations::Add(res, move(key), toValue(PassRevived(elem)));
+			}
+			return res;
 		}
-		return res;
+		else {
+			SizeInfo si  = etor.Measure();
+			size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
+
+			auto res = DictOperations::Init<DictionaryType<K, V, Options...>>(cap, opts...);
+			while (etor.FetchNext()) {
+				auto&& elem = etor.Current();
+				K      key  = toKey(elem);
+				DictOperations::Add(res, move(key), toValue(forward<decltype(elem)>(elem)));
+			}
+			return res;
+		}
 	}
 
 

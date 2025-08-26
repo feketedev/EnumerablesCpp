@@ -287,7 +287,7 @@ namespace std {
 	struct hash<Enumerables::TypeHelpers::RefHolder<T>> : hash<remove_const_t<T>>	// inherit disabledness
 	{
 		// SFINAE: don't define when disabled for referred type
-		template<class TT = T, enable_if_t<is_same<TT, T>::value, int> = 0>
+		template<class TT = T, enable_if_t<is_same_v<TT, T>, int> = 0>
 		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
 		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
 		{

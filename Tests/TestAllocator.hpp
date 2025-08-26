@@ -16,11 +16,6 @@ namespace EnumerableTests {
 			unsigned	count			   = 0;
 			void*		pointers[MaxCount] = { nullptr };
 
-		
-			BufferControl(size_t space) : free { space }	// for old MSVC's placement-new
-			{
-			}
-
 
 			bool HasFreedAll() const noexcept
 			{

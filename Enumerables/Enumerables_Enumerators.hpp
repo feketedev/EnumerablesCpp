@@ -800,12 +800,6 @@ namespace Enumerables::Def {
 			return ObtainCachedResults<SetOperations, S, TSet>(etor, 0, opts...);
 		}
 
-		// NOTE: Avoids MSVC 2015 bug: expanding SetOptions... within ctor initializer-block results in C2226.
-		static TSet   CreateOperandDefaultOpts(OpSource&& etor)
-		{
-			return ObtainCachedResults<SetOperations, S, TSet>(etor, 0, SetOptions {}...);
-		}
-
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
 		
@@ -843,7 +837,7 @@ namespace Enumerables::Def {
 		SetFilterEnumerator(SrcFactory&& getSource, OpFactory&& getOpSource, bool intersect) :
 			source    { getSource() },
 			intersect { intersect },
-			operand   { CreateOperandDefaultOpts(getOpSource()) }
+			operand   { CreateOperand(getOpSource(), SetOptions {}...) }
 		{
 		}
 	};
