@@ -125,7 +125,7 @@ namespace Enumerables::Def {
 
 #endif
 
-}	// namespace Enumerables::Def
+}
 
 
 namespace Enumerables::TypeHelpers {
@@ -1344,14 +1344,14 @@ namespace Enumerables::Def {
 	using IfInitValues = enable_if_t<!is_reference_v<ForcedResult> && !is_void_v<ForcedResult>, int>;
 
 	template <class ForcedResult, class I>
-	using IfInitDeducedRefs   = enable_if_t< std::is_pointer_v<I> &&
+	using IfInitDeducedRefs   = enable_if_t< is_pointer_v<I> &&
 											(	is_void_v<ForcedResult>
 											||	is_reference_v<ForcedResult> &&
 												is_convertible_v<remove_pointer_t<I>&, ForcedResult>),
 											int >;
 	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t< !std::is_pointer_v<I> &&
-											 (is_void_v<ForcedResult> || is_convertible_v<I, ForcedResult>),
+	using IfInitDeducedValues = enable_if_t<	is_void_v<ForcedResult> && !is_pointer_v<I>
+											 ||	!is_scalar_v<ForcedResult> && is_convertible_v<I, ForcedResult>,
 											 int >;
 
 
@@ -1446,14 +1446,19 @@ namespace Enumerables::Def {
 	}
 
 	// NOTE: Concatenating init lists might be debatable - might be useful for template code.
-	template <class TForced = void, class... Is>
+	template <class TForced = void, class = IfNonScalar<TForced>, class... Is>
 	auto Concat(std::initializer_list<Is>&&... inits)
+	{
+		return ConcatInternal<TForced>(move(inits)...);
+	}
+	template <class TForced, class... Is>
+	auto Concat(std::initializer_list<OverrideT<TForced, Is>>&&... inits)
 	{
 		return ConcatInternal<TForced>(move(inits)...);
 	}
 
 
-	template <class TForced = void, class I1, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<Containers>(tail)...);
@@ -1465,7 +1470,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class C1, class I2, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class I2, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, std::initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(iList2), forward<Containers>(tail)...);
@@ -1478,7 +1483,7 @@ namespace Enumerables::Def {
 
 
 
-	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, C2&& cont2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), forward<C2>(cont2), move(ilist3), forward<Containers>(tail)...);
@@ -1490,7 +1495,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class I1, class I2, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class I2, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, std::initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
@@ -1501,7 +1506,7 @@ namespace Enumerables::Def {
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
 	}
 
-	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(C1&& cont1, std::initializer_list<I2>&& ilist2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(ilist2), move(ilist3), forward<Containers>(tail)...);
@@ -1513,7 +1518,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfVoid<TForced>>
+	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(std::initializer_list<I1>&& iList1, C2&& cont2, std::initializer_list<I3>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<C2>(cont2), move(iList3), forward<Containers>(tail)...);
@@ -1631,6 +1636,7 @@ namespace Enumerables {
 	using Def::FirstFrom;
 	using Def::SingleFrom;
 	using Def::SingleOrNoneFrom;
+
 
 }		// namespace Enumerables
 

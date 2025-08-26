@@ -322,15 +322,11 @@ namespace Enumerables::Def {
 	/// Results container as a whole can be obtained as an optimization.
 	/// @remarks
 	///		Implementors and ObtainCachedResults calls should use the same alias:
-	///		- CachingEnumerator<T, ListType<T>> vs
-	///		  CachingEnumerator<T, ListOperations::Container<T>>
+	///		- CachingEnumerator<ListType<T>> vs
+	///		  CachingEnumerator<ListOperations::Container<T>>
 	///		have different RTTI.
-	template <class V, class Cache>
-	class CachingEnumerator : public IEnumerator<V> {
-		
-		// TODO: Eliminate redundancy introcuded by bound Cache type having replaced template Container.
-		static_assert (is_same<StorableT<V>&, IterableT<Cache&>&>(), "Value type <-> cached item mismatch. "
-																	 "Has StorableT been correctly applied?");
+	template <class Cache>
+	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {	
 
 		struct State {
 			Cache					results;
@@ -347,6 +343,7 @@ namespace Enumerables::Def {
 
 	public:
 		using TCache = Cache;
+		using typename CachingEnumerator::IEnumerator::TElem;
 
 
 		/// Calculate cached results as a whole.
@@ -358,14 +355,14 @@ namespace Enumerables::Def {
 		//			 How much would it hurt to lose this iterator-like access in custom algorithms (like mergeing sequences)?
 		//			 The main point of keeping Current separate instead of "Optional<T> FetchNext()", I think, is to provide RVO.
 
-		V    Current()	 override final
+		TElem  Current()	override final
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (fetchState.IsInitialized() && fetchState->HasMore(), NotFetchedError);
 			return Revive(*fetchState->current);
 		}
 
 
-		bool FetchNext() override final
+		bool   FetchNext()	override final
 		{
 			if (fetchState.IsInitialized() && fetchState->HasMore())
 				++fetchState->current;
@@ -378,8 +375,8 @@ namespace Enumerables::Def {
 		~CachingEnumerator() override;
 	};
 
-	template <class V, class Cache>
-	CachingEnumerator<V, Cache>::~CachingEnumerator() = default;
+	template <class Cache>
+	CachingEnumerator<Cache>::~CachingEnumerator() = default;
 
 
 
@@ -398,9 +395,9 @@ namespace Enumerables::Def {
 		static_assert (!is_reference<TrgElem>(), "Use StorableT for reference targets!");
 
 		// NOTE: Might be nicer to use explicit specialization - but conversion from any concrete type to interface is wanted!
-		template <class V, class C>
-		static auto GetCache(CachingEnumerator<V, C>&& source) -> decltype(source.CalcResults()) { return source.CalcResults(); }
-		static None GetCache(...)																 { return None {}; }
+		template <class C>
+		static auto GetCache(CachingEnumerator<C>&& source) -> decltype(source.CalcResults()) { return source.CalcResults(); }
+		static None GetCache(...)															  { return None {}; }
 
 	public:
 		using TCache = decltype(GetCache(declval<Enumerator>()));
@@ -469,11 +466,11 @@ namespace Enumerables::Def {
 		// NOTE: - Currently only List-caching enumerators exist.
 		//		 - Obtaining any cache is beneficial here to avoid repeated virtual calls during enumeration.
 		//		   - Moving items would be possible with ConsumeCurrent() on IEnumerable too.
-		//		 - Revise if any CachingEnumerator<T, SmallList> or CachingEnumerator<T, Set>
+		//		 - Revise if any CachingEnumerator<SmallList> or CachingEnumerator<Set>
 		//		   or default allocator option will exist.
 		using AimedCache = ListOperations::Container<StorableT<T>>;
 
-		using ET = CachingEnumerator<T, AimedCache>;
+		using ET = CachingEnumerator<AimedCache>;
 		ET* caching = etor.template TryCast<ET>();
 		if (caching == nullptr)
 			return ObtainCachedResults<ContainerOps, R, ReqContainer>(etor.WrappedInterface(), hint, args...);
@@ -1405,8 +1402,7 @@ namespace Enumerables::Def {
 #pragma region Chainable Caching Operations
 
 	template <class Source, class Ordering>
-	class SorterEnumerator final : public CachingEnumerator<EnumeratedT<Source>,
-															ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
+	class SorterEnumerator final : public CachingEnumerator<ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
 		Source			 source;
 		const Ordering&	 ordering;
 
@@ -1430,8 +1426,7 @@ namespace Enumerables::Def {
 
 
 	template <class Source, class Ordering>
-	class MinSeekEnumerator final : public CachingEnumerator<EnumeratedT<Source>,
-															 ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
+	class MinSeekEnumerator final : public CachingEnumerator<ListOperations::Container<StorableT<EnumeratedT<Source>>>> {
 		Source			 source;
 		const Ordering&	 isLess;
 

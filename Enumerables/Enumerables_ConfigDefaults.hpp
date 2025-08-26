@@ -208,6 +208,40 @@ namespace Enumerables::StlBinding {
 #ifndef ENUMERABLES_LIST_BINDING
 #define ENUMERABLES_LIST_BINDING  StlBinding::ListOperations
 
+#	ifndef __clang__
+
+	struct ListOperations {
+
+		/// Custom container type with arbitrary user-provided type-arguments.
+		template <class V, class... Options>
+		using Container = std::vector<V, Options...>;
+
+		/// Allocator's position within Container's "Options..."
+		static constexpr unsigned AllocatorOptionIdx = 0;
+
+
+		/// Create a new Container, preallocating the given capacity if supported.
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t capacity, const Opts&... options)
+		{
+			TContainer list (options...);
+			list.reserve(capacity);
+			return list;
+		}
+
+
+		template <class V, class... Opts, class Vin>
+		static void		Add(Container<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
+
+		template <class V, class... Opts>
+		static void		Clear(Container<V, Opts...>& l)				{ l.clear();	/* keep capacity! */   }
+
+		template <class V, class... Opts>
+		static V&		Access(Container<V, Opts...>& l, size_t i)	{ return l[i];}
+	};
+
+#	else
+
 	struct ListOperations {
 
 		// NOTE: This little helper is necessitated by a clang limitation (bug?) in using ellipsis with template aliases.
@@ -229,18 +263,14 @@ namespace Enumerables::StlBinding {
 		using DeducibleContainer = std::vector<V, Options...>;
 
 
+		// --- From here manifests the usual "Container Binding" concept ---
 
-	// --- From here manifests the "Container Binding" concept ---
-
-		/// Custom container type with arbitrary user-provided type-arguments.
 		template <class V, class... Options>
 		using Container = typename BindHelper<V, Options...>::type;
 
-		/// Allocator's position within Container's "Options..."
 		static constexpr unsigned AllocatorOptionIdx = 0;
 
 
-		/// Create a new Container, preallocating the given capacity if supported.
 		template <class TContainer, class... Opts>
 		static TContainer	Init(size_t capacity, const Opts&... options)
 		{
@@ -260,6 +290,7 @@ namespace Enumerables::StlBinding {
 		static V&		Access(DeducibleContainer<V, Opts...>& l, size_t i)	{ return l[i];}
 	};
 
+#	endif
 #endif
 
 
@@ -371,9 +402,48 @@ namespace Enumerables {
 
 namespace Enumerables::DefaultBinding {
 
+	// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
+	// - hence only a ListOperations fallback is provided, but it presents the way to utilize such a type from your favourite library.
+	struct FallbackSmallListOperations : public ListOperations {
+
+		template <class V, size_t InlineCap, class... Options>
+		using Container = ListOperations::Container<V, Options...>;
+
+		template <class V, size_t InlineCap, class... Options>
+		using AllocatedValueT = typename TypeHelpers::AsDependentT<V, ListOperations>::template AllocatedValueT<V, Options...>;
+	};
+
+
+	// Required solely by direct Enumerate({ a, b, c }) syntax, specifies the backing container of elements.
+	// This default uses the specified LIST_BINDING, assuming initializer_list support.
+	struct ListBracedInitOperations {
+
+		/// @tparam Alloc:  optional user-given allocator - use default if void
+		template <class V, class Alloc = void>
+		using Container = TypeHelpers::OverriddenNthArgT<ListOperations::Container<V>,
+															ListOperations::AllocatorOptionIdx + 1,
+															Alloc								   >;
+
+		/// Create backing container with default allocator.
+		template <class V>
+		static Container<V>		Init(std::initializer_list<V> initList)
+		{
+			return Container<V>(initList);
+		}
+
+		/// Create backing container with a user-specified allocator.
+		template <class V, class A>
+		static Container<V, A>	Init(std::initializer_list<V> initList, const A& allocator)
+		{
+			return Container<V, A>(initList, allocator);
+		}
+	};
+
+		
 	// Recommended default for terminal operations of optional result.
 	struct OptionalOperations {
-		template <class T>	using Container = OptResult<T>;
+		template <class T>	using Container = OptResult<T>;		// this alias could adjust type (e.g. decay<T>)
+																// => not for automatic deduction
 
 		template <class T, class Enumerator>
 		static Container<T>	FromCurrent(Enumerator& et)
@@ -385,55 +455,10 @@ namespace Enumerables::DefaultBinding {
 		static Container<T>	NoValue(StopReason rs)	{ return rs; }
 	};
 
-
-		// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
-		// - hence only a ListOperations fallback is provided, but it presents the way to utilize such a type from your favourite library.
-		struct FallbackSmallListOperations : public ListOperations {
-
-			template <class V, size_t InlineCap, class... Options>
-			using Container = ListOperations::Container<V, Options...>;
-
-			template <class V, size_t InlineCap, class... Options>
-			using AllocatedValueT = typename TypeHelpers::AsDependentT<V, ListOperations>::template AllocatedValueT<V, Options...>;
-		};
-
-
-		// Required solely by direct Enumerate({ a, b, c }) syntax, specifies the backing container of elements.
-		// This default uses the specified LIST_BINDING, assuming initializer_list support.
-		struct ListBracedInitOperations {
-
-			/// @tparam Alloc:  optional user-given allocator - use default if void
-			template <class V, class Alloc = void>
-			using Container = TypeHelpers::OverriddenNthArgT<ListOperations::Container<V>,
-															 ListOperations::AllocatorOptionIdx + 1,
-															 Alloc								   >;
-
-			/// Create backing container with default allocator.
-			template <class V>
-			static Container<V>		Init(std::initializer_list<V> initList)
-			{
-				return Container<V>(initList);
-			}
-
-			/// Create backing container with a user-specified allocator.
-			template <class V, class A>
-			static Container<V, A>	Init(std::initializer_list<V> initList, const A& allocator)
-			{
-				return Container<V, A>(initList, allocator);
-			}
-		};
-
 }	// namespace Enumerables::DefaultBinding
 
 
 namespace Enumerables {
-
-#ifdef ENUMERABLES_OPTIONAL_BINDING
-	using OptionalOperations = ENUMERABLES_OPTIONAL_BINDING;
-#else
-	using OptionalOperations = DefaultBinding::OptionalOperations;
-#endif
-
 
 #ifdef ENUMERABLES_SMALLLIST_BINDING
 	using SmallListOperations = ENUMERABLES_SMALLLIST_BINDING;
@@ -453,6 +478,12 @@ namespace Enumerables {
 	using BracedInitOperations = DefaultBinding::ListBracedInitOperations;
 #endif
 
+
+#ifdef ENUMERABLES_OPTIONAL_BINDING
+	using OptionalOperations = ENUMERABLES_OPTIONAL_BINDING;
+#else
+	using OptionalOperations = DefaultBinding::OptionalOperations;
+#endif
 
 
 	// Establish container type aliases
@@ -480,8 +511,8 @@ namespace Enumerables {
 		return TypeHelpers::AdlSize(c);	 
 	}
 
-	// NOTE: To improve performance ensure that size hints are enabled for used container types in either form!
-	
+	// NOTE: To improve performance ensure that size hints are enabled for input container types in either form!
+
 
 	// HasValue overloads for optional-like types enable convenience features like the .ValuesOnly() shorthand.
 	// Further overlaods can be introduced by client code in the Enumerables namespace.
@@ -499,6 +530,14 @@ namespace Enumerables {
 		return o.has_value();
 	}
 #endif
+
+
+	// Containers in Bindings must have a corresponding GetSize/HasValue function accessible in the Enumerables namespace.
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<ListType<int>&>()))			>(), "GetSize(List) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<SmallListType<int, 1>&>()))	>(), "GetSize(SmallList) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<SetType<int>&>()))			>(), "GetSize(Set) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<DictionaryType<int, int>&>()))>(), "GetSize(Dictionary) is not defined!");
+	static_assert (std::is_same<bool,	decltype(HasValue(std::declval<Optional<int>&>()))			>(), "HasValue(Optional) is not defined!");
 
 }	// namespace Enumerables
 

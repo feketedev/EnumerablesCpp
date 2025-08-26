@@ -37,6 +37,8 @@
 
 namespace EnumerableTests {
 
+	std::pair<bool, std::string>  FindCmdOption(char letter, int argc, const char* argv[]);
+
 	void Greet(const char* testName);
 
 	void PrintFail	(const char* errorTxt, const char* file, long line);
@@ -77,6 +79,10 @@ namespace EnumerableTests {
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
 							  long			line   = 0			  );
+		
+		void AssertMaxFreshCount(size_t		 maxExpected,
+							     const char* file   = "unspecified",
+							     long		 line   = 0			   );
 	};
 
 
@@ -119,6 +125,34 @@ namespace EnumerableTests {
 		MoveOnly(const MoveOnly&) = delete;
 		MoveOnly(MoveOnly&& src) noexcept(noexcept(T(std::move(src.data)))) :
 			data	  { std::move(src.data) },
+			moveCount { src.moveCount + 1 }
+		{
+		}
+	};
+	
+
+	template <class T>
+	struct CountedCopy final {
+		T			data;
+		unsigned	copyCount = 0;
+		unsigned	moveCount = 0;		// preserved cumulatively
+
+		const T&	operator *() const	{ return data; }
+		T&			operator *()		{ return data; }
+
+		template <class In, class = std::enable_if_t<!std::is_same<In&, CountedCopy&>::value>>
+		CountedCopy(In&& init) : data { std::forward<In>(init) } {}
+
+		CountedCopy(const CountedCopy& src) noexcept(noexcept(T(src.data))) :
+			data	  { src.data },
+			copyCount { src.copyCount + 1 },
+			moveCount { src.moveCount }
+		{
+		}
+
+		CountedCopy(CountedCopy&& src) noexcept(noexcept(T(std::move(src.data)))) :
+			data	  { std::move(src.data) },
+			copyCount { src.copyCount },
 			moveCount { src.moveCount + 1 }
 		{
 		}

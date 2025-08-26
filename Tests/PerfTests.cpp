@@ -4,6 +4,7 @@
 #include "Enumerables.hpp"
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <string>
 
@@ -849,10 +850,22 @@ namespace EnumerableTests {
 		bool			waitRewrite	= false;
 
 	public:
-		const unsigned	Widths[Columns];
+		std::ostream&	output;
+		const char		separator;
+		const unsigned	widths[Columns];
 
 		template <class... Args>
-		constexpr TableWriter(Args... args) : Widths { (unsigned)args... }
+		constexpr TableWriter(std::ostream& out, Args... args) :
+			TableWriter { out.fill(), out, args...}
+		{
+		}
+
+
+		template <class... Args>
+		constexpr TableWriter(char sep, std::ostream& out, Args... args) :
+			output	  { out },
+			separator { sep },
+			widths	  { (unsigned)args... }
 		{
 		}
 
@@ -862,23 +875,26 @@ namespace EnumerableTests {
 		{
 			if (waitRewrite) {
 				// oversimplified - just works for this tiny feedback here...
-				for (unsigned i = 0; i < Widths[col]; i++)
-					std::cout << '\b';
+				for (unsigned i = 0; i < widths[col]; i++)
+					output << '\b';
 			}
 			if (col == 0) {
 				// 0 serves as indentation only
 				ASSERT (!waitRewrite);
-				std::cout << std::setw(Widths[col++]) << ' ';
+				output << std::setw(widths[col++]) << "";
 			}
 
-			std::cout << std::setw(Widths[col] - N + 1) << val << suffix;
+			output << std::setw(widths[col] - N + 1) << val << suffix;
 			if (waitRewrite = forRewrite)
 				return col;
 
 			const unsigned filled = col++;
 			if (col == Columns) {
-				std::cout << std::endl;
+				output << std::endl;
 				col = 0;
+			}
+			else {
+				output << separator;
 			}
 			return filled;
 		}
@@ -887,7 +903,7 @@ namespace EnumerableTests {
 		void CloseRow()
 		{
 			if (col > 0)
-				std::cout << std::endl;
+				output << std::endl;
 			col = 0;
 			waitRewrite = false;
 		}
@@ -902,6 +918,15 @@ namespace EnumerableTests {
 			CloseRow();
 		}
 	};
+
+
+	static void SectionBreak(const char* title, unsigned hrWidth, char hrSymbol = '-')
+	{
+		std::string hr = "  ";
+		hr.append(hrWidth, hrSymbol);
+		Greet(hr.c_str());			// preserve base indentation
+		Greet(title);
+	}
 
 #pragma endregion
 
@@ -1079,15 +1104,159 @@ namespace EnumerableTests {
 
 
 
+#pragma region Summaries
+
+	static TableWriter<6>  BeginSummaryTab()
+	{
+		TableWriter<6> tb { std::cout, 11, 17, 14, 16, 19, 13 };
+
+		tb.output << std::right;
+		tb.PutRow("", "Handwritten", "Repeated Query", "Construct + Query", "Malloc diff");
+
+		return tb;
+	}
+
+
+	static TableWriter<6>  BeginCompactTab(bool showOverheads)
+	{
+		TableWriter<6> tb { std::cout, 5, 37, 15, 17, 17, 13 };
+
+		std::string leftpadHead1 = "Testcase";
+		leftpadHead1.append(tb.widths[1] - leftpadHead1.size(), tb.output.fill());
+
+		tb.output << std::right;
+		if (showOverheads)
+			tb.PutRow(leftpadHead1, "Baseline [us]", "Query ovrhd [%]", "Total ovrhd [%]", "Malloc diff");
+		else
+			tb.PutRow(leftpadHead1, "Baseline [us]", "Query time [us]", "Total time [us]", "Malloc diff");
+
+		return tb;
+	}
+
+
+	static TableWriter<6>  BeginCsv(std::ostream& output, bool showOverheads)
+	{
+		TableWriter<6> tb { ',', output, 0, 0, 0, 0, 0, 0};
+
+		if (showOverheads)
+			tb.PutRow("Testcase", R"("Baseline [us]")", R"("Query ovrhd [%]")", R"("Total ovrhd [%]")", R"("Malloc diff")");
+		else
+			tb.PutRow("Testcase", R"("Baseline [us]")", R"("Query time [us]")", R"("Total time [us]")", R"("Malloc diff")");
+
+		return tb;
+	}
+
+
+	static void PrintSummary(TableWriter<6>& tb, const std::vector<PerfComparison>& res)
+	{
+		using namespace std::chrono;
+		using Millis = duration<double, std::milli>;
+
+		PerfComparison sum { "TOTALs" };
+
+		for (const PerfComparison& r : res) {
+			if (r.isValidComparison)
+				sum += r;
+		}
+
+		auto extraMallocs = (long long)sum.constructAndEnumerate.allocations
+						  - (long long)sum.classic.allocations;
+
+		tb.PutCell("ALL comparable:");
+		tb.PutCell(duration_cast<Millis>(sum.classic.runtime),				 " ms");
+		tb.PutCell(duration_cast<Millis>(sum.enumerate.runtime),			 " ms");
+		tb.PutCell(duration_cast<Millis>(sum.constructAndEnumerate.runtime), " ms");
+		tb.output << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
+		tb.PutCell((double)extraMallocs);
+
+		tb.output << std::noshowpos << std::fixed << std::setprecision(1);
+		tb.PutCell("Overhead:");
+		tb.PutCell("-");
+		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
+		tb.PutCell(sum.TotalOverheadPercent(), " %");
+		tb.CloseRow();
+	}
+
+
+	static void PrintCompact(TableWriter<6>& tb, const std::vector<PerfComparison>& res, bool showOverheads, const char* groupPrefix = nullptr)
+	{
+		for (const PerfComparison& r : res) {
+			tb.output << std::left;
+			std::string quoted { '"' };
+			if (groupPrefix)
+				quoted += groupPrefix;
+			quoted += r.testCase;
+			quoted += '"';
+			tb.PutCell(quoted);
+			tb.output << std::right;
+
+			tb.PutCell(r.classic.runtime);
+
+			if (showOverheads) {
+				tb.output << std::fixed << std::setprecision(1);
+				tb.PutCell(r.EnumerateOverheadPercent());
+				tb.PutCell(r.TotalOverheadPercent());
+			}
+			else {
+				tb.PutCell(r.enumerate.runtime);
+				tb.PutCell(r.constructAndEnumerate.runtime);
+			}
+
+			auto extraMallocs = (long long)r.constructAndEnumerate.allocations
+							  - (long long)r.classic.allocations;
+
+			// no showpos for ints?
+			tb.output << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
+			tb.PutCell((double)extraMallocs);
+			tb.output << std::noshowpos;
+		}
+	}
+
+
+	static void SummarizeOnScreen(bool showTimes, bool showOvrhds, const std::vector<PerfComparison>& results)
+	{
+		bool details = (showTimes || showOvrhds);
+		auto tabWriter = details ? BeginCompactTab(showOvrhds) : BeginSummaryTab();
+		if (details) {
+			PrintCompact(tabWriter, results, showOvrhds);
+			std::cout << std::endl;
+		}
+		PrintSummary(tabWriter, results);
+	}
+
+
+	static void SummarizeCsv(bool showOvrhds, const std::string& path, const std::vector<PerfComparison>& longResults,
+																	   const std::vector<PerfComparison>& shortResults)
+	{
+		std::cout << "  Saving results to '" << path << "'.";
+		std::ofstream file { path, std::ios::out };
+		if (!file) {
+			std::cerr << "Cannot write to file!" << std::endl;
+			return;
+		}
+		auto tabWriter = BeginCsv(file, showOvrhds);
+		PrintCompact(tabWriter, longResults,  showOvrhds, "Long - ");
+		PrintCompact(tabWriter, shortResults, showOvrhds, "Short - ");
+		file.close();
+		if (file)
+			std::cout << std::endl;
+		else
+			std::cerr << "Error writing to file." << std::endl;
+	}
+
+#pragma endregion
+
+
+
 	static std::vector<PerfComparison>	RunAllWith(size_t complexity, unsigned cycles)
 	{
 		std::string cyclesTxt = std::to_string(MeasurementCount) + " * " + std::to_string(cycles);
 		std::cout << "    Complexity: " << std::setw(10) << std::left << complexity
 				  << " Cycles: " << cyclesTxt << std::endl;
 
-		TableWriter<5> tb { 5, 35, 16, 15, 20 };
+		TableWriter<5> tb { std::cout, 5, 35, 16, 15, 20 };
 
-		std::cout << std::endl << std::right;
+		std::cout << std::right;
 		tb.PutRow("", "Handwritten", "Enumerable", "    Enumerable   ");
 		tb.PutRow("", "",			  "  query   ", "construct + query");
 
@@ -1133,85 +1302,34 @@ namespace EnumerableTests {
 	}
 
 
-	// csv-like output to diff/collect
-	static void							PrintCompact(const std::vector<PerfComparison>& res)
+	void NewPerfTests(int argc, const char* argv[])
 	{
-		TableWriter<6> tb { 5, 37, 15, 17, 17, 13 };
+		auto [sumTimes, timesPath]     = FindCmdOption('T', argc, argv);
+		auto [sumOverheads, ovrhdPath] = FindCmdOption('O', argc, argv);
+		
+		bool printTimes = sumTimes && timesPath.empty();
+		bool printOvrhd = sumOverheads && ovrhdPath.empty() && !printTimes;
 
-		std::cout << std::left;
-		tb.PutRow("Testcase", "  Baseline [us]", "  Query ovrhd [%]", "  Total ovrhd [%]", "  Malloc diff");
-
-		PerfComparison sum { "TOTALs" };
-
-		for (const PerfComparison& r : res) {
-			std::cout << std::left;
-			std::string quoted { '"' };
-			quoted += r.testCase;
-			quoted += '"';
-			tb.PutCell(quoted);
-			std::cout << std::right;
-
-			tb.PutCell(r.classic.runtime);
-
-			std::cout << std::fixed << std::setprecision(1);
-			tb.PutCell(r.EnumerateOverheadPercent());
-			tb.PutCell(r.TotalOverheadPercent());
-
-			auto extraMallocs = (long long)r.constructAndEnumerate.allocations
-							  - (long long)r.classic.allocations;
-
-			// no showpos for ints?
-			std::cout << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
-			tb.PutCell((double)extraMallocs);
-			std::cout << std::noshowpos;
-
-			if (r.isValidComparison)
-				sum += r;
-		}
-		std::cout << std::endl;
-
-		using namespace std::chrono;
-		using Millis = duration<double, std::milli>;
-
-		auto extraMallocs = (long long)sum.constructAndEnumerate.allocations
-						  - (long long)sum.classic.allocations;
-
-		tb.PutCell("ALL comparable:");
-		tb.PutCell(duration_cast<Millis>(sum.classic.runtime),				 " ms");
-		tb.PutCell(duration_cast<Millis>(sum.enumerate.runtime),			 " ms");
-		tb.PutCell(duration_cast<Millis>(sum.constructAndEnumerate.runtime), " ms");
-		std::cout << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
-		tb.PutCell((double)extraMallocs);
-
-		std::cout << std::noshowpos << std::fixed << std::setprecision(1);
-		tb.PutCell("Overhead:");
-		tb.PutCell("-");
-		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
-		tb.PutCell(sum.TotalOverheadPercent(), " %");
-		tb.CloseRow();
-	}
-
-
-
-	void NewPerfTests()
-	{
 		Greet(GreetTxt);
-		Greet("  Long sequences...");
+		SectionBreak("  Long sequences...", 90);
 		auto results1 = RunAllWith(DefaultComplexity, DefaultCycles);
 		std::cout << std::endl;
 
-		Greet("  ---------------------------------------------------------------------------------------");
-		Greet("  Short sequences...");
+		SectionBreak("  Short sequences...", 90);
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
-
-		Greet("  ====================================================================================================");
-		Greet("  Long sequences summary:");
-		PrintCompact(results1);
+		
+		SectionBreak("  Long sequences summary:", printTimes || printOvrhd ? 104 : 90, '=');
+		SummarizeOnScreen(printTimes, printOvrhd, results1);
 		std::cout << std::endl;
-		Greet("  ----------------------------------------------------------------------------------------------------");
-		Greet("  Short sequences summary:");
-		PrintCompact(results2);
+		SectionBreak("  Short sequences summary:", printTimes || printOvrhd ? 104 : 90);
+		SummarizeOnScreen(printTimes, printOvrhd, results2);
+		std::cout << std::endl;
+
+		if (!timesPath.empty())
+			SummarizeCsv(false, timesPath, results1, results2);
+		if (!ovrhdPath.empty())
+			SummarizeCsv(true, ovrhdPath, results1, results2);
 	}
 
 }	// namespace EnumerableTests

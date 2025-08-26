@@ -75,6 +75,16 @@ namespace Enumerables::TypeHelpers {
 
 
 
+	/// Trait to restore a RefHolder's pointed type. [Expects non-ref, non-volatile RefHolder.]
+	template <class T>
+	struct RestoredRef						{ using type = T;  };
+	template <class T>
+	struct RestoredRef<RefHolder<T>>		{ using type = T&; };
+	template <class T>
+	struct RestoredRef<const RefHolder<T>>	{ using type = T&; };
+
+
+
 	/// Temporary storage for arbitrary T input in generic code - supports both (l-value) references and values.
 	/// @remarks
 	///	  The input element, as a source Enumerator's return value can be:
@@ -85,6 +95,11 @@ namespace Enumerables::TypeHelpers {
 	using StorableT = conditional_t< is_lvalue_reference_v<T>,
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
+
+	/// Elem type restorable from a temporary container - i.e. resolve StorableT.
+	/// [ignores ref, strips it from an unwrapped T&]
+	template <class T>
+	using RestorableT = typename RestoredRef<remove_reference_t<T>>::type;
 
 
 	/// Access stored instance as lvalue
