@@ -144,6 +144,70 @@ namespace EnumerableTests {
 			ASSERT_EQ (0.0, s2.x);
 			ASSERT_EQ (0.0, s2.y);
 		}
+
+		// Some terminal operations form containers out of sequence elements.
+		// ToList and ToSet are simplistic and have been covered. ToDictionary needs more input:
+		{
+			// Suppose a sample record:
+			struct Person {
+				unsigned		id;
+				std::string		name;
+
+				unsigned			GetId()	  const { return id; }
+				std::string&		GetName()		{ return name; }
+				const std::string&	GetName() const { return name; }
+
+				bool operator ==(const Person& rhs) const   { return id == rhs.id && name == rhs.name; }
+			};
+
+			Person personArr[] = {
+				{ 1, "Aldo" },
+				{ 2, "Ben" },
+				{ 3, "Charlie" },
+				{ 1, "Dave" }		// duplicate id!
+			};
+
+			Enumerable<Person&> persons = personArr;
+
+			// The 1st overload requires just a mapper to designate the keys.
+			// Just like .ToList, it decays elements to store them as values:
+			std::unordered_map<unsigned, Person>	  dict1 = persons.ToDictionary(FUN(p, p.id));
+			
+			// The 2nd takes a value-mapper too.
+			std::unordered_map<unsigned, std::string> dict2 = persons.ToDictionary(FUN(p, p.id),
+																				   FUN(p, p.name));
+			ASSERT_EQ (3, dict1.size());
+			ASSERT_EQ (3, dict2.size());
+
+			// In both cases, Values are forwarded into the container / value-mapper parameter.
+			// This case the input was Person&, so no moves have happened:
+			ASSERT_EQ ("Aldo",    personArr[0].name);
+			ASSERT_EQ ("Charlie", personArr[2].name);
+
+			// Duplicate keys are handled by the container itself, as configured via DictOperations::Add.
+			// Typically the first occurrence should be kept.
+			ASSERT_EQ ("Aldo",    dict1[1].name);
+			ASSERT_EQ ("Aldo",    dict2[1]);
+			ASSERT_EQ ("Charlie", dict1[3].name);
+			ASSERT_EQ ("Charlie", dict2[3]);
+
+			// It is possible to use member-pointers:
+			std::unordered_map<unsigned, Person>	  dictS1 = persons.ToDictionary(&Person::id);
+			std::unordered_map<unsigned, std::string> dictS2 = persons.ToDictionary(&Person::id, &Person::name);
+
+			ASSERT_EQ (dict1, dictS1);
+			ASSERT_EQ (dict2, dictS2);
+
+			// To follow .Map/.Select convention, overload-resolution of qualified getters can be enabled by specifying "-Of<K, V>" types
+			// explicitly when convenient (although with the caveat that method-pointers cannot be mixed with anything else at the moment).
+			std::unordered_map<unsigned, Person>	  dictO1 = persons.ToDictionaryOf<unsigned>(&Person::GetId);
+			std::unordered_map<unsigned, std::string> dictO2 = persons.ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
+			std::unordered_map<unsigned, std::string> dictO2C = persons.AsConst()
+																	   .ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
+			ASSERT_EQ (dictS1, dictO1);
+			ASSERT_EQ (dictS2, dictO2);
+			ASSERT_EQ (dictS2, dictO2C);	// called const overload => no "unused function" warning
+		}
 	}
 
 
@@ -222,7 +286,7 @@ namespace EnumerableTests {
 				auto refSuffix = Concat(arrX, { &x });			// "capture-syntax", see Enumerate({...})
 																// Braced-init is implemented for first 3 params!
 				
-				auto doubles = Concat<double>({ 2.0, 3.5 }, { 1 });		// Value-conversion must be exact
+				auto doubles = Concat<double>({ 2.0, 3.5 }, { 1 });		// Value-conversion
 
 				ASSERT_ELEM_TYPE (int&,			all);
 				ASSERT_ELEM_TYPE (int&,			repeated);
@@ -348,7 +412,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (2, secondMaxed->sensorId);
 
 			// To avoid this, .ToSnapshot can be put to the end of the Query
-			// -> this results in the cache getting stored in the Enumerable object itself, rather then the Enumerator.
+			// -> this results in the cache getting stored in the Enumerable object itself, rather than the Enumerator.
 			auto maxesSnapshot = maxesAsc.ToSnapshot();
 
 			// Now it's cheap to create and destroy Enumerators multiple times
@@ -392,6 +456,35 @@ namespace EnumerableTests {
 			// (This mechanism can work even with interfaced Enuemrable<T>'s involved between the steps
 			//  - by using dynamic_cast between Enumerators internally.)
 		}
+
+		// Working with interfaced Enumerable<T>, the check for obtainable cache is possible via dynamic_cast.
+		// This has great benefit when succeeds (resorting to a single virtual call per full enumeration),
+		// but in return adds the unnecessary overhead of dynamic_cast in the (more likely) unsuccessful cases.
+		// To opt-out, define ENUMERABLES_EMPLOY_DYNAMICCAST = false in config.
+		{
+			auto maxes = Enumerate(measurements).Addresses().MaximumsBy(&Measurement::value);
+			
+			AllocationCounter allocations;
+
+			std::vector<Measurement*> maxList = maxes.ToList();
+
+			const size_t maxListAllocs = allocations.Count();
+			
+			// have multiple max-places for this test
+			ASSERT (maxListAllocs > 1);
+			allocations.Reset();
+
+			Enumerable<Measurement*>  maxesIfaced   = maxes;
+			std::vector<Measurement*> maxListIfaced = maxesIfaced.ToList();
+
+			// Depending on configured inline buffer size, creation of complex Enumerators could require allocation when type-erased.
+			// Not this time:
+			static_assert (sizeof(decltype(maxes)::TEnumerator) <= ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE, "Wrong test setup.");
+
+			// The sorted list can be obtained even through type-erasure (no copy occurs)!
+			ASSERT_EQ (maxListAllocs, allocations.Count());
+		}
+		
 
 		// There's no .ThenBy to introduce secondary ordering critera in the Linq way.
 		// The simplest way probably is using std::tie!
@@ -482,7 +575,7 @@ namespace EnumerableTests {
 			auto roots = Enumerate(set1).MapTo<double>(&sqrt);
 			allocations.AssertFreshCount(0);
 
-			std::unordered_set<double> rootVec = roots.ToHashSet();
+			std::unordered_set<double> rootSet = roots.ToSet();
 
 #		if defined(_DEBUG) && !defined(__clang__)
 			// MSVC doesn't apply NRVO in debug + its move ctor does allocate!

@@ -15,27 +15,29 @@
 	 *   lution, as long as no multiple bindings needed within a compliation unit.]   *
 	 *  																			  *
 	 *  Note that some container types (particularly lists) play internal roles too:  *
-	 *	  - in implementation of multipass algorithms								  *
-	 *	  - as backing buffer of "Materialized" Enumerables							  *
-	 *	  - debug buffer for natvis													  *
+	 *    - in implementation of multipass algorithms								  *
+	 *    - as backing buffer of "Materialized" Enumerables							  *
+	 *    - debug buffer for natvis													  *
 	 *  																			  *
 	 *  ----------------------------------------------------------------------------  *
 	 *  This file contains the default configuration and type bindings -> for STL.	  *
 	 *  																			  *
-	 *  Options in this file should be changed BEFORE including the whole library	  *
-	 *	via Enumerables_Implementation.hpp !										  *
-	 *																				  *
-	 * 	Recommended is to have a customized Enumerables.hpp for the project with	  *
-	 * 	the customized settings, and including implementation at the end.			  *
-	 * 																				  *
+	 *  Options laid out in this file should be changed BEFORE including the whole	  *
+	 *  library via Enumerables_Implementation.hpp !	   Do NOT change this file!	  *
+	 *  																			  *
+	 *  Recommended is to have a customized Enumerables.hpp for the project with	  *
+	 *  the customized settings, and including implementation at the end.			  *
+	 *  																			  *
 	 *  To use a custom container type:												  *
-	 *	 * create the appropriate "Binding" following the simple patterns below		  *
+	 *   * create the appropriate "Binding" following the simple patterns below		  *
 	 *   * point it by the corresponding define in your Enumerables.hpp				  *
-	 *	 * then including Enumerables_Implementation.hpp which pulls this file		  *
-	 *	 * don't modify this header													  *
+	 *   * then including Enumerables_Implementation.hpp which pulls this file		  *
+	 *   * don't modify this header													  *
 	 *  [Alternatively: do the find&replace in your own copy :)]					  *
 	 *  ----------------------------------------------------------------------------  */
 
+
+#include "Enumerables_TypeHelperBasics.hpp"
 
 #include "Enumerables_TypeHelperBasics.hpp"
 
@@ -52,7 +54,7 @@ namespace Enumerables {
 // ==== Macros ==============================================================================================
 
 #ifndef ENUMERABLES_NOINLINE
-#	ifdef _MSC_VER
+#	if defined(_MSC_VER) && !defined(__clang__)
 #		define ENUMERABLES_NOINLINE __declspec(noinline)
 #	else
 #		define ENUMERABLES_NOINLINE __attribute__((noinline))
@@ -148,6 +150,37 @@ namespace Enumerables {
 
 
 
+// ==== Behavioural settings ================================================================================
+
+// Use standard rebind mechanism (via std::allocator_traits)
+// for allocators passed down to containers, when used with a changed type.
+// Set false if the project's allocator-system is value-unaware (e.g. EASTL).
+//
+// When enabled, container bindings should define:
+//	- AllocatedValueT<[K], V, Args...>
+//		Type to be used instead of plain V as value_type.	[optional]
+//	- AllocatorOptionIdx
+//		The allocator's position within the ellipsis of the Container<[K,] V, [n,] Options...> alias.
+//
+// This is only for internal type-changes, the client is still responsible for correctly binding allocators
+// to observable types. When T& is observable, a convention to bind T* externally is enforced.
+#ifndef ENUMERABLES_STANDARD_REBIND_ALLOCATORS
+#	define ENUMERABLES_STANDARD_REBIND_ALLOCATORS	true
+#endif
+
+
+// NOTE on Allocators & rebinding:
+// When using standard allocators, another approach can be to completely ignore their value_type
+// as received in parameters, and always rebind them appropriately for the container to use.
+// This could facilitate comfortable usage without manually binding allocators for every usage.
+//
+// The implementation should be simple via config:
+//	- set ENUMERABLES_STANDARD_REBIND_ALLOCATORS false
+//  - define Container<...> aliases in bindings so that they rebind any incoming allocator.
+
+
+
+
 // ==== Define bindings to STL if needed ====================================================================
 
 #ifndef ENUMERABLES_LIST_BINDING
@@ -175,27 +208,89 @@ namespace Enumerables::StlBinding {
 #ifndef ENUMERABLES_LIST_BINDING
 #define ENUMERABLES_LIST_BINDING  StlBinding::ListOperations
 
-	struct ListOperations {
-		template <class V>	using Container = std::vector<V>;
+#	ifndef __clang__
 
-		template <class V>
-		static Container<V>	Init(size_t capacity)
+	struct ListOperations {
+
+		/// Custom container type with arbitrary user-provided type-arguments.
+		template <class V, class... Options>
+		using Container = std::vector<V, Options...>;
+
+		/// Allocator's position within Container's "Options..."
+		static constexpr unsigned AllocatorOptionIdx = 0;
+
+
+		/// Create a new Container, preallocating the given capacity if supported.
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t capacity, const Opts&... options)
 		{
-			Container<V> l;
-			l.reserve(capacity);
-			return l;
+			TContainer list (options...);
+			list.reserve(capacity);
+			return list;
 		}
 
-		template <class V, class Vin>
-		static void			Add(Container<V>& l, Vin&& val)		{ l.push_back(std::forward<Vin>(val)); }
 
-		template <class V>
-		static void			Clear(Container<V>& l)				{ l.clear();	/* keep capacity! */   }
+		template <class V, class... Opts, class Vin>
+		static void		Add(Container<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
 
-		template <class V>
-		static V&			Access(Container<V>& l, size_t i)	{ return l[i];}
+		template <class V, class... Opts>
+		static void		Clear(Container<V, Opts...>& l)				{ l.clear();	/* keep capacity! */   }
+
+		template <class V, class... Opts>
+		static V&		Access(Container<V, Opts...>& l, size_t i)	{ return l[i];}
 	};
 
+#	else
+
+	struct ListOperations {
+
+		// NOTE: This little helper is necessitated by a clang limitation (bug?) in using ellipsis with template aliases.
+		//		 Is it standard? (Resembles Core lang issue #1430, but we don't expand packs into non-pack alias params!)
+		//		 Interestingly though, the same problem is not presented with unordered_map (SetOperations),
+		//		 nor is it reproducible at all using MSVC or GCC.
+		//
+		//		 Rationale of using ellipsis:
+		//			- keep library headers generic, any required customization in config
+		//			- automatically use default (type) arguments of the given container itself
+		//
+		//		In case of further errors, the same trcick is applicable to other bindings.
+		template <class V, class... Options>
+		struct BindHelper  { using type = std::vector<V, Options...>; };
+
+		// Argument deduction won't work through a dependent type, only with a direct alias.
+		// Fortunately, deduced arguments don't trigger the (supposed) clang bug.
+		template <class V, class... Options>
+		using DeducibleContainer = std::vector<V, Options...>;
+
+
+		// --- From here manifests the usual "Container Binding" concept ---
+
+		template <class V, class... Options>
+		using Container = typename BindHelper<V, Options...>::type;
+
+		static constexpr unsigned AllocatorOptionIdx = 0;
+
+
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t capacity, const Opts&... options)
+		{
+			TContainer list (options...);
+			list.reserve(capacity);
+			return list;
+		}
+
+
+		template <class V, class... Opts, class Vin>
+		static void		Add(DeducibleContainer<V, Opts...>& l, Vin&& val)	{ l.push_back(std::forward<Vin>(val)); }
+
+		template <class V, class... Opts>
+		static void		Clear(DeducibleContainer<V, Opts...>& l)			{ l.clear();	/* keep capacity! */   }
+
+		template <class V, class... Opts>
+		static V&		Access(DeducibleContainer<V, Opts...>& l, size_t i)	{ return l[i];}
+	};
+
+#	endif
 #endif
 
 
@@ -204,21 +299,27 @@ namespace Enumerables::StlBinding {
 #define ENUMERABLES_SET_BINDING   StlBinding::SetOperations
 
 	struct SetOperations {
-		template <class V>	using Container = std::unordered_set<V>;
 
-		template <class V>
-		static Container<V>	Init(size_t capacity)
+		template <class V, class... Options>
+		using Container = std::unordered_set<V, Options...>;
+
+		static constexpr unsigned AllocatorOptionIdx = 2;
+
+
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t capacity, const Opts&... options)
 		{
-			Container<V> s;
-			s.reserve(capacity);
-			return s;
+			TContainer set (0u, options...);
+			set.reserve(capacity);
+			return set;
 		}
 
-		template <class V>
-		static bool			Contains(const Container<V>& s, const V& elem)	{ return s.find(elem) != s.end(); }
 
-		template <class V, class Vin>
-		static void			Add(Container<V>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
+		template <class V, class... Opts>
+		static bool			Contains(const Container<V, Opts...>& s, const V& elem)	{ return s.find(elem) != s.end(); }
+
+		template <class V, class... Opts, class Vin>
+		static void			Add(Container<V, Opts...>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
 	};
 
 #endif
@@ -229,24 +330,36 @@ namespace Enumerables::StlBinding {
 #define ENUMERABLES_DICTIONARY_BINDING	StlBinding::DictionaryOperations
 
 	struct DictionaryOperations {
-		template <class K, class V>		using Container = std::unordered_map<K, V>;
 
-		template <class K, class V>
-		static Container<K, V> Init(size_t capacity)
+		template <class K, class V, class... Options>
+		using Container = std::unordered_map<K, V, Options...>;
+
+		static constexpr unsigned AllocatorOptionIdx = 2;
+
+		template <class K, class V, class... Options>
+		using AllocatedValueT = std::pair<const K, V>;
+
+
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t capacity, const Opts&... options)
 		{
-			Container<K, V> d;
-			d.reserve(capacity);
-			return d;
+			TContainer dict (/*buckets:*/ 0u, options...);
+			dict.reserve(capacity);
+			return dict;
 		}
 
-		template <class K, class V>
-		static bool		Contains(const Container<K, V>& d, const K& key)	{ return d.find(key) != d.end(); }
 
-		template <class K, class V, class Kin, class Vin>
-		static void		Add(Container<K, V>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
+		template <class K, class V, class... Opts>
+		static bool		Contains(const Container<K, V, Opts...>& d, const K& key)	{ return d.find(key) != d.end(); }
 
-		//template <class K, class V, class Kin, class Vin>
-		//static void	Upsert(Container<K, V>& d, K&& key, Vin&& val)		{ d.insert_or_assign(std::forward<Kin>(key), std::forward<Vin>(val)); }
+		template <class K, class V, class... Opts, class Kin, class Vin>
+		static void		Add(Container<K, V, Opts...>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
+
+		//template <class K, class V, class... Opts, class Kin, class Vin>
+		//static void	Upsert(Container<K, V, Opts...>& d, K&& key, Vin&& val)		{ d.insert_or_assign(std::forward<Kin>(key), std::forward<Vin>(val)); }
+
+		template <class K, class V, class... Opts>
+		static V&		Access(Container<K, V, Opts...>& d, const K& key)			{ return d[key]; }
 	};
 
 #endif
@@ -279,6 +392,7 @@ namespace Enumerables {
 
 	using LogicException = ENUMERATIONS_EXCEPTION_TYPE;
 
+	// Set fundamental bindings: fallbacks below can rely on them
 	using ListOperations = ENUMERABLES_LIST_BINDING;
 	using SetOperations  = ENUMERABLES_SET_BINDING;
 	using DictOperations = ENUMERABLES_DICTIONARY_BINDING;
@@ -288,9 +402,48 @@ namespace Enumerables {
 
 namespace Enumerables::DefaultBinding {
 
+	// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
+	// - hence only a ListOperations fallback is provided, but it presents the way to utilize such a type from your favourite library.
+	struct FallbackSmallListOperations : public ListOperations {
+
+		template <class V, size_t InlineCap, class... Options>
+		using Container = ListOperations::Container<V, Options...>;
+
+		template <class V, size_t InlineCap, class... Options>
+		using AllocatedValueT = typename TypeHelpers::AsDependentT<V, ListOperations>::template AllocatedValueT<V, Options...>;
+	};
+
+
+	// Required solely by direct Enumerate({ a, b, c }) syntax, specifies the backing container of elements.
+	// This default uses the specified LIST_BINDING, assuming initializer_list support.
+	struct ListBracedInitOperations {
+
+		/// @tparam Alloc:  optional user-given allocator - use default if void
+		template <class V, class Alloc = void>
+		using Container = TypeHelpers::OverriddenNthArgT<ListOperations::Container<V>,
+															ListOperations::AllocatorOptionIdx + 1,
+															Alloc								   >;
+
+		/// Create backing container with default allocator.
+		template <class V>
+		static Container<V>		Init(std::initializer_list<V> initList)
+		{
+			return Container<V>(initList);
+		}
+
+		/// Create backing container with a user-specified allocator.
+		template <class V, class A>
+		static Container<V, A>	Init(std::initializer_list<V> initList, const A& allocator)
+		{
+			return Container<V, A>(initList, allocator);
+		}
+	};
+
+		
 	// Recommended default for terminal operations of optional result.
 	struct OptionalOperations {
-		template <class T>	using Container = OptResult<T>;
+		template <class T>	using Container = OptResult<T>;		// this alias could adjust type (e.g. decay<T>)
+																// => not for automatic deduction
 
 		template <class T, class Enumerator>
 		static Container<T>	FromCurrent(Enumerator& et)
@@ -302,40 +455,13 @@ namespace Enumerables::DefaultBinding {
 		static Container<T>	NoValue(StopReason rs)	{ return rs; }
 	};
 
-
-	// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
-	// - hence only a ListOp. fallback is provided, but the below code presents the way to utilize such type from your favorite library.
-	struct FallbackSmallListOperations {
-		template <class V, size_t InlineCap>
-		using Container = ListOperations::Container<V>;
-
-		template <class V, size_t N>
-		static Container<V, N>	Init(size_t capacity = N)		{ return ListOperations::Init<V>(capacity); }
-
-		template <class V, size_t N = 0, class Vin>
-		static void		Add(Container<V, N>& l, Vin&& val)		{ ListOperations::Add(l, std::forward<Vin>(val)); }
-
-		template <class V, size_t N = 0>
-		static void		Clear(Container<V, N>& l)				{ ListOperations::Clear(l); }
-
-		template <class V, size_t N = 0>
-		static V&		Access(Container<V, N>& l, size_t i)	{ return ListOperations::Access(l, i); }
-	};
-
 }	// namespace Enumerables::DefaultBinding
 
 
 namespace Enumerables {
 
-#ifdef ENUMERABLES_OPTIONAL_BINDING
-	using OptionalOperations = ENUMERABLES_OPTIONAL_BINDING;
-#else
-	using OptionalOperations = DefaultBinding::OptionalOperations;
-#endif
-
-
 #ifdef ENUMERABLES_SMALLLIST_BINDING
-	using SmallListOperations = ENUMERABLES_SMALLARRAY_BINDING;
+	using SmallListOperations = ENUMERABLES_SMALLLIST_BINDING;
 
 #	define ENUMERABLES_WARN_FOR_SMALLLIST 
 #else
@@ -346,12 +472,26 @@ namespace Enumerables {
 #endif
 
 
+#ifdef ENUMERABLES_BRACEDINIT_BINDING
+	using BracedInitOperations = ENUMERABLES_BRACEDINIT_BINDING;
+#else
+	using BracedInitOperations = DefaultBinding::ListBracedInitOperations;
+#endif
+
+
+#ifdef ENUMERABLES_OPTIONAL_BINDING
+	using OptionalOperations = ENUMERABLES_OPTIONAL_BINDING;
+#else
+	using OptionalOperations = DefaultBinding::OptionalOperations;
+#endif
+
+
 	// Establish container type aliases
-	template <class V>				using ListType		 = typename ListOperations::Container<V>;
-	template <class V, size_t N>	using SmallListType  = typename SmallListOperations::Container<V, N>;
-	template <class V>				using SetType		 = typename SetOperations::Container<V>;
-	template <class K, class V>		using DictionaryType = typename DictOperations::Container<K, V>;
-	template <class V>				using Optional		 = typename OptionalOperations::Container<V>;
+	template <class V, class... Opts>			using ListType		 = typename ListOperations::Container<V, Opts...>;
+	template <class V, size_t N, class... Opts>	using SmallListType  = typename SmallListOperations::Container<V, N, Opts...>;
+	template <class V, class... Opts>			using SetType		 = typename SetOperations::Container<V, Opts...>;
+	template <class K, class V, class... Opts>	using DictionaryType = typename DictOperations::Container<K, V, Opts...>;
+	template <class V>							using Optional		 = typename OptionalOperations::Container<V>;
 
 }	// namespace Enumerables
 
@@ -371,8 +511,8 @@ namespace Enumerables {
 		return TypeHelpers::AdlSize(c);	 
 	}
 
-	// NOTE: To improve performance ensure that size hints are enabled for used container types in either form!
-	
+	// NOTE: To improve performance ensure that size hints are enabled for input container types in either form!
+
 
 	// HasValue overloads for optional-like types enable convenience features like the .ValuesOnly() shorthand.
 	// Further overlaods can be introduced by client code in the Enumerables namespace.
@@ -390,6 +530,14 @@ namespace Enumerables {
 		return o.has_value();
 	}
 #endif
+
+
+	// Containers in Bindings must have a corresponding GetSize/HasValue function accessible in the Enumerables namespace.
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<ListType<int>&>()))			>(), "GetSize(List) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<SmallListType<int, 1>&>()))	>(), "GetSize(SmallList) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<SetType<int>&>()))			>(), "GetSize(Set) is not defined!");
+	static_assert (std::is_same<size_t,	decltype(GetSize(std::declval<DictionaryType<int, int>&>()))>(), "GetSize(Dictionary) is not defined!");
+	static_assert (std::is_same<bool,	decltype(HasValue(std::declval<Optional<int>&>()))			>(), "HasValue(Optional) is not defined!");
 
 }	// namespace Enumerables
 

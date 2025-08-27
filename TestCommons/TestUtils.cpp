@@ -1,5 +1,6 @@
 #include "TestUtils.hpp"
 #include <new>
+#include <cctype>
 #include <cassert>
 
 
@@ -33,6 +34,32 @@ namespace EnumerableTests {
 		Reset();
 	}
 
+
+	void AllocationCounter::AssertMaxFreshCount(size_t maxExpected, const char* file, long line)
+	{
+		if (EnableAsserts)
+			Assert(maxExpected >= Count(), "Allocation count exceeded", file, line);
+		Reset();
+	}
+
+
+	std::pair<bool, std::string> FindCmdOption(char letter, int argc, const char* argv[])
+	{
+		std::string trg1 = "-";
+		std::string trg2 = trg1;
+		trg1.push_back(static_cast<char>(std::toupper(letter)));
+		trg2.push_back(static_cast<char>(std::tolower(letter)));
+
+		for (int i = 1; i < argc; i++) {
+			if (trg1 == argv[i] || trg2 == argv[i]) {
+				if (argc > i + 1 && argv[i + 1][0] != '-')
+					return { true, argv[i + 1] };
+				else
+					return { true, "" };
+			}
+		}
+		return { false, "" };
+	}
 
 
 	void Greet(const char* testName)

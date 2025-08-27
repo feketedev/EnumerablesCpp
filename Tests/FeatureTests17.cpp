@@ -170,7 +170,7 @@ namespace EnumerableTests {
 
 		// -- Also check Enumerator capability directly --
 
-		std::unordered_set<int>	 numSet = numbers.ToHashSet();
+		std::unordered_set<int>	 numSet = numbers.ToSet();
 		std::map<char, int>		 map { { 'a', 5 }, { 'b', 8 }, { 'c', 10 } };
 
 		Enumerables::SizeInfo s1 = numbers.GetEnumerator().Measure();

@@ -24,6 +24,7 @@ namespace Enumerables::TypeHelpers {
 #pragma region StorableT
 
 	/// Holds a pointer bypassing a reference for unified storage/access in generic code.
+	/// Convertible to and std::hashable as the referred lvalue.
 	template <class T>
 	class RefHolder {
 		static_assert (!is_reference<T>(), "Use with (qualified) decayed type.");
@@ -33,14 +34,55 @@ namespace Enumerables::TypeHelpers {
 	public:
 		template <class Ref>
 		requires is_same_v<const T, const remove_reference_t<Ref>>
-		RefHolder(Ref&& ref) : ptr { &ref }
+		RefHolder(Ref&& ref) noexcept : ptr { &ref }
 		{
 			static_assert (is_lvalue_reference<Ref>(), "Reference stored from rvalue soon becomes dangling!");
 		}
 
-		T&		 Get() const	{ return *ptr; }
-		operator T&()  const	{ return *ptr; }
+		T&		 Get() const noexcept	{ return *ptr; }
+		operator T&()  const noexcept	{ return *ptr; }
+
+
+		// let's have full transparency with equality-checks
+		template <class RH = T>
+		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
+		
+		template <class RH = T>
+		bool operator !=(const RH& rhs)				const	 noexcept(noexcept(Get() != rhs))		{ return Get() != rhs; }
+
+		template <class RT>
+		bool operator ==(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() == rhs.Get()))	{ return Get() == rhs.Get(); }
+		
+		template <class RT>
+		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
+
+
+		// also support default ordering -> be usable in tree-sets
+		template <class RH = T>
+		bool operator <(const RH& rhs)				const	 noexcept(noexcept(Get() < rhs))		{ return Get() < rhs; }
+
+		template <class RT>
+		bool operator <(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() < rhs.Get()))	{ return Get() < rhs.Get(); }
 	};
+
+	template <class T, class LH = T>
+	bool operator ==(const LH& lhs, const RefHolder<T>& ref) noexcept(noexcept(lhs == ref.Get()))	{ return lhs == ref.Get(); }
+
+	template <class T, class LH = T>
+	bool operator !=(const LH& lhs, const RefHolder<T>& ref) noexcept(noexcept(lhs != ref.Get()))	{ return lhs != ref.Get(); }
+
+	template <class T, class LH = T>
+	bool operator <(const LH& lhs, const RefHolder<T>& ref)	 noexcept(noexcept(lhs < ref.Get()))	{ return lhs < ref.Get(); }
+
+
+
+	/// Trait to restore a RefHolder's pointed type. [Expects non-ref, non-volatile RefHolder.]
+	template <class T>
+	struct RestoredRef						{ using type = T;  };
+	template <class T>
+	struct RestoredRef<RefHolder<T>>		{ using type = T&; };
+	template <class T>
+	struct RestoredRef<const RefHolder<T>>	{ using type = T&; };
 
 
 
@@ -55,20 +97,25 @@ namespace Enumerables::TypeHelpers {
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
 
+	/// Elem type restorable from a temporary container - i.e. resolve StorableT.
+	/// [ignores ref, strips it from an unwrapped T&]
+	template <class T>
+	using RestorableT = typename RestoredRef<remove_reference_t<T>>::type;
+
 
 	/// Access stored instance as lvalue
-	template <class V>	V&			Revive(const RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&			Revive(RefHolder<V>& stored)			{ return stored.Get(); }
-	template <class V>	V&			Revive(V& stored)						{ return stored; }
+	template <class V>	V&			Revive(const RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>	V&			Revive(RefHolder<V>& stored)			noexcept  { return stored.Get(); }
+	template <class V>	V&			Revive(V& stored)						noexcept  { return stored; }
 
 	/// Access stored instance forcing constness even on referenced object
-	template <class V>	const V&	ReviveConst(const RefHolder<V>& stored)	{ return stored.Get(); }
-	template <class V>	const V&	ReviveConst(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>  const V&	ReviveConst(const V& stored)			{ return stored; }
+	template <class V>	const V&	ReviveConst(const RefHolder<V>& stored)	noexcept  { return stored.Get(); }
+	template <class V>	const V&	ReviveConst(RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>  const V&	ReviveConst(const V& stored)			noexcept  { return stored; }
 
 	/// Get final access to the stored entity, if possible as an rvalue
-	template <class V>	V&			PassRevived(RefHolder<V>& stored)		{ return stored.Get(); }
-	template <class V>	V&&			PassRevived(V& stored)					{ return move(stored); }
+	template <class V>	V&			PassRevived(RefHolder<V>& stored)		noexcept  { return stored.Get(); }
+	template <class V>	V&&			PassRevived(V& stored)					noexcept  { return move(stored); }
 
 #pragma endregion
 
@@ -227,5 +274,32 @@ namespace Enumerables::TypeHelpers {
 
 
 }		// namespace Enumerables::TypeHelpers
+
+
+
+
+
+namespace std {
+
+
+#pragma region StorableT
+
+	template<class T>
+	struct hash<Enumerables::TypeHelpers::RefHolder<T>> : hash<remove_const_t<T>>	// inherit disabledness
+	{
+		// SFINAE: don't define when disabled for referred type
+		template<class TT = T, enable_if_t<is_same_v<TT, T>, int> = 0>
+		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
+		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
+		{
+			return hash<remove_const_t<T>>::operator()(ref.Get());
+		}
+	};
+
+#pragma endregion
+
+
+}		// namespace std
+
 
 #endif	// ENUMERABLES_GENERICSTORAGE_HPP

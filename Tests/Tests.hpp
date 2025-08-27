@@ -9,7 +9,7 @@ namespace EnumerableTests {
 	void LegacyTests(const char myPath[]);
 	void LegacyPerfTests();
 
-	void NewPerfTests();
+	void NewPerfTests(int argc, const char* argv[]);
 
 	void RunIntroduction1();
 	void RunIntroduction2();
@@ -22,13 +22,14 @@ namespace EnumerableTests {
 	void TestFiltration();
 	void TestArithmetics();
 	void TestMisc();
+	void TestCollectionCustomizability();
 
 	void TestFeatures17();
 	void TestFeatures20();
 
 
 
-	inline void RunAll(const char myPath[])
+	inline void RunAll(const char myPath[], int argc, const char* argv[])
 	{
 		LegacyTests(myPath);
 		RunIntroduction1();
@@ -41,10 +42,11 @@ namespace EnumerableTests {
 		TestLambdaUsage();
 		TestArithmetics();
 		TestMisc();
+		TestCollectionCustomizability();
 		TestFeatures17();
 		TestFeatures20();
 
-		NewPerfTests();
+		NewPerfTests(argc, argv);
 	 // LegacyPerfTests();
 	}
 
