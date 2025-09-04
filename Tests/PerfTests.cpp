@@ -738,6 +738,7 @@ namespace EnumerableTests {
 			return q.template Sum<long long>();
 		}
 
+
 #if CPP23_ENABLED
 		static auto& CreateRange(const std::vector<Pair>& in)
 		{
@@ -1347,7 +1348,7 @@ namespace EnumerableTests {
 
 	static TableWriter<7>  BeginSummaryTab()
 	{
-		TableWriter<7> tb { std::cout, 11, 17, 10, 14, 16, 19, 13 };
+		TableWriter<7> tb { std::cout, 11, 17, 13, 12, 16, 19, 13 };
 		tb.output << std::right;
 		tb.PutRow("", "Handwritten", "Ranges", "Repeated Query", "Construct + Query", "Malloc diff");
 		return tb;
@@ -1402,16 +1403,27 @@ namespace EnumerableTests {
 		auto extraMallocs = (long long)sum.constructAndEnumerate.allocations
 						  - (long long)sum.classic.allocations;
 
+		auto extraMallocsRangesCompare = (long long)rangesSum.constructAndEnumerate.allocations
+									   - (long long)rangesSum.classic.allocations;
+
 		auto extraMallocsRanges = (long long)rangesSum.constructAndEnumerate.allocations
 								- (long long)rangesSum.ranges.allocations;
 
 		tb.PutCell("ALL comparable:");
 		tb.PutCell(duration_cast<Millis>(sum.classic.runtime),				 " ms");
-		tb.PutCell("-");
+		tb.PutCell("n/a");
 		tb.PutCell(duration_cast<Millis>(sum.enumerate.runtime),			 " ms");
 		tb.PutCell(duration_cast<Millis>(sum.constructAndEnumerate.runtime), " ms");
 		tb.output << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
 		tb.PutCell((double)extraMallocs);
+
+		tb.output << std::noshowpos << std::fixed << std::setprecision(1);
+		tb.PutCell("Overhead:");
+		tb.PutCell("-");
+		tb.PutCell("n/a");
+		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
+		tb.PutCell(sum.TotalOverheadPercent(), " %");
+		tb.CloseRow();
 
 		tb.output << std::noshowpos;
 		tb.PutCell("ALL with ranges:");
@@ -1419,14 +1431,15 @@ namespace EnumerableTests {
 		tb.PutCell(duration_cast<Millis>(rangesSum.ranges.runtime),				   " ms");
 		tb.PutCell(duration_cast<Millis>(rangesSum.enumerate.runtime),			   " ms");
 		tb.PutCell(duration_cast<Millis>(rangesSum.constructAndEnumerate.runtime), " ms");
-		tb.CloseRow();
+		tb.output << std::fixed << std::setprecision(0) << (extraMallocs ? std::showpos : std::noshowpos);
+		tb.PutCell((double)extraMallocsRangesCompare);
 
 		tb.output << std::noshowpos << std::fixed << std::setprecision(1);
 		tb.PutCell("Overhead:");
 		tb.PutCell("-");
 		tb.PutCell(rangesSum.RangesOverheadPercent(), " %");
-		tb.PutCell(sum.EnumerateOverheadPercent(), " %");
-		tb.PutCell(sum.TotalOverheadPercent(), " %");
+		tb.PutCell(rangesSum.EnumerateOverheadPercent(), " %");
+		tb.PutCell(rangesSum.TotalOverheadPercent(), " %");
 		tb.CloseRow();
 
 		tb.PutCell("Against ranges:");
