@@ -158,7 +158,7 @@ class Pet {
 public:
 	const Person&       Owner() const;
 	const std::string&  Name()  const;
-// ...
+	// ...
 };
 
 Enumerable<Pet&>  pets   = /*...*/;
@@ -246,35 +246,35 @@ The whole test-suit ran 10 times on an i7-14700K, with all Turbo, SpeedStep and 
 <details open>
 <summary>Clang Runtimes</summary>
 
-  ![Clang Long runtimes](./doc/perfCharts/Clang23_longs.svg) \
-  ![Clang Short runtimes](./doc/perfCharts/Clang23_shorts.svg)
+  ![Clang Long runtimes](./doc/perfCharts/Clang23_Longs.svg) \
+  ![Clang Short runtimes](./doc/perfCharts/Clang23_Shorts.svg)
 
 </details>
 
 <details>
 <summary>Clang Overhead comparison</summary>
 
-  ![Clang Long overheads](./doc/perfCharts/Clang23_longs_overhead.svg)\
+  ![Clang Long overheads](./doc/perfCharts/Clang23_Longs_Overhead.svg)\
   **-- Note that extreme cases are off the chart to visualize the rest. --**
 
-  ![Clang Short overheads](./doc/perfCharts/Clang23_shorts_overhead.svg)
+  ![Clang Short overheads](./doc/perfCharts/Clang23_Shorts_Overhead.svg)
 
 </details>
 
 <details>
 <summary>MSVC Runtimes</summary>
 
-  ![MSVC Long runtimes](./doc/perfCharts/MS23_longs.svg)\
-  ![MSVC Short runtimes](./doc/perfCharts/MS23_shorts.svg)
+  ![MSVC Long runtimes](./doc/perfCharts/MS23_Longs.svg)\
+  ![MSVC Short runtimes](./doc/perfCharts/MS23_Shorts.svg)
 
 </details>
 
 <details>
 <summary>MSVC Overhead comparison</summary>
 
-  ![MSVC Long overheads](./doc/perfCharts/MS23_longs_overhead.svg)\
+  ![MSVC Long overheads](./doc/perfCharts/MS23_Longs_Overhead.svg)\
   **-- Note that extreme cases are off the chart to visualize the rest. --**
-  ![MSVC Short overheads](./doc/perfCharts/MS23_shorts_overhead.svg)
+  ![MSVC Short overheads](./doc/perfCharts/MS23_Shorts_Overhead.svg)
 
 </details>
 
@@ -323,7 +323,7 @@ The theoretical benefit is that a good intellisense can provide method completio
 ### Input Containers
 
 Naturally, any range-iterable type can serve as the source of a sequence.\
-Querying there size however does not have a standard way before C++17.
+Querying their size however does not have a standard way before C++17.
 
 The client is allowed to overload 2 functions in the library's namespace:
 * size_t *Enumerables::GetSize*(const Container&)
