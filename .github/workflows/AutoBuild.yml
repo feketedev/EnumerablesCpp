@@ -13,6 +13,12 @@ env:
   BUILD_CONFIG: Release
   BUILD_PLATFORM: x64
 
+  # path + common prefix
+  EXPECTED_WARNINGS: .github\workflows\ExpectedWarnings\WarningList
+  
+  # expecting windows paths
+  REDACT_LOCATIONS: -replace '(?<=\.[hc]pp)\(\d+,\d+\):',':' -replace '[A-Za-z]:\\(\w+\\)*EnumerablesCpp\\','EnumerablesCpp\'
+
 permissions:
   contents: read
 
@@ -21,6 +27,11 @@ jobs:
     name: Build on Clang
     runs-on: windows-latest
 
+    env:
+      # ideally, configuration should be irrelevant
+      # TODO: BUILD_PLATFORM
+      LOGS_SUFFIX: Clang_x64.txt
+
     steps:
     - uses: actions/checkout@v4
 
@@ -29,11 +40,35 @@ jobs:
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIG}},Platform=${{env.BUILD_PLATFORM}} TestsClang\TestsClang.vcxproj
-   
-  msBuild:
+      run: >
+        msbuild /M /P:Platform=${{env.BUILD_PLATFORM}},Configuration=${{env.BUILD_CONFIG}}
+        /FileLogger /FLP:'logfile=Warnings_${{env.LOGS_SUFFIX}};verbosity=Quiet'
+        TestsClang\TestsClang.vcxproj
+
+    - name: Check warnings
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        $act = type 'Warnings_${{env.LOGS_SUFFIX}}' | %{ $_ ${{env.REDACT_LOCATIONS}} }
+        $exp = type ${{env.EXPECTED_WARNINGS}}_${{env.LOGS_SUFFIX}}
+        compare $act $exp | tee -variable diff
+        if ($diff) {
+            echo "`n ---- Actual WarningList ----"
+            echo $act
+            return 1
+        }
+
+
+  msvcBuild:
     name: Build on MSVC
     runs-on: windows-latest
+    
+    #temp saving
+    needs: clangBuild
+
+    env:
+      # ideally, configuration should be irrelevant
+      # TODO: BUILD_PLATFORM
+      LOGS_SUFFIX: MSVC_x64.txt
 
     steps:
     - uses: actions/checkout@v4
@@ -43,5 +78,20 @@ jobs:
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      # NOTE: only the latest toolset is available -> override project setting!
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIG}},Platform=${{env.BUILD_PLATFORM}},PlatformToolset=v143 TestsMSVC\TestsMSVC.vcxproj
+      # only the latest toolset is available -> override project setting!
+      run: >
+        msbuild /M /P:Platform=${{env.BUILD_PLATFORM}},Configuration=${{env.BUILD_CONFIG}},PlatformToolset=v143
+        /FileLogger /FLP:'logfile=Warnings_${{env.LOGS_SUFFIX}};verbosity=Quiet'
+        TestsMSVC\TestsMSVC.vcxproj
+
+    - name: Check warnings
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        $act = type 'Warnings_${{env.LOGS_SUFFIX}}' | %{ $_ ${{env.REDACT_LOCATIONS}} }
+        $exp = type ${{env.EXPECTED_WARNINGS}}_${{env.LOGS_SUFFIX}}
+        compare $act $exp | tee -variable diff
+        if ($diff) {
+            echo "`n ---- Actual WarningList ----"
+            echo $act
+            return 1
+        }
