@@ -1336,6 +1336,9 @@ namespace EnumerableTests {
 
 	void NewPerfTests(int argc, const char* argv[])
 	{
+		if (FindCmdOption('Q', argc, argv).first)
+			return;
+
 		std::pair<bool, std::string> compactTimes     = FindCmdOption('T', argc, argv);
 		std::pair<bool, std::string> compactOverheads = FindCmdOption('O', argc, argv);
 		

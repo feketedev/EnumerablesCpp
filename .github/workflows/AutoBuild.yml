@@ -23,7 +23,7 @@ jobs:
     runs-on: windows-latest
 
     strategy: &matrixStrategy
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         platform: [x64, x86]
         config: [Debug, Release]
@@ -61,14 +61,15 @@ jobs:
               echo 'All warnings were expected.'
           }
 
+    - name: Run tests
+      run: TestsClang\${{matrix.platform}}\${{matrix.config}}\TestsClang\TestsClang.exe -Q
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+
 
   msvcBuild:
     name: Build on MSVC
     runs-on: windows-latest
     strategy: *matrixStrategy
-
-    #temp saving
-    needs: clangBuild
 
     env:
       # ideally, config should be irrelevant
@@ -90,4 +91,8 @@ jobs:
         TestsMSVC\TestsMSVC.vcxproj
 
     - *warnCheck
+
+    - name: Run tests
+      run: TestsMSVC\${{matrix.platform}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -Q
+      working-directory: ${{env.GITHUB_WORKSPACE}}
 
