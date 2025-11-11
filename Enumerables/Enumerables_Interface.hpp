@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *  									  Enumerables for C++   v2.0.3										  *
+	 *  									  Enumerables for C++   v2.0.4										  *
 	 *  																										  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
@@ -155,6 +155,7 @@ namespace TypeHelpers {
 namespace Def {
 
 	using namespace Enumerables::TypeHelpers;
+	using std::initializer_list;
 
 
 	/// Common Enumerable implementation.
@@ -181,7 +182,7 @@ namespace Def {
 	public:
 		using TEnumerator	  = decltype(factory());
 		using TElem			  = EnumeratedT<TEnumerator>;
-		using TElemDecayed	  = std::decay_t<TElem>;
+		using TElemDecayed	  = decay_t<TElem>;
 		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// deep-const for predicates
 
 
@@ -414,8 +415,8 @@ namespace Def {
 
 	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
 
-		template <class Mapper>  using DecayedResult   = std::decay_t<MappedT<TElem, Mapper>>;
-		template <class Mapper>  using DecayedResultLV = std::decay_t<MappedT<TElem&, Mapper>>;
+		template <class Mapper>  using DecayedResult   = decay_t<MappedT<TElem, Mapper>>;
+		template <class Mapper>  using DecayedResultLV = decay_t<MappedT<TElem&, Mapper>>;
 
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
@@ -681,8 +682,19 @@ namespace Def {
 		auto ZipTo(Eb2&& second, Zipper&& z) &&				{ return MvChainJoined<Eb2, void, ZipperEnumerator>(second, CombinerR<IterableT<Eb2>, Zipper, TZipped>(z)); }
 
 
+		/// Fluently append elements of a continuation sequence. Those must be convertible to the current TElem, which is strictly preserved.
+		/// See Enumerables::Concat(...) for more options.
+		/// @param continuation: any iterable, captured following Enumerate() rules. Overloads support braced-initializer as well.
 		template <class E2>	auto Concat(E2&& continuation) const &	{ return   ChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
 		template <class E2>	auto Concat(E2&& continuation) &&		{ return MvChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
+
+		template <class I2, class = IfNonScalar<AsDependentT<I2, TElem>>>
+		auto Concat(initializer_list<I2>&& conti) const &					{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
+		template <class I2, class = IfNonScalar<AsDependentT<I2, TElem>>>
+		auto Concat(initializer_list<I2>&& conti) &&						{ return MvChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
+
+		auto Concat(initializer_list<InitElemFor<TElem>>&& conti) const &	{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
+		auto Concat(initializer_list<InitElemFor<TElem>>&& conti) &&		{ return MvChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
 
 	#pragma endregion
 
@@ -1319,7 +1331,7 @@ namespace Def {
 	// These 2 overloads could work publicly IF enumerated type was always provided explicitly.
 	// They provide the  R* -> R&  "capture-syntax".
 	template <class R, class A, class I, class = R*>
-	auto InitEnumerable(std::initializer_list<I>&& init, const A& alloc)
+	auto InitEnumerable(initializer_list<I>&& init, const A& alloc)
 	{
 		static_assert (!is_reference<R>::value, "Enumerables internal error.");
 
@@ -1327,7 +1339,7 @@ namespace Def {
 	}
 
 	template <class R, class A, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
-	auto InitEnumerable(std::initializer_list<V*>&& init, const A& alloc)
+	auto InitEnumerable(initializer_list<V*>&& init, const A& alloc)
 	{
 		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
 		return Enumerate<RB*>(BracedInitWithOptionalAlloc(init, alloc)).Dereference();
@@ -1335,10 +1347,12 @@ namespace Def {
 
 
 	// Implicit type deduction is achieved by 4 additional, public wrappers.
-	//	Explicit Result type => braced-initializer elems can be converted
-	//							Note subcase: init-list type already deduced but needing conversion should work!
-	//										  Important for indirect usage, like Concat.
-	//	void Result type	 => initializer must be deducable -> pointer usage defaults to "capture-syntax"
+	//	Explicit ForcedResult  => braced-initializer elems can be converted individually
+	//								-> scalar Result: enforced to init-list directly, so that literal-conversions are checked
+	//								-> non-scalar Result: lets the init-list deduce its separate element type (if able),
+	//								   then the Result type serves as a yield-time conversion target (just like with containers).
+	//	void ForcedResult	   => initializer must be deducible
+	//								-> pointer usage defaults to "capture-syntax"
 
 	template <class ForcedResult>
 	using IfInitRefs   = enable_if_t<is_reference<ForcedResult>::value, int>;
@@ -1360,7 +1374,7 @@ namespace Def {
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
 	template <class ForcedResult, class CustomAllocator = None,
 			  IfInitValues<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<NoDeduce<ForcedResult>>&& init, const CustomAllocator& alloc = {})
+	auto Enumerate(initializer_list<NoDeduce<ForcedResult>>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<ForcedResult>(move(init), alloc);
 	}
@@ -1369,24 +1383,28 @@ namespace Def {
 	/// (Explicit type allows conversions, thus usage of interfaces.)
 	template <class ForcedResult, class CustomAllocator = None,
 			  IfInitRefs<ForcedResult> = 0>
-	auto Enumerate(std::initializer_list<remove_reference_t<ForcedResult>*>&& init, const CustomAllocator& alloc = {})
+	auto Enumerate(initializer_list<remove_reference_t<ForcedResult>*>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<ForcedResult>(move(init), alloc);
 	}
 
 
 	/// Take implicitly typed values (pointers excluded) from braced initializer.
+	/// Also enables yield-time conversion to a non-scalar ForcedResult, having seed elements deduced to a different type.
 	template <class ForcedResult = void, class CustomAllocator = None,
 			  class T, IfInitDeducedValues<ForcedResult, T> = 0>
-	auto Enumerate(std::initializer_list<T>&& init, const CustomAllocator& alloc = {})
+	auto Enumerate(initializer_list<T>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init), alloc);
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
+	/// @remarks 
+	///		For internal reasons (Concat), must also accept a list of compatible pointers
+	///		in the explicit case, should those be already deduced and mismatch ForcedResult.
 	template <class ForcedResult = void, class CustomAllocator = None,
 			  class T, IfInitDeducedRefs<ForcedResult, T*> = 0>
-	auto Enumerate(std::initializer_list<T*>&& init, const CustomAllocator& alloc = {})
+	auto Enumerate(initializer_list<T*>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init), alloc);
 	}
@@ -1394,9 +1412,9 @@ namespace Def {
 
 	// For lvalue initializer lists (often used in template tricks), does not copy elements!
 	template <class ForcedResult = void, class T>
-	auto Enumerate(std::initializer_list<T>& cont)
+	auto Enumerate(initializer_list<T>& cont)
 	{
-		using It = typename std::initializer_list<T>::iterator;
+		using It = typename initializer_list<T>::iterator;
 		return WrapFactory(
 			[&cont]() { return IteratorEnumerator<It, ForcedResult> { cont.begin(), cont.end() }; }
 		);
@@ -1416,10 +1434,10 @@ namespace Def {
 	bool AreEqual(A&& lhs, B&& rhs);
 
 	template <class I, class B>
-	bool AreEqual(std::initializer_list<I>&& lhs, B&& rhs);
+	bool AreEqual(initializer_list<I>&& lhs, B&& rhs);
 
 	template <class I, class A>
-	bool AreEqual(A&& lhs, std::initializer_list<I>&& rhs);
+	bool AreEqual(A&& lhs, initializer_list<I>&& rhs);
 
 
 
@@ -1432,101 +1450,103 @@ namespace Def {
 	auto ConcatInternal(C1&&, C2&&);
 
 
-	template <class TForced>
-	using DefaultInitT = conditional_t<is_reference<TForced>::value, remove_reference_t<TForced>*, TForced>;
 
-
-
-	// NOTE: Inline braced-init-list syntax can be handy to append/prepend some fixed elements - but requires explicit overloads.
-	//		 Those are kindly provided for up to 3(+) parameters. Otherwise Concat(Enumerate({...}), ...), or named (and moved)
-	//		 "auto" variables can be used. (Unfortunately parameter packs can only be deduced at the end of parameter list.)
-
+	/// Concatenate elements from arbitrary number of iterables, captured according to Enumerate() rules.
+	/// Braced-initializer support is provided for the first 3 parameters.
+	/// @tparam TForced:  Explicit type for TElem of the resulting sequence. If absent, the least derived element type is inferred.
+	/// @remarks
+	///		Inline braced-init syntax can be handy to append/prepend some fixed elements - but requires explicit overloads.
+	///		Those are kindly provided for up to 3(+) parameters. Otherwise Concat(Enumerate({...}), ...), or named (+moved)
+	///		"auto" variables can be used. (Unfortunately parameter packs can only be deduced at the end of parameter list.)
+	///
+	///		Following the Enumerate({...}) convention, init-lists of pointers deduce to reference TElem - thus, for clarity,
+	///		even if a pointer TElem can be infered from preceeding containers, explicit type must be specified to append an init-list!
 	template <class TForced = void, class... Containers>
 	auto Concat(Containers&&... conts)
 	{
 		return ConcatInternal<TForced>(forward<Containers>(conts)...);
 	}
 
-	// NOTE: Concatenating init lists might be debatable - might be useful for template code.
-	template <class TForced = void, class = IfNonScalar<TForced>, class... Is>
-	auto Concat(std::initializer_list<Is>&&... inits)
+	
+	template <class TForced = void, class I1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
+	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{
-		return ConcatInternal<TForced>(move(inits)...);
+		return ConcatInternal<TForced>(move(iList1), move(iList2), move(iList3), forward<Containers>(tail)...);
 	}
-	template <class TForced, class... Is>
-	auto Concat(std::initializer_list<OverrideT<TForced, Is>>&&... inits)
+	template <class TForced, class... Containers>
+	auto Concat(initializer_list<InitElemFor<TForced>>&& iList1, initializer_list<InitElemFor<TForced>>&& iList2, initializer_list<InitElemFor<TForced>>&& iList3, Containers&&... tail)
 	{
-		return ConcatInternal<TForced>(move(inits)...);
+		return ConcatInternal<TForced>(move(iList1), move(iList2), move(iList3), forward<Containers>(tail)...);
 	}
 
 
 	template <class TForced = void, class I1, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(std::initializer_list<I1>&& iList1, Containers&&... tail)
+	auto Concat(initializer_list<I1>&& iList1, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<Containers>(tail)...);
 	}
 	template <class TForced, class... Containers>
-	auto Concat(std::initializer_list<DefaultInitT<TForced>>&& iList1, Containers&&... tail)
+	auto Concat(initializer_list<InitElemFor<TForced>>&& iList1, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<Containers>(tail)...);
 	}
 
 
 	template <class TForced = void, class C1, class I2, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(C1&& cont1, std::initializer_list<I2>&& iList2, Containers&&... tail)
+	auto Concat(C1&& cont1, initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(iList2), forward<Containers>(tail)...);
 	}
 	template <class TForced, class C1, class... Containers>
-	auto Concat(C1&& cont1, std::initializer_list<DefaultInitT<TForced>>&& iList2, Containers&&... tail)
+	auto Concat(C1&& cont1, initializer_list<InitElemFor<TForced>>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(iList2), forward<Containers>(tail)...);
 	}
 
 
-
 	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(C1&& cont1, C2&& cont2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
+	auto Concat(C1&& cont1, C2&& cont2, initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), forward<C2>(cont2), move(ilist3), forward<Containers>(tail)...);
 	}
 	template <class TForced, class C1, class C2, class... Containers>
-	auto Concat(C1&& cont1, C2&& cont2, std::initializer_list<DefaultInitT<TForced>>&& ilist3, Containers&&... tail)
+	auto Concat(C1&& cont1, C2&& cont2, initializer_list<InitElemFor<TForced>>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), forward<C2>(cont2), move(ilist3), forward<Containers>(tail)...);
 	}
 
 
 	template <class TForced = void, class I1, class I2, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(std::initializer_list<I1>&& iList1, std::initializer_list<I2>&& iList2, Containers&&... tail)
+	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
 	}
 	template <class TForced, class... Containers>
-	auto Concat(std::initializer_list<DefaultInitT<TForced>>&& iList1, std::initializer_list<DefaultInitT<TForced>>&& iList2, Containers&&... tail)
+	auto Concat(initializer_list<InitElemFor<TForced>>&& iList1, initializer_list<InitElemFor<TForced>>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
 	}
 
+
 	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(C1&& cont1, std::initializer_list<I2>&& ilist2, std::initializer_list<I3>&& ilist3, Containers&&... tail)
+	auto Concat(C1&& cont1, initializer_list<I2>&& ilist2, initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(ilist2), move(ilist3), forward<Containers>(tail)...);
 	}
 	template <class TForced, class C1, class... Containers>
-	auto Concat(C1&& cont1, std::initializer_list<DefaultInitT<TForced>>&& ilist2, std::initializer_list<DefaultInitT<TForced>>&& ilist3, Containers&&... tail)
+	auto Concat(C1&& cont1, initializer_list<InitElemFor<TForced>>&& ilist2, initializer_list<InitElemFor<TForced>>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(ilist2), move(ilist3), forward<Containers>(tail)...);
 	}
 
 
 	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
-	auto Concat(std::initializer_list<I1>&& iList1, C2&& cont2, std::initializer_list<I3>&& iList3, Containers&&... tail)
+	auto Concat(initializer_list<I1>&& iList1, C2&& cont2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<C2>(cont2), move(iList3), forward<Containers>(tail)...);
 	}
 	template <class TForced, class C2, class... Containers>
-	auto Concat(std::initializer_list<DefaultInitT<TForced>>&& iList1, C2&& cont2, std::initializer_list<DefaultInitT<TForced>>&& iList3, Containers&&... tail)
+	auto Concat(initializer_list<InitElemFor<TForced>>&& iList1, C2&& cont2, initializer_list<InitElemFor<TForced>>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<C2>(cont2), move(iList3), forward<Containers>(tail)...);
 	}

@@ -329,15 +329,42 @@ namespace EnumerableTests {
 			ASSERT_EQ (3, shorts.Count());
 			ASSERT (Enumerables::AreEqual(shorts, uints));
 
-		 // -- Importance:
-		 // Letting the initializer_list deduce freely, then converting its elements to the Forced type
-		 // would lack this static safety (but trigger narrowing warning in benign cases as well):
-		 // 
-		 //	auto shorts2 = Enumerate<short>({ 1, 200000 });		// CTE: constexpr does not fit
-		 //	auto uints   = Enumerate<unsigned>({ 1, 2, -3 });	// 
+			// -- Importance:
+			// Letting the initializer_list deduce freely, then converting its elements to the Forced type
+			// would lack this static safety (but trigger narrowing warning in benign cases as well):
+			// 
+			//	auto shorts2 = Enumerate<short>({ 1, 200000 });		// CTE: constexpr does not fit
+			//	auto uints   = Enumerate<unsigned>({ 1, 2, -3 });	// 
+		
+			// Pointers are scalars as well...
+			DerivedA derived1 { 1, 5.0 };
+			DerivedA derived2 { 2, 5.1 };
+
+			auto basePtrs = Enumerate<Base*>({ &derived1, &derived2 });
+			ASSERT_ELEM_TYPE (Base*, basePtrs);
+			ASSERT_EQ (&derived1, basePtrs.First());
+			ASSERT_EQ (&derived2, basePtrs.Last());
+
+			auto constPtrs = Enumerate<const Base*>({ &derived1, &derived2 });
+			ASSERT_ELEM_TYPE (const Base*, constPtrs);
+			ASSERT_EQ (&derived1, constPtrs.First());
+			ASSERT_EQ (&derived2, constPtrs.Last());
+
+			// -- Unimplemented combination:
+			// No conversion from a previously deduced init-list of pointers.
+			// Their runtime conversion would be safe (when possible), but as of now nothing necessitates it internally,
+			// using init-lists to yield pointers (and not references) requires explicit type in each top-level function.
+			// [In contrast the reference-producing overloads do need such ability to facilitate implicit Concat(bases, deriveds).]
+			// 
+			//	std::initializer_list<DerivedA*> derivedPtrs { &derived1, &derived2 };
+			// 
+			//	auto basePtrs2 = Enumerate<Base*>(std::move(derivedPtrs));		// simulate forwarded param
+			//	ASSERT_ELEM_TYPE (Base*, basePtrs2);
+			//	ASSERT_EQ (&derived1, basePtrs2.First());
+			//	ASSERT_EQ (&derived2, basePtrs2.Last());
 		}
 
-
+		
 		// For non-scalars (~class types), however, storing from freely
 		// deduced initializer_list is allowed to avoid unnecessary copies:
 		{
@@ -376,60 +403,67 @@ namespace EnumerableTests {
 
 		// "Capture-syntax" is supported to enumerate references of objects
 		// - currently only for inline (rvalue) initializers!
-		int a = 5, b = 6, c = 7;
-		auto ints2 = Enumerate({ &c, &b, &a });
-		ASSERT_ELEM_TYPE (int&, ints2);
-		ASSERT_EQ		 (3, ints2.Count());
-		ASSERT_EQ		 (7, ints2.First());
-		c = 8;
-		ASSERT_EQ		 (8, ints2.First());
+		{
+			int a = 5, b = 6, c = 7;
+			auto ints2 = Enumerate({ &c, &b, &a });
+			ASSERT_ELEM_TYPE (int&, ints2);
+			ASSERT_EQ		 (3, ints2.Count());
+			ASSERT_EQ		 (7, ints2.First());
+			c = 8;
+			ASSERT_EQ		 (8, ints2.First());
 
-		// with explicit type
-		auto ints3 = Enumerate<int&>({ &c, &b, &a });
-		auto ints4 = Enumerate<const int&>({ &c, &b, &a });
-		ASSERT_ELEM_TYPE (int&, ints3);
-		ASSERT_ELEM_TYPE (const int&, ints4);
-		ints3.First() = 1;
-		ASSERT_EQ (1, ints4.First());
+			// with explicit type
+			auto ints3 = Enumerate<int&>({ &c, &b, &a });
+			auto ints4 = Enumerate<const int&>({ &c, &b, &a });
+			ASSERT_ELEM_TYPE (int&, ints3);
+			ASSERT_ELEM_TYPE (const int&, ints4);
+			ints3.First() = 1;
+			ASSERT_EQ (1, ints4.First());
 
-	 // auto bad1 = Enumerate<int&>({ 1, 2, 3, 4 });	// CTE
-	 // auto bad2 = Enumerate<int>({ &c, &b, &a });		// CTE
+		 // auto bad1 = Enumerate<int&>({ 1, 2, 3, 4 });	// CTE
+		 // auto bad2 = Enumerate<int>({ &c, &b, &a });		// CTE
 
-		// explicit type can override "capture-syntax" to keep simple pointers :)
-		auto ptrs = Enumerate<int*>({ &c, &b, &a });
-		ASSERT_ELEM_TYPE (int*, ptrs);
-		ASSERT_EQ (&a, ptrs.Last());
+			// explicit type can override "capture-syntax" to keep simple pointers :)
+			auto ptrs = Enumerate<int*>({ &c, &b, &a });
+			ASSERT_ELEM_TYPE (int*, ptrs);
+			ASSERT_EQ (&a, ptrs.Last());
 
-		// Beware of c-strings! Implicitly stored: they are pointers -> interpreted as char& !
-		// (Shortcoming of the generally useful &-syntax here...)
-		auto letters = Enumerate({ "ant", "brick" });
-		ASSERT_ELEM_TYPE (const char&, letters);
-		ASSERT_EQ		 (2,   letters.Count());
+			// Beware of c-strings! Implicitly stored: they are pointers -> interpreted as char& !
+			// (Shortcoming of the generally useful &-syntax here...)
+			auto letters = Enumerate({ "ant", "brick" });
+			ASSERT_ELEM_TYPE (const char&, letters);
+			ASSERT_EQ		 (2,   letters.Count());
 
-		// explicit allows the initializer to accept polymorphic objects too:
-		Base		base { 1 };
-		DerivedA	derA { 20, 5.5 };
-		DerivedB	derB { 33, 'e' };
+			// explicit allows the initializer to accept polymorphic objects too:
+			Base		base { 1 };
+			DerivedA	derA { 20, 5.5 };
+			DerivedB	derB { 33, 'e' };
 
-		auto mixedList = Enumerate<Base&>({ &base, &derA, &derB });
-		ASSERT_ELEM_TYPE (Base&,  mixedList);
-		ASSERT_EQ		 (3,	  mixedList.Count());
-		ASSERT_EQ		 (&base, &mixedList.First());
-		ASSERT_EQ		 (&derB, &mixedList.Last());
-
+			auto mixedList = Enumerate<Base&>({ &base, &derA, &derB });
+			ASSERT_ELEM_TYPE (Base&,  mixedList);
+			ASSERT_EQ		 (3,	  mixedList.Count());
+			ASSERT_EQ		 (&base, &mixedList.First());
+			ASSERT_EQ		 (&derB, &mixedList.Last());
+		}
 
 		// Currently, lvalue initializers are just treated as regular containers!
-		NO_MORE_HEAP;
-		std::initializer_list<int> lvalList { 10, 11u, 12, 13, 14 };
-		auto listReferred = Enumerate(lvalList);
-		ASSERT_ELEM_TYPE (const int&, listReferred);
-		ASSERT_EQ		 (5,  listReferred.Count());
-		ASSERT_EQ		 (10, listReferred.First());
-		ASSERT_EQ		 (14, listReferred.Last());
+		{
+			NO_MORE_HEAP;
 
-		std::initializer_list<int*> lvalPtrs { &a, &b };
-		auto ptrsReferred = Enumerate(lvalPtrs);
-		ASSERT_ELEM_TYPE (int* const&, ptrsReferred);		// no fancy tricks here
+			int a = 5;
+
+			std::initializer_list<int> lvalList { 10, 11u, 12, 13, 14 };
+			auto listReferred = Enumerate(lvalList);
+			ASSERT_ELEM_TYPE (const int&, listReferred);
+			ASSERT_EQ		 (5,  listReferred.Count());
+			ASSERT_EQ		 (10, listReferred.First());
+			ASSERT_EQ		 (14, listReferred.Last());
+
+			std::initializer_list<int*> lvalPtrs { &a };
+			auto ptrsReferred = Enumerate(lvalPtrs);
+			ASSERT_ELEM_TYPE (int* const&, ptrsReferred);		// no fancy tricks here
+			ASSERT_EQ		 (&a, ptrsReferred.Single());
+		}
 	}
 
 
@@ -615,7 +649,9 @@ namespace EnumerableTests {
 			ASSERT_EQ (8.5, sd.Last());
 		}
 
-		// with init lists - note that those get stored on the heap for the Enumerable if inline (since rvalues)
+		// with init lists - note that those might get stored on the heap for the Enumerable if inline (since rvalues)
+		//					 -> according to ENUMERABLES_LIST_BINDING by default
+		//					 -> define ENUMERABLES_BRACEDINIT_BINDING to use separate container type
 		//				   - use lvalues to reference them
 		{
 			auto s = Concat<int>(nums1, { 4, 5 });
@@ -688,28 +724,54 @@ namespace EnumerableTests {
 			ASSERT (AreEqual({ "apple", "pie", "eaten" }, words2.Dereference()));
 		}
 
-		// Concat with fluent syntax
+		// Concat with fluent syntax - continuation must yield convertible elems!
 		{
+			// init_lists - with possible literal-conversion
+			auto catBraced = Enumerate<int>(nums2).Concat({ 8l, 9u });
+			ASSERT_EQ (4, catBraced.First());
+			ASSERT_EQ (9, catBraced.Last());
+			ASSERT_ELEM_TYPE (int, catBraced);
+
+			// init_lists - runtime conversion allowed to non-scalars
+			auto catBracedConv = Enumerate<MoveOnly<int>>(nums2).Concat({ 7, 8 });
+			ASSERT_EQ (4, *catBracedConv.First());
+			ASSERT_EQ (8, *catBracedConv.Last());
+			ASSERT_ELEM_TYPE (MoveOnly<int>, catBracedConv);
+
 			NO_MORE_HEAP;
 
-			// continuation is already an Enumerable
+			// continuation is already an Enumerable 
 			auto catFiltered = Enumerate(nums1).Concat(Filter(nums2, FUN(x, x < 5)));
 			ASSERT_EQ (1, catFiltered.First());
 			ASSERT_EQ (4, catFiltered.Last());
+			ASSERT_ELEM_TYPE (int&, catFiltered);
 
 			// collection directly as continuation
 			auto catVec = Enumerate(nums1).Concat(nums2);
 			ASSERT_EQ (1, catVec.First());
 			ASSERT_EQ (5, catVec.Last());
-
-			// elem type propagation - No intelligence here, just forcing the first type to the continuation.
-			auto prInts = Range<int>(5, 2).Concat(nums1);
-
-			ASSERT_ELEM_TYPE (int,  prInts);
 			ASSERT_ELEM_TYPE (int&, catVec);
 
-			ASSERT_EQ (5, prInts.First());
-			ASSERT_EQ (3, prInts.Last());
+			// elem type propagation - No intelligence here, just forcing the first type to the continuation.
+			auto prCatRef = Range<int>(5, 2).Concat(nums1);
+			ASSERT_EQ (5, prCatRef.First());
+			ASSERT_EQ (3, prCatRef.Last());
+			ASSERT_ELEM_TYPE (int, prCatRef);
+
+			double dubs[] = { 7.0, 8.0 };
+
+			auto catConv1 = Enumerate<double>(dubs).Concat(Enumerate(nums2));
+			ASSERT_EQ (7, catConv1.First());
+			ASSERT_EQ (5, catConv1.Last());
+			ASSERT_ELEM_TYPE (double, catConv1);
+
+			auto catConv2 = Enumerate<double>(dubs).Concat(nums2);
+			ASSERT_EQ (7, catConv2.First());
+			ASSERT_EQ (5, catConv2.Last());
+			ASSERT_ELEM_TYPE (double, catConv2);
+
+		 // of course, incompatible references shouldn't be concatenable!
+		 //	auto catConv = Enumerate(dubs).Concat(nums2);		  // CTE!
 
 			// concat multiple
 			auto all = Enumerate(numsE).Concat(nums1).Concat(nums2).Concat(numsE).Concat(nums4);
@@ -723,8 +785,8 @@ namespace EnumerableTests {
 	// Concatenation of derived types
 	static void ConcatenationsInheritance()
 	{
-		std::vector<Base>		bases1 { {1}, {2} };
-		std::vector<Base>		bases2 { {3}, {4} };
+		std::vector<Base>		bases1 { { 1 }, { 2 } };
+		std::vector<Base>		bases2 { { 3 }, { 4 } };
 
 		std::vector<DerivedA>	deriveds1 { { 11, 1.5 }, { 12, 2.5 } };
 		std::vector<DerivedA>	deriveds2 { { 13, 3.5 }, { 14, 4.5 } };
@@ -808,25 +870,6 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (const Base&, siblingsAndBasesDC2);
 		}
 
-		// with init lists - note that those get stored into the Enumerable as a ListType
-		//					 [or the container configured by ENUMERABLES_BRACEDINIT_BINDING]
-		{
-			DerivedA d1 { 50, 2.5 };
-			DerivedB b1 { 65, 'b' };
-
-			auto s = Concat(bases1, { &d1 });
-			ASSERT_EQ		 (3,	 s.Count());
-			ASSERT_ELEM_TYPE (Base&, s);
-
-			// Explicitly determined initializer type => can mix convertible elements
-			auto s2 = Concat<Base&>(bases1, { &d1, &b1 }, bases2);
-			ASSERT_EQ		 (6, s2.Count());
-			ASSERT_ELEM_TYPE (Base&, s2);
-
-			auto simplePtrs = Enumerate<Base*>({ &bases1[0], &bases1[1], &d1, &b1, &bases2[0], &bases2[1] });
-			ASSERT (AreEqual(simplePtrs, s2.Addresses()));
-		}
-
 		// with fluent syntax
 		{
 			NO_MORE_HEAP;
@@ -842,6 +885,66 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (Base&, catVec);
 			ASSERT_EQ		 (1,	 catVec.First().x);
 			ASSERT_EQ		 (27,	 catVec.Last().x);
+		}
+
+		// with init lists - note that those get stored into the Enumerable as a ListType
+		//					 [or the container configured by ENUMERABLES_BRACEDINIT_BINDING]
+		{
+			DerivedA d1 { 50, 2.5 };
+			DerivedA d2 { 52, 4.0 };
+			DerivedB b1 { 65, 'b' };
+
+			auto s = Concat(bases1, { &d1 });
+			ASSERT_EQ		 (3,	 s.Count());
+			ASSERT_ELEM_TYPE (Base&, s);
+
+			// Explicitly determined initializer type => can mix convertible elements
+			auto s2 = Concat<Base&>(bases1, { &d1, &b1 }, bases2);
+			ASSERT_EQ		 (6, s2.Count());
+			ASSERT_ELEM_TYPE (Base&, s2);
+
+			auto simplePtrs = Enumerate<Base*>({ &bases1[0], &bases1[1], &d1, &b1, &bases2[0], &bases2[1] });
+			ASSERT (AreEqual(simplePtrs, s2.Addresses()));
+
+			std::vector<Base*> basePtrs1 = Enumerate(bases1).Addresses().ToList();
+			std::vector<Base*> basePtrs2 = Enumerate(bases2).Addresses().ToList();
+
+			// To work with pointers directly, explicit type is mandatory
+			auto s3 = Concat<const Base*>(basePtrs1, { &d1, &b1 }, basePtrs2);
+			ASSERT_EQ		 (6, s3.Count());
+			ASSERT_ELEM_TYPE (const Base*, s3);
+			ASSERT (AreEqual(simplePtrs, s3));
+
+			auto s4 = Concat<Base*>(basePtrs1, { &d1, &d2 }, basePtrs2);
+			ASSERT_EQ		 (6, s4.Count());
+			ASSERT_EQ		 (simplePtrs.First(), s4.First());
+			ASSERT_EQ		 (simplePtrs.Last(), s4.Last());
+			ASSERT_EQ		 (&d1, s4.ElementAt(basePtrs1.size()));
+			ASSERT_EQ		 (&d2, s4.ElementAt(basePtrs1.size() + 1));
+			ASSERT_ELEM_TYPE (Base*, s4);
+
+			// Try more overloads:
+			auto s5 = Concat<Base&>({ &d1, &b1 }, bases1, { &d2 });
+			ASSERT_EQ		 (5, s5.Count());
+			ASSERT_ELEM_TYPE (Base&, s5);
+
+			auto s6 = Concat<Base&>({ &d1, &b1 }, { &d1 }, {&d2});
+			ASSERT_EQ		 (4, s6.Count());
+			ASSERT_ELEM_TYPE (Base&, s6);
+
+			// Fluent init-lists have fixed type of TElem:
+			auto f1 = Enumerate(bases1).Concat({ &d1, &b1 });
+			ASSERT_EQ		 (4, f1.Count());
+			ASSERT_EQ		 (&bases1[0], &f1.First());
+			ASSERT_EQ		 (&b1,		  &f1.Last());
+			ASSERT_ELEM_TYPE (Base&, f1);
+
+			// because TElem is forced, in this special situation appending pointers is possible without specifying explicitly
+			auto f2 = Enumerate(bases1).Addresses().Concat({ nullptr, &d1, &b1 });
+			ASSERT_EQ		 (&bases1[0], f2.First());
+			ASSERT_EQ		 (&b1,		  f2.Last());
+			ASSERT_EQ		 (1,		  f2.Count(nullptr));
+			ASSERT_ELEM_TYPE (Base*, f2);
 		}
 	}
 

@@ -132,6 +132,12 @@ namespace TypeHelpers {
 					   "Const & output for a materialized enumerable is possible only with compatible types!");
 	};
 
+	
+
+	/// Type expected by a non-deduced initializer_list parameter. Supports the T& -> T* "capture-syntax".
+	template <class TElem>
+	using InitElemFor = conditional_t<is_reference<TElem>::value, remove_reference_t<TElem>*, TElem>;
+
 
 	
 	/// Ref-access guard for a temporarily held "Current" value stored in an Enumerator.
