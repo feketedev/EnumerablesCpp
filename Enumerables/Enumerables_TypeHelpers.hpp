@@ -134,12 +134,6 @@ namespace TypeHelpers {
 
 	
 
-	/// Type expected by a non-deduced initializer_list parameter. Supports the T& -> T* "capture-syntax".
-	template <class TElem>
-	using InitElemFor = conditional_t<is_reference<TElem>::value, remove_reference_t<TElem>*, TElem>;
-
-
-	
 	/// Ref-access guard for a temporarily held "Current" value stored in an Enumerator.
 	/// @remarks
 	///		It's important not to expose a [const] reference via Current() to an owned non-ref variable (e.g. an accumulator).
@@ -156,6 +150,32 @@ namespace TypeHelpers {
 
 	template <class Override, class Elem>
 	using InterimElemAccessT = typename InterimElemAccess<Override, Elem>::Output;
+
+
+
+	/// Type expected by a non-deduced initializer_list parameter. Supports the T& -> T* "capture-syntax".
+	template <class TElem>
+	using InitElemFor = conditional_t<is_reference<TElem>::value, remove_reference_t<TElem>*, TElem>;
+
+
+	namespace InitListSupport
+	{
+		template <class ForcedElem, class I>
+		constexpr bool CanDeduceRefs   = is_pointer<I>::value &&
+										 (	is_void<ForcedElem>::value
+										 ||	is_reference<ForcedElem>::value &&
+											is_convertible<remove_pointer_t<I>&, ForcedElem>::value );
+
+		template <class ForcedElem, class I>
+		constexpr bool CanDeduceValues =   is_void<ForcedElem>::value && !is_pointer<I>::value
+										|| !is_scalar<ForcedElem>::value && is_convertible<I, ForcedElem>::value;
+
+		template <class ForcedElem, class I>
+		using IfDeduceRefs   = enable_if_t<CanDeduceRefs<ForcedElem, I>, int>;
+
+		template <class ForcedElem, class I>
+		using IfDeduceValues = enable_if_t<CanDeduceValues<ForcedElem, I>, int>;
+	}
 
 
 

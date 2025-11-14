@@ -505,6 +505,9 @@ namespace TypeHelpers {
 	// ===== Enable_if shorthands =====================================================================================
 
 	template <class T, class S = T>
+	using IfNonvoidValue = enable_if_t<std::is_object<T>::value, S>;
+
+	template <class T, class S = T>
 	using IfNonScalar = enable_if_t<!is_scalar<T>::value, S>;
 
 	template <class T, class S = T>

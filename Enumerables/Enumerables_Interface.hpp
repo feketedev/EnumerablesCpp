@@ -1354,26 +1354,10 @@ namespace Def {
 	//	void ForcedResult	   => initializer must be deducible
 	//								-> pointer usage defaults to "capture-syntax"
 
-	template <class ForcedResult>
-	using IfInitRefs   = enable_if_t<is_reference<ForcedResult>::value, int>;
-	template <class ForcedResult>
-	using IfInitValues = enable_if_t<!is_reference<ForcedResult>::value && !is_void<ForcedResult>::value, int>;
-
-	template <class ForcedResult, class I>
-	using IfInitDeducedRefs   = enable_if_t< is_pointer<I>::value &&
-											 (	is_void<ForcedResult>::value
-											 ||	is_reference<ForcedResult>::value &&
-												is_convertible<remove_pointer_t<I>&, ForcedResult>::value),
-											 int >;
-	template <class ForcedResult, class I>
-	using IfInitDeducedValues = enable_if_t<	is_void<ForcedResult>::value && !is_pointer<I>::value
-											 ||	!is_scalar<ForcedResult>::value && is_convertible<I, ForcedResult>::value,
-											 int >;
-
 
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
 	template <class ForcedResult, class CustomAllocator = None,
-			  IfInitValues<ForcedResult> = 0>
+			  IfNonvoidValue<ForcedResult, int> = 0>
 	auto Enumerate(initializer_list<NoDeduce<ForcedResult>>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<ForcedResult>(move(init), alloc);
@@ -1382,7 +1366,7 @@ namespace Def {
 	/// Take explicitly typed references from braced initializer. Use pointers as "capture-syntax".
 	/// (Explicit type allows conversions, thus usage of interfaces.)
 	template <class ForcedResult, class CustomAllocator = None,
-			  IfInitRefs<ForcedResult> = 0>
+			  IfReference<ForcedResult, int> = 0>
 	auto Enumerate(initializer_list<remove_reference_t<ForcedResult>*>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<ForcedResult>(move(init), alloc);
@@ -1392,7 +1376,7 @@ namespace Def {
 	/// Take implicitly typed values (pointers excluded) from braced initializer.
 	/// Also enables yield-time conversion to a non-scalar ForcedResult, having seed elements deduced to a different type.
 	template <class ForcedResult = void, class CustomAllocator = None,
-			  class T, IfInitDeducedValues<ForcedResult, T> = 0>
+			  class T, InitListSupport::IfDeduceValues<ForcedResult, T> = 0>
 	auto Enumerate(initializer_list<T>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init), alloc);
@@ -1403,7 +1387,7 @@ namespace Def {
 	///		For internal reasons (Concat), must also accept a list of compatible pointers
 	///		in the explicit case, should those be already deduced and mismatch ForcedResult.
 	template <class ForcedResult = void, class CustomAllocator = None,
-			  class T, IfInitDeducedRefs<ForcedResult, T*> = 0>
+			  class T, InitListSupport::IfDeduceRefs<ForcedResult, T*> = 0>
 	auto Enumerate(initializer_list<T*>&& init, const CustomAllocator& alloc = {})
 	{
 		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init), alloc);
