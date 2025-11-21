@@ -186,7 +186,7 @@ namespace Def {
 		using TElemConstParam = LambdaCreators::ConstParamT<TElem>;		// deep-const for predicates
 
 
-		static_assert(!is_reference<TFactory>::value,	"AutoEnumerable construction error");
+		static_assert (!is_reference<TFactory>::value,	"AutoEnumerable construction error");
 
 
 		/// Execute the factory function.
@@ -481,30 +481,40 @@ namespace Def {
 
 		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, !SetOperations::Contains(set, x))); }
 		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	&&		 { return Move().Where(FUN(x, !SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&		set)	const &	 { return		 Except(AsConstRef(set)); }
+		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&		set)	&&		 { return Move().Except(AsConstRef(set)); }
 		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&&      set)	const &	 { return		 Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
 		template <class... SetOptions>  auto Except(SetType<TElemDecayed, SetOptions...>&&      set)	&&		 { return Move().Where([s = move(set)](const auto& x) { return !SetOperations::Contains(s, x); }); }
 
 		template <class... SetOptions>  auto Intersect(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, SetOperations::Contains(set, x))); }
 		template <class... SetOptions>  auto Intersect(const SetType<TElemDecayed, SetOptions...>& set)	&&		 { return Move().Where(FUN(x, SetOperations::Contains(set, x))); }
+		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&	   set)	const &	 { return		 Intersect(AsConstRef(set)); }
+		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&	   set)	&&		 { return Move().Intersect(AsConstRef(set)); }
 		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	const &	 { return		 Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
 		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	&&		 { return Move().Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
 
 
 		// --- Boolean operations evaluating other iterables ---
 		
-		// NOTE: 2nd operand gets evaluated lazily, before enumeration - forming a temporary SetType.
+		// NOTE: 2nd operand gets evaluated lazily, before enumeration - forming a temporary SetType [scalars decayed for efficiency].
+		//		 For further convenience, default mode supports filtration (via conversion) by:
+		//			- compatible and similar pointers
+		//			- descendant references [r-values forbidden]
+		//			- unrelated(!) types convertible to TElem (compared as such)
+		//		 If user SetOptions are present, operand type is left as is 
+		//			-> SetOptions may implement "transparent" check as needed.
 
 		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types injected directly to SetType used as filter internally
-		template <class... SetOptions, class E>	 auto Except   (E&& elems) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
-		template <class... SetOptions, class E>	 auto Except   (E&& elems) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
-		template <class... SetOptions, class E>	 auto Intersect(E&& elems) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
-		template <class... SetOptions, class E>	 auto Intersect(E&& elems) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
+		template <class... SetOptions, class E>	 auto Except   (E&& elems) const &	{ return   ChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
+		template <class... SetOptions, class E>	 auto Except   (E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
+		template <class... SetOptions, class E>	 auto Intersect(E&& elems) const &	{ return   ChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
+		template <class... SetOptions, class E>	 auto Intersect(E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
 		
 		/// @param setOptions:    hash/equal_to/etc. strategy objects injected to the internally constructed SetType used as filter
-		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
-		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
-		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
-		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, TElem, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
+		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
+		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
+		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
+		template <class E, class... Os>	 auto Intersect(E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(true),  setOptions...); }
 
 		// NOTE: Union wouldn't make much sense asymmetrically.
 		//		 For a proper set result .Concat(s).ToSet() is effective! (No lazy evaluation though.)
@@ -591,8 +601,8 @@ namespace Def {
 		auto Decay()		&&		{ return Move().template As<TElemDecayed>(); }
 
 		/// Copy ref elements to form pr-values. (Readability helper.)
-		auto Copy()			const &	{ return		Decay();	static_assert(is_reference<TElem>::value, "Already copies."); }
-		auto Copy()			&&		{ return Move().Decay();	static_assert(is_reference<TElem>::value, "Already copies."); }
+		auto Copy()			const &	{ return		Decay();	static_assert (is_reference<TElem>::value, "Already copies."); }
+		auto Copy()			&&		{ return Move().Decay();	static_assert (is_reference<TElem>::value, "Already copies."); }
 
 
 		// --- Misc. sequence conversions ---
@@ -1256,33 +1266,33 @@ namespace Def {
 	#pragma region Wrap Containers by Reference
 
 	/// Shortcuts to enable some generic code (to Enumerate either a container or any AutoEnumerable)
-	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(const AutoEnumerable<Fact>& eb)
 	{
 		// note: unnecessary conversions are bypassed inside As
-		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(AutoEnumerable<Fact>& eb)
 	{
-		return eb.template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedResult = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
 	auto Enumerate(AutoEnumerable<Fact>&& eb)
 	{
-		return move(eb).template As<OverrideT<ForcedResult, typename AutoEnumerable<Fact>::TElem>>();
+		return move(eb).template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
 
 
 	/// Wrap any container by reference.
-	template <class ForcedResult = void, class Container>
+	template <class ForcedElem = void, class Container>
 	auto Enumerate(Container& cont)
 	{
 		return WrapFactory(
-			[&cont]() { return CreateEnumeratorFor<ForcedResult>(cont); },
+			[&cont]() { return CreateEnumeratorFor<ForcedElem>(cont); },
 			true, false
 		);
 	}
@@ -1290,7 +1300,7 @@ namespace Def {
 
 	/// Wrap any container by move. The result is self-contained (Materialized).
 	template <
-		class ForcedResult = void,
+		class ForcedElem = void,
 		class Container,
 		enable_if_t<!is_lvalue_reference<Container>::value
 				 && !IsSpeciallyTreatedContainer<Container>::value, int> = 0
@@ -1298,9 +1308,9 @@ namespace Def {
 	auto Enumerate(Container&& cont)
 	{
 		using Elem = IterableT<const Container&>;
-		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedResult, Elem>>();
+		ContainerWrapChecks::ByRef<Elem, OverrideT<ForcedElem, Elem>>();
 		return WrapFactory(
-			[c = move(cont)]() { return CreateEnumeratorFor<ForcedResult>(c); }
+			[c = move(cont)]() { return CreateEnumeratorFor<ForcedElem>(c); }
 		);
 	}
 
@@ -1313,11 +1323,11 @@ namespace Def {
 	///		   (~ the chances of malloc by std::function if converted to interfaced Enumerable<T>)
 	///		 * iterators can invalidate on a simple Push/Add/Delete...
 	///		 * a container itself is an iterator-factory
-	template <class ForcedResult = void, class It>
+	template <class ForcedElem = void, class It>
 	auto Enumerate(It begin, It end)
 	{
 		return WrapFactory(
-			[b = move(begin), e = move(end)]() { return IteratorEnumerator<It, ForcedResult> { b, e }; }
+			[b = move(begin), e = move(end)]() { return IteratorEnumerator<It, ForcedElem> { b, e }; }
 		);
 	}
 
@@ -1347,60 +1357,60 @@ namespace Def {
 
 
 	// Implicit type deduction is achieved by 4 additional, public wrappers.
-	//	Explicit ForcedResult  => braced-initializer elems can be converted individually
+	//	Explicit ForcedElem  => braced-initializer elems can be converted individually
 	//								-> scalar Result: enforced to init-list directly, so that literal-conversions are checked
 	//								-> non-scalar Result: lets the init-list deduce its separate element type (if able),
 	//								   then the Result type serves as a yield-time conversion target (just like with containers).
-	//	void ForcedResult	   => initializer must be deducible
+	//	void ForcedElem	   => initializer must be deducible
 	//								-> pointer usage defaults to "capture-syntax"
 
 
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
-	template <class ForcedResult, class CustomAllocator = None,
-			  IfNonvoidValue<ForcedResult, int> = 0>
-	auto Enumerate(initializer_list<NoDeduce<ForcedResult>>&& init, const CustomAllocator& alloc = {})
+	template <class ForcedElem, class CustomAllocator = None,
+			  IfNonvoidValue<ForcedElem, int> = 0>
+	auto Enumerate(initializer_list<NoDeduce<ForcedElem>>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<ForcedResult>(move(init), alloc);
+		return InitEnumerable<ForcedElem>(move(init), alloc);
 	}
 
 	/// Take explicitly typed references from braced initializer. Use pointers as "capture-syntax".
 	/// (Explicit type allows conversions, thus usage of interfaces.)
-	template <class ForcedResult, class CustomAllocator = None,
-			  IfReference<ForcedResult, int> = 0>
-	auto Enumerate(initializer_list<remove_reference_t<ForcedResult>*>&& init, const CustomAllocator& alloc = {})
+	template <class ForcedElem, class CustomAllocator = None,
+			  IfReference<ForcedElem, int> = 0>
+	auto Enumerate(initializer_list<remove_reference_t<ForcedElem>*>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<ForcedResult>(move(init), alloc);
+		return InitEnumerable<ForcedElem>(move(init), alloc);
 	}
 
 
 	/// Take implicitly typed values (pointers excluded) from braced initializer.
-	/// Also enables yield-time conversion to a non-scalar ForcedResult, having seed elements deduced to a different type.
-	template <class ForcedResult = void, class CustomAllocator = None,
-			  class T, InitListSupport::IfDeduceValues<ForcedResult, T> = 0>
+	/// Also enables yield-time conversion to a non-scalar ForcedElem, having seed elements deduced to a different type.
+	template <class ForcedElem = void, class CustomAllocator = None,
+			  class T, InitListSupport::IfDeduceValues<ForcedElem, T> = 0>
 	auto Enumerate(initializer_list<T>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T>>(move(init), alloc);
+		return InitEnumerable<OverrideT<ForcedElem, T>>(move(init), alloc);
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
 	/// @remarks 
 	///		For internal reasons (Concat), must also accept a list of compatible pointers
-	///		in the explicit case, should those be already deduced and mismatch ForcedResult.
-	template <class ForcedResult = void, class CustomAllocator = None,
-			  class T, InitListSupport::IfDeduceRefs<ForcedResult, T*> = 0>
+	///		in the explicit case, should those be already deduced and mismatch ForcedElem.
+	template <class ForcedElem = void, class CustomAllocator = None,
+			  class T, InitListSupport::IfDeduceRefs<ForcedElem, T*> = 0>
 	auto Enumerate(initializer_list<T*>&& init, const CustomAllocator& alloc = {})
 	{
-		return InitEnumerable<OverrideT<ForcedResult, T&>>(move(init), alloc);
+		return InitEnumerable<OverrideT<ForcedElem, T&>>(move(init), alloc);
 	}
 
 
 	// For lvalue initializer lists (often used in template tricks), does not copy elements!
-	template <class ForcedResult = void, class T>
+	template <class ForcedElem = void, class T>
 	auto Enumerate(initializer_list<T>& cont)
 	{
 		using It = typename initializer_list<T>::iterator;
 		return WrapFactory(
-			[&cont]() { return IteratorEnumerator<It, ForcedResult> { cont.begin(), cont.end() }; }
+			[&cont]() { return IteratorEnumerator<It, ForcedElem> { cont.begin(), cont.end() }; }
 		);
 	}
 

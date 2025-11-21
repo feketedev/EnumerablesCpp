@@ -23,6 +23,7 @@ namespace EnumerableTests {
 	{
 		int numsArr[] = { 2, 3, 4, 5, 6, 7, 8, 9, 2, 0 };
 		int oddsArr[] = { 1, 3, 5, 7, 9 };
+		const int oddsConst[] = { 1, 3, 5, 7, 9 };
 
 		// basic - lvalue lists captured by reference
 		{
@@ -31,6 +32,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (2, nonOdds.First());
 			ASSERT_EQ (0, nonOdds.Last());
 			ASSERT_EQ (2, nonOdds.Count(2));
+			ASSERT_ELEM_TYPE (int&, nonOdds);
 
 			auto odds = Enumerate(numsArr).Intersect(oddsArr);
 			ASSERT_EQ (4, odds.Count());
@@ -38,6 +40,15 @@ namespace EnumerableTests {
 			ASSERT_EQ (9, odds.Last());
 			ASSERT_EQ (0, odds.Count(1));
 			ASSERT_EQ (1, odds.Count(5));
+			ASSERT_ELEM_TYPE (int&, odds);
+
+			auto copNonOdds = Enumerate(numsArr).Except(oddsConst);
+			auto copOdds = Enumerate(numsArr).Intersect(oddsConst);
+
+			ASSERT (AreEqual(nonOdds, copNonOdds));
+			ASSERT (AreEqual(odds,    copOdds));
+			ASSERT_ELEM_TYPE (int&, copNonOdds);
+			ASSERT_ELEM_TYPE (int&, copOdds);
 		}
 
 		// basic - same with modifications underneeth
@@ -59,6 +70,8 @@ namespace EnumerableTests {
 			ASSERT_EQ (0, res.Last());
 			ASSERT_EQ (0, res.Count(2));
 			ASSERT_EQ (4, res.Count());
+
+			ASSERT_ELEM_TYPE (int&, res);
 		}
 
 		// basic - referencing an available set
@@ -90,13 +103,33 @@ namespace EnumerableTests {
 				ASSERT_EQ(4, myObj.ValidEntries().Last());
 				ASSERT_EQ(3, myObj.ValidEntries().Count());
 			}
+
+			// check mixing mutable + const
+			{
+				NO_MORE_HEAP;					// <-- the actual point here!
+
+				std::vector<int>&				entries = myObj.entries;
+				const std::unordered_set<int>&	invalid = myObj.invalid;
+
+				auto copRes = Enumerate(entries).Except(invalid);
+				auto cRes   = Enumerate(entries).AsConst().Except(myObj.invalid);
+				auto ccRes  = Enumerate(entries).AsConst().Except(invalid);
+
+				ASSERT_ELEM_TYPE (int&, copRes);
+				ASSERT_ELEM_TYPE (const int&, cRes);
+				ASSERT_ELEM_TYPE (const int&, ccRes);
+
+				ASSERT (AreEqual(myObj.ValidEntries(), copRes));
+				ASSERT (AreEqual(copRes, cRes));
+				ASSERT (AreEqual(copRes, ccRes));
+			}
 		}
 
 		// value capture
 		{
 			auto getFilteredNums = [&numsArr]() -> Enumerable<int>
 			{
-				// init list -> unodrered_set overload
+				// init list -> SetType overload [relies on the container to implement it]
 				return Enumerate(numsArr).Except({ 3, 5, 7, 9 });
 			};
 
@@ -117,15 +150,15 @@ namespace EnumerableTests {
 	{
 		using Obj = std::pair<char, int>;
 
-		std::vector<Obj> objList { { 'a',  1 },
-								   { 'b',  1 },
-								   { 'c',  2 },
-								   { 'a',  5 },
-								   { 'a',  1 } };
+		std::vector<Obj> objList { { 'a', 1 },
+								   { 'b', 1 },
+								   { 'c', 2 },
+								   { 'a', 5 },
+								   { 'a', 1 } };
 
 		// T& sequence -> filter by Set<T>
 		{
-			const std::unordered_set<Obj> subset { { 'c',  2 }, { 'a',  1 } };
+			const std::unordered_set<Obj> subset { { 'c', 2 }, { 'a', 1 } };
 
 			NO_MORE_HEAP;
 
@@ -141,8 +174,8 @@ namespace EnumerableTests {
 		}
 		// Same with non-set operands
 		{
-			Obj				 subsetArr[] = { { 'c',  2 }, { 'a',  1 }, { 'c',  2 } };
-			std::vector<Obj> subsetVec	 = { { 'c',  2 }, { 'a',  1 }, { 'c',  2 } };
+			Obj				 subsetArr[] = { { 'c', 2 }, { 'a', 1 }, { 'c', 2 } };
+			std::vector<Obj> subsetVec	 = { { 'c', 2 }, { 'a', 1 }, { 'c', 2 } };
 
 			auto common1    = Enumerate(objList).Intersect(subsetArr);
 			auto common2    = Enumerate(objList).Intersect(subsetVec);
@@ -202,6 +235,132 @@ namespace EnumerableTests {
 			ASSERT_EQ (&objList.front(),	common2.First());
 			ASSERT_EQ (&objList[1],			remaining1.First());
 			ASSERT_EQ (&objList[1],			remaining2.First());
+		}
+	}
+
+
+
+	static void SetOperationsDefaultConversions()
+	{
+		using Base = std::pair<int, int>;	// using pair for already added std::hash
+
+		struct Derived : Base {
+			char c;
+			Derived(int x, int y, char c) : Base(x, y),	c(c)  {}
+			Derived(const Base& b)		  : Base(b),	c(0)  {}	// for testing "CTE" lines
+		};
+
+		ASSERT_EQ (1, Derived(Base(1, 2)).first);					// suppress unused warnings
+
+
+		Base	 bases[]	= { { 3, 3 }, { 1, 1 }, { 2, 2 }, { 3, 3 } };
+		Derived	 deriveds[] = { { 1, 1, 'a' }, { 3, 3, 'e' }, { 1, 1, 'b' }, { 4, 4, 'a' } };
+
+		// Descendants are accepted [only] by reference
+		//  -> compared as type Base (note: there's not even hash<Derived>!)
+		{
+			auto remaining = Enumerate(bases).Except(deriveds);
+			auto common    = Enumerate(bases).Intersect(deriveds);
+			ASSERT_ELEM_TYPE (Base&, remaining);
+			ASSERT_ELEM_TYPE (Base&, common);
+
+			ASSERT_EQ (bases + 2, &remaining.Single());
+			ASSERT_EQ (3,		   common.Count());
+			ASSERT_EQ (bases + 0, &common.First());
+			ASSERT_EQ (bases + 3, &common.Last());
+			
+			auto r1 = Enumerate<const Base&>(bases).Except(deriveds);
+			auto c1 = Enumerate<const Base&>(bases).Intersect(deriveds);
+
+			auto r2 = Enumerate<Base>(bases).Except(deriveds);
+			auto c2 = Enumerate<Base>(bases).Intersect(deriveds);
+
+			ASSERT_ELEM_TYPE (const Base&, r1);
+			ASSERT_ELEM_TYPE (const Base&, c1);
+			ASSERT_ELEM_TYPE (Base, r2);
+			ASSERT_ELEM_TYPE (Base, c2);
+			ASSERT (AreEqual(remaining, r1));
+			ASSERT (AreEqual(remaining, r2));
+			ASSERT (AreEqual(common,    c1));
+			ASSERT (AreEqual(common,    c2));
+
+			//const auto& constBases    = bases;
+			const auto& constDeriveds = deriveds;
+
+			auto r3 = Enumerate(bases).Except(constDeriveds);
+			auto c3 = Enumerate(bases).Intersect(constDeriveds);
+
+			ASSERT_ELEM_TYPE (Base&, r3);
+			ASSERT_ELEM_TYPE (Base&, c3);
+			ASSERT (AreEqual(remaining, r3));
+			ASSERT (AreEqual(common,    c3));
+
+			// However, slicing filter values is not allowed:
+			//  auto r4 = Enumerate(bases).Except(Enumerate<Derived>(deriveds));	// CTE
+			
+			// Nor is a filter of partial data (even if a conversion exists):
+			//  auto r5 = Enumerate(deriveds).Except(Enumerate<Base>(bases));		// CTE
+			//  auto r6 = Enumerate(deriveds).Except(bases);						// CTE
+			//  static_assert (std::is_convertible<Base&, Derived>(), "missing conversion");
+
+			// If needed, the strange conversion could be used explicitly
+			// (only there's no std::hash<Derived> implemented in this test):
+			//  auto r7 = Enumerate(deriveds).Except(Enumerate(bases).As<Derived>());
+		}
+
+		// Pointers can be mixed freely, as long as they are similar and compatible
+		{
+			auto derivedPtrs = Enumerate(deriveds).Addresses();
+			auto basePtrs    = Enumerate<Base*>({ &deriveds[1], &deriveds[3] });	// a subset
+
+			auto remaining = derivedPtrs.Except(basePtrs);
+			auto common = derivedPtrs.Intersect(basePtrs);
+			ASSERT_ELEM_TYPE (Derived*, remaining);
+			ASSERT_ELEM_TYPE (Derived*, common);
+			ASSERT_EQ (2, remaining.Count());
+			ASSERT_EQ (deriveds + 0, remaining.First());
+			ASSERT_EQ (deriveds + 2, remaining.Last());
+			ASSERT    (AreEqual(common, basePtrs));
+
+			auto r1 = derivedPtrs.AsConst().Except(basePtrs);
+			auto c1 = derivedPtrs.AsConst().Intersect(basePtrs);
+			auto r2 = derivedPtrs.Except(basePtrs.AsConst());
+			auto c2 = derivedPtrs.Intersect(basePtrs.AsConst());
+
+			ASSERT_ELEM_TYPE (const Derived*, r1);
+			ASSERT_ELEM_TYPE (const Derived*, c1);
+			ASSERT_ELEM_TYPE (Derived*, r2);
+			ASSERT_ELEM_TYPE (Derived*, c2);
+			ASSERT (AreEqual(remaining, r1));
+			ASSERT (AreEqual(remaining, r2));
+			ASSERT (AreEqual(common,	c2));
+			ASSERT (AreEqual(common,	c2));
+
+			auto rr = basePtrs.Except(derivedPtrs.AsConst());
+			auto cr = basePtrs.Intersect(derivedPtrs.AsConst());
+			ASSERT (!rr.Any());
+			ASSERT (AreEqual(common, cr));
+		}
+
+		// Value conversions to TElem is supported only from unrelated types
+		{
+			std::pair<short, short> convables[] = { { 1, 1 }, { 3, 3 } };
+
+			auto remaining = Enumerate(bases).Except(convables);
+			auto common    = Enumerate(bases).Intersect(convables);
+
+			ASSERT_ELEM_TYPE (Base&, remaining);
+			ASSERT_ELEM_TYPE (Base&, common);
+
+			ASSERT_EQ (2, remaining.Single().first);
+			ASSERT_EQ (3, common.Count());
+			ASSERT_EQ (3, common.First().first);
+			ASSERT_EQ (3, common.Last().first);
+
+			// Friendly errors for no conversion:
+			//	auto ops = Enumerate(convables);
+			//	auto rn = Enumerate(deriveds).Except(ops);			// CTE
+			//	auto rd = Enumerate(deriveds).Except(ops.Copy());	// CTE
 		}
 	}
 
@@ -382,10 +541,10 @@ namespace EnumerableTests {
 			ASSERT (!fives.Contains(4));
 			ASSERT (fives.Contains(5));
 
-			ASSERT (fives.AllNeighbors(FUN(p,n,  p == n)));
-			ASSERT (nums.AllNeighbors(FUN(p,n,	 p + 1 == n)));
-			ASSERT (nums.AnyNeighbors(FUN(p,n,	 p + n < 6)));
-			ASSERT (!nums.AnyNeighbors(FUN(p,n,	 p + n < 5)));
+			ASSERT (fives.AllNeighbors(FUN(p,n,	p == n)));
+			ASSERT (nums.AllNeighbors(FUN(p,n,	p + 1 == n)));
+			ASSERT (nums.AnyNeighbors(FUN(p,n,	p + n < 6)));
+			ASSERT (!nums.AnyNeighbors(FUN(p,n,	p + n < 5)));
 		}
 
 	}
@@ -449,6 +608,7 @@ namespace EnumerableTests {
 
 		SetOperationsSimple();
 		SetOperationsByReference();
+		SetOperationsDefaultConversions();
 		SimpleSubrange();
 		ConditionalSubrange();
 		TerminalOperators();

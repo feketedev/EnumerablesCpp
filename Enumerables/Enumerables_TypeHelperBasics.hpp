@@ -201,13 +201,25 @@ namespace TypeHelpers {
 	using RootPointedBaseT = std::remove_cv_t<typename RootPointed<T>::Type>;
 
 
-	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
-	template <class T>
-	using ConstValueT =
+	/// Inject const inside top-level pointer/reference - leave top-level qualifiers intact. [T must not be void.]
+	template <class T, class FallbackIfDirectValue = T>
+	using ConstPointedT =
 		conditional_t< is_pointer<T>::value && !is_reference<T>::value,	std::add_const_t<remove_pointer_t<remove_reference_t<T>>>*,
 		conditional_t< is_lvalue_reference<T>::value,					std::add_const_t<remove_reference_t<T>>&,
 		conditional_t< is_rvalue_reference<T>::value,					std::add_const_t<remove_reference_t<T>>&&,
-																		std::add_const_t<T>										>>>;
+																		FallbackIfDirectValue									>>>;
+
+	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
+	template <class T>
+	using ConstValueT = ConstPointedT<T, std::add_const_t<T>>;
+
+
+	template <class T>
+	const T&	AsConstRef(T& obj)	{ return obj; }
+	template <class T>
+	const T&&	AsConstRef(T&& obj)	{ return move(obj); }
+
+
 
 	/// Implementation of DeepConstT.
 	template <class T>
@@ -224,13 +236,13 @@ namespace TypeHelpers {
 	template <class T>
 	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
 	template <class T>
-	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &; };
+	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &; };
 	template <class T>		
-	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &&; };
+	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &&; };
 	template <class T>		
-	struct DeepConst<T[]>				{ using Type = typename DeepConst<T>::Type const []; };
+	struct DeepConst<T[]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> []; };
 	template <class T, size_t N>		
-	struct DeepConst<T[N]>				{ using Type = typename DeepConst<T>::Type const [N]; };
+	struct DeepConst<T[N]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> [N]; };
 
 	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
 	/// @remarks
@@ -262,6 +274,10 @@ namespace TypeHelpers {
 	constexpr bool HaveRefcompatibleRoots = HasRefcompatibleRoot<T, U>
 										 || HasRefcompatibleRoot<U, T>;
 
+	
+	template <class T>
+	constexpr bool IsUnknownBoundArray = std::is_array<T>::value && std::extent<T>::value == 0;
+
 
 	/// Graceful variant of std::commontype: falling back to void instead of substitution failure.
 	template <class T, class U, class = void>
@@ -269,8 +285,11 @@ namespace TypeHelpers {
 		using Type = void;
 	};
 	template <class T, class U>
-	struct CommonOrVoid<T, U, void_t< decltype(false ? declval<T>() : declval<U>()),	// hardened SFINAE for old STL (VS2015)
-									  std::common_type_t<T, U>						>> {
+	struct CommonOrVoid<T, U, void_t< decltype(false ? declval<T>() : declval<U>()),		  // hardened SFINAE for old STL (VS2015)
+									  std::common_type_t<T, U>					   ,
+									  enable_if_t<!is_void<T>::value && !is_void<U>::value>,  // guard UB
+									  enable_if_t< !IsUnknownBoundArray<T> 
+												&& !IsUnknownBoundArray<U>>				   >> {
 		using Type = std::common_type_t<T, U>;
 	};
 
@@ -293,6 +312,21 @@ namespace TypeHelpers {
 						  conditional_t< is_convertible<Sec, BaseT<Pri>>::value,
 										 BaseT<Pri>,
 						  void >>>>;
+
+
+	/// Viable common type to store for later comparisons. [& can pass if compatible with T]
+	/// @tparam T: incoming elements compared
+	/// @tparam O: "operands" to be stored as filter, in some compatible form
+	template <class T, class O>
+	using CompatComparisonBaseT = conditional_t< is_pointer<remove_reference_t<T>>::value && is_pointer<remove_reference_t<O>>::value,
+					   							 typename CommonOrVoid<T, O>::Type,
+								  conditional_t< is_lvalue_reference<O>::value && HasRefcompatibleRoot<T, O>,
+					   							 std::add_lvalue_reference_t<QualifiedCommonT<T, O>>,
+								  conditional_t< is_same<BaseT<O>, BaseT<T>>::value
+											  || is_convertible<O, BaseT<T>>::value && !HaveRefcompatibleRoots<T, O>,
+												 BaseT<T>,
+								  void >>>;
+
 
 
 	/// Simplified, unchecked version of std::align.

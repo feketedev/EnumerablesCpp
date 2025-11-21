@@ -861,9 +861,28 @@ namespace Def {
 	// for cases when the operand can't be readily captured as a SetType<T>
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
-
+	public:
+		using typename SetFilterEnumerator::IEnumerator::TElem;
+	
+	private:
 		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
-		using S	   = StorableT<DecayIfScalarT<EnumeratedT<OpSource>>>;
+		using Op = DecayIfScalarT<EnumeratedT<OpSource>>;
+
+		// Having user options -> No further manipulation, offer opportunity to implement "transparent" containment check (e.g. std::less<>)
+		// Implicitly:		   -> Bring similar (or compatible) pointers or references to common-type for a symmetric experience!
+		//						  Don't mess with direct values.
+		using CompBase = conditional_t<sizeof...(SetOptions) != 0, Op, CompatComparisonBaseT<TElem, Op>>;
+
+		static_assert (!is_void<CompBase>::value || !is_pointer<Op>::value || !is_pointer<remove_reference_t<TElem>>::value,
+					   "Source and Operator elements are incompatible or dissimilar pointers!");
+		static_assert (!is_void<CompBase>::value || is_convertible<Op, BaseT<TElem>>::value,
+					   "Can't convert Operator elements to TElem for comparison. Use SetOptions to implement a transparent check!");
+		static_assert (!is_void<CompBase>::value || !is_lvalue_reference<Op>::value,
+					   "Operator elements are references, but not of any TElem descendant. Use SetOptions to implement a transparent check!");
+		static_assert (!is_void<CompBase>::value || !is_convertible<Op, BaseT<TElem>>::value || is_same<BaseT<Op>, BaseT<TElem>>::value || !HaveRefcompatibleRoots<TElem, Op>,
+					   "Converting elements for comparison could lose data. If the conversion is desired, use .As<T> explicitly!");
+
+		using S	   = StorableT<CompBase>;
 		using TSet = AdjustedSet<S, SetOptions...>;
 
 		Source		source;
@@ -884,12 +903,11 @@ namespace Def {
 		}
 
 	public:
-		using typename SetFilterEnumerator::IEnumerator::TElem;
-
 		bool		FetchNext() override
 		{
 			while (source.FetchNext()) {
-				bool inOper = SetOperations::Contains<S>(operand, source.Current());
+				TElem  elem = source.Current();
+				bool inOper = SetOperations::Contains<S>(operand, elem);
 				if (inOper == intersect)
 					return true;
 			}
@@ -1463,9 +1481,9 @@ namespace Def {
 		template <class IM = InitAccMapper>
 		void InitFromCurrent(enable_if_t<IsNone<IM> && !is_same<InElem, TAcc>::value>* = nullptr)
 		{
-			static_assert(IsBraceConstructible<TAcc, InElem>::value,
-						  "Can't convert input element into TAcc. (Narrowing not supported.)"
-						  " Please specify an Initial Accumulator Mapper."				     );
+			static_assert (IsBraceConstructible<TAcc, InElem>::value,
+						   "Can't convert input element into TAcc. (Narrowing not supported.)"
+						   " Please specify an Initial Accumulator Mapper."				     );
 
 			this->accumulator = this->source.Current();
 		}
@@ -1482,8 +1500,8 @@ namespace Def {
 		template <class IM = InitAccMapper>
 		void InitFromCurrent(enable_if_t<!IsNone<IM> && !is_same<MappedT<InElem, IM>, TAcc>::value>* = nullptr)
 		{
-			static_assert(IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
-						  "Can't convert input element into TAcc. (Narrowing not supported.)");
+			static_assert (IsBraceConstructible<TAcc, MappedT<InElem, InitAccMapper>>::value,
+						   "Can't convert input element into TAcc. (Narrowing not supported.)");
 
 			this->accumulator = initAccumulator(this->source.Current());
 		}
