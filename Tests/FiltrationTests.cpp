@@ -361,6 +361,56 @@ namespace EnumerableTests {
 			//	auto ops = Enumerate(convables);
 			//	auto rn = Enumerate(deriveds).Except(ops);			// CTE
 			//	auto rd = Enumerate(deriveds).Except(ops.Copy());	// CTE
+
+			// More typical example (though providing a transparent hash/equals could avoid conversions - from C++17):
+			std::string fruits[] = { "apple", "banana" };
+			auto remFruits1 = Enumerate(fruits).Except({ "coconut", "banana" });	// direct (eager) operand set
+			
+			const char* toHide[] = { "coconut", "banana" };
+			auto remFruits2 = Enumerate(fruits).Except(Enumerate(toHide));			// deferred operand set
+			ASSERT_ELEM_TYPE (std::string&, remFruits1);
+			ASSERT_ELEM_TYPE (std::string&, remFruits2);
+			ASSERT_EQ (fruits + 0, &remFruits1.Single());
+			ASSERT_EQ (fruits + 0, &remFruits2.Single());
+		}
+
+		// Convenience overloads for reference-capturing elements via init-lists
+		{
+			const Base	b1 { 1, 1 };
+			Derived		d3 { 3, 3, 'z' };
+
+			auto remaining = Enumerate(bases).Except({ &b1, &d3 });
+			auto common = Enumerate(bases).Intersect({ &b1, &d3 });
+			ASSERT_ELEM_TYPE (Base&, remaining);
+			ASSERT_ELEM_TYPE (Base&, common);
+			ASSERT_EQ (2, remaining.Single().first);	// still value comparison!
+			ASSERT_EQ (3, common.Count());
+			ASSERT_EQ (3, common.First().first);
+			ASSERT_EQ (3, common.Last().first);
+
+			auto r1 = Enumerate<const Base&>(bases).Except({ &b1, &d3 });
+			auto c1 = Enumerate<const Base&>(bases).Intersect({ &b1, &d3 });
+			ASSERT_ELEM_TYPE (const Base&, r1);
+			ASSERT_ELEM_TYPE (const Base&, c1);
+			ASSERT (AreEqual(remaining, r1));
+			ASSERT (AreEqual(common, c1));
+
+			// No ambiguity emerge with pointer elements, "ref-capture" always mean 1 extra indirection.
+			// However, "ref-capture" syntax is forbidden for scalars (by static_assert), because copying them
+			// is more efficient + with these eager sets no referred item can change until enumeration anyway!
+			int  n		= 2;
+			int* ptrs[] = { &n, &d3.first };
+			int* p		= &n;
+
+		 //	auto remp = Enumerate(ptrs).Except({ &p });		// deliberate CTE
+		 //	auto comp = Enumerate(ptrs).Intersect({ &p });	// deliberate CTE
+
+			auto remp = Enumerate(ptrs).Except({ p });		// same semantics
+			auto comp = Enumerate(ptrs).Intersect({ p });	//
+			ASSERT_ELEM_TYPE (int*&, remp);
+			ASSERT_ELEM_TYPE (int*&, comp);
+			ASSERT_EQ (&d3.first, remp.Single());
+			ASSERT_EQ (p,		  comp.Single());
 		}
 	}
 

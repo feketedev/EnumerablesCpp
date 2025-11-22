@@ -423,7 +423,7 @@ namespace Enumerables {
 			using Container = ListOperations::Container<V, Options...>;
 
 			template <class V, size_t InlineCap, class... Options>
-			using AllocatedValueT = typename TypeHelpers::AsDependentT<V, ListOperations>::template AllocatedValueT<V, Options...>;
+			using AllocatedValueT = typename TypeHelpers::AsDependentT<ListOperations, V>::template AllocatedValueT<V, Options...>;
 		};
 
 

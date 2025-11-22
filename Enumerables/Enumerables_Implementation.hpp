@@ -242,6 +242,21 @@ namespace Def {
 
 #endif
 
+	
+
+	template <class T, class... Os>
+	SetType<RefHolder<T>> InitRefholderSet(const initializer_list<T*>& elems, const Os&... opts)
+	{
+		static_assert (!is_scalar<T>::value,
+					   "Capturing set elements by reference is only meant to save copies - no sense for scalars. "
+					   "Since the set is formed eagerly in this case, referred elements can't mutate until query!");
+
+		auto set = SetOperations::Init<SetType<RefHolder<T>>>(elems.size(), opts...);
+		for (auto* e : elems)
+			SetOperations::Add(set, *e);
+		return set;
+	}
+
 #pragma endregion
 
 
@@ -763,6 +778,86 @@ namespace Def {
 
 		return Enumerate<const S&>(move(list))
 				 .Map([](const S& sv) -> TElem { return Revive(sv); });
+	}
+
+#pragma endregion
+
+
+
+
+#pragma region AutoEnumerable Convenience Overloads
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) const &
+	{
+		return Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) &&
+	{
+		return Move().Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) const &
+	{
+		return Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) &&
+	{
+		return Move().Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &
+	{
+		return Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&
+	{
+ 		return Move().Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &
+	{
+ 		return Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&
+	{
+ 		return Move().Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
 	}
 
 #pragma endregion

@@ -493,6 +493,21 @@ namespace Def {
 		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	const &	 { return		 Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
 		template <class... SetOptions>  auto Intersect(SetType<TElemDecayed, SetOptions...>&&	   set)	&&		 { return Move().Where([s = move(set)](const auto& x) { return SetOperations::Contains(s, x); }); }
 
+		// Augmentation overloads to form a Set parameter out of referred items via "capture-syntax".
+		// NOTE: This is merely to avoid copies, Set elements usually must not mutate after the set has formed!
+		
+		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types [against const TElem&] injected directly to SetType used as filter
+		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &;
+		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
+		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &;
+		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
+		
+		/// @param setOptions:    hash/equal_to/etc. strategy objects [against const TElem&] injected directly to SetType used as filter
+		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) const &;
+		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) &&;
+		template <class... Os>			auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) const &;
+		template <class... Os>			auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) &&;
+
 
 		// --- Boolean operations evaluating other iterables ---
 		
@@ -554,7 +569,7 @@ namespace Def {
 		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) &&		{ return MvChain<MapperEnumerator>(SelectorOverload<TSelected>(getter)); }
 
 
-			// --- Shorthands for convenience ---
+		// --- Shorthands for convenience ---
 
 		/// Results of & operator applied to elements.
 		auto Addresses()	const &	{ return		Map(FUN(x, &x)); }
@@ -698,9 +713,9 @@ namespace Def {
 		template <class E2>	auto Concat(E2&& continuation) const &	{ return   ChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
 		template <class E2>	auto Concat(E2&& continuation) &&		{ return MvChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
 
-		template <class I2, class = IfNonScalar<AsDependentT<I2, TElem>>>
+		template <class I2, class = IfNonScalar<AsDependentT<TElem, I2>>>
 		auto Concat(initializer_list<I2>&& conti) const &					{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
-		template <class I2, class = IfNonScalar<AsDependentT<I2, TElem>>>
+		template <class I2, class = IfNonScalar<AsDependentT<TElem, I2>>>
 		auto Concat(initializer_list<I2>&& conti) &&						{ return MvChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
 
 		auto Concat(initializer_list<InitElemFor<TElem>>&& conti) const &	{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }

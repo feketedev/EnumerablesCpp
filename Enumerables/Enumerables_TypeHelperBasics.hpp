@@ -113,9 +113,17 @@ namespace TypeHelpers {
 	using NoDeduce = OverrideT<T, void>;
 
 
-	/// Make T a dependent-type on some arbitrary template parameter to enable SFINAE.
-	template <class FakeDep, class T>
-	using AsDependentT = conditional_t<is_void<FakeDep>::value, T, T>;
+	/// Just an arbitrary condition for AsDependentT
+	template <class... Traits>
+	struct FirstOrFalse : public std::false_type {};
+	
+	template <class F, class... Tail>
+	struct FirstOrFalse<F, Tail...> : public std::integral_constant<bool, F::value> {};
+
+
+	/// Make T a dependent-type on some arbitrary template parameters to enable SFINAE.
+	template <class T, class... FakeDeps>
+	using AsDependentT = conditional_t<FirstOrFalse<is_void<FakeDeps>...>::value, T, T>;
 
 
 	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.
