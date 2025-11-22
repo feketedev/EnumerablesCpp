@@ -877,8 +877,8 @@ namespace EnumerableTests {
 		struct Base {
 			int data;
 		};
-		struct Derived1 : public Base {};
-		struct Derived2 : public Base {
+		struct Derived1 : Base {};
+		struct Derived2 : Base {
 			Derived2 (const Base& b);
 		};
 

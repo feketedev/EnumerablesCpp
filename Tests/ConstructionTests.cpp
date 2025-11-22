@@ -18,12 +18,12 @@ namespace EnumerableTests {
 
 		struct Base { int x; };
 
-		struct DerivedA : public Base {
+		struct DerivedA : Base {
 			double d;
 			DerivedA(int bx, double d) : Base { bx }, d { d } {}
 		};
 
-		struct DerivedB : public Base {
+		struct DerivedB : Base {
 			char c;
 			DerivedB(int bx, char c) : Base { bx }, c { c } {}
 		};

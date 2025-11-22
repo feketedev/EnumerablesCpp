@@ -303,7 +303,7 @@ namespace EnumerableTests {
 					int data; 
 					Base(int d) : data { d } {}
 				};
-				struct Derived : public Base {
+				struct Derived : Base {
 					using Base::Base;
 				};
 

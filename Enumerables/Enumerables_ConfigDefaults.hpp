@@ -417,7 +417,7 @@ namespace Enumerables {
 
 		// STL doesn't have a small_vector (one with an inline buffer for initial elements, but being able to dynamically expand if needed)
 		// - hence only a ListOperations fallback is provided, but it presents the way to utilize such a type from your favourite library.
-		struct FallbackSmallListOperations : public ListOperations {
+		struct FallbackSmallListOperations : ListOperations {
 
 			template <class V, size_t InlineCap, class... Options>
 			using Container = ListOperations::Container<V, Options...>;

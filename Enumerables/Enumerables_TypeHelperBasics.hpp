@@ -115,10 +115,10 @@ namespace TypeHelpers {
 
 	/// Just an arbitrary condition for AsDependentT
 	template <class... Traits>
-	struct FirstOrFalse : public std::false_type {};
+	struct FirstOrFalse : std::false_type {};
 	
 	template <class F, class... Tail>
-	struct FirstOrFalse<F, Tail...> : public std::integral_constant<bool, F::value> {};
+	struct FirstOrFalse<F, Tail...> : std::integral_constant<bool, F::value> {};
 
 
 	/// Make T a dependent-type on some arbitrary template parameters to enable SFINAE.

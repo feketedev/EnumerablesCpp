@@ -76,7 +76,7 @@ namespace EnumerableTests {
 
 	
 	template <bool PosFiltered = false>
-	struct PairMinimumsTestBase : public PairTestBase {
+	struct PairMinimumsTestBase : PairTestBase {
 
 		// ensure multiple minima, in some non-leading location
 		static std::vector<Pair> GenerateInput(size_t size)
@@ -116,7 +116,7 @@ namespace EnumerableTests {
 
 
 
-	struct DirectCopy : public PairTestBase {
+	struct DirectCopy : PairTestBase {
 		static constexpr const char Name[] = "Small POD iteration";
 
 
@@ -142,7 +142,7 @@ namespace EnumerableTests {
 
 
 
-	struct ConversionCopy : public ScalarTestBase<int, double> {
+	struct ConversionCopy : ScalarTestBase<int, double> {
 		static constexpr const char Name[] = "Convert: int -> double";
 
 
@@ -205,7 +205,7 @@ namespace EnumerableTests {
 
 
 	template <class N>
-	struct Squares : public ScalarTestBase<N> {
+	struct Squares : ScalarTestBase<N> {
 		static const char Name[];
 
 
@@ -228,7 +228,7 @@ namespace EnumerableTests {
 
 
 
-	struct SubrangeFiltered : public ScalarTestBase<int> {
+	struct SubrangeFiltered : ScalarTestBase<int> {
 		static constexpr const char Name[] = "Subrange of filtered int";
 
 
@@ -268,7 +268,7 @@ namespace EnumerableTests {
 
 
 
-	struct IntSort : public ScalarTestBase<int> {
+	struct IntSort : ScalarTestBase<int> {
 		static constexpr const char Name[] = "Sorted copy of ints";
 
 
@@ -291,7 +291,7 @@ namespace EnumerableTests {
 
 
 	// TEMPORARY for CachingEnumerator iteration
-	struct IntSort2 : public ScalarTestBase<int> {
+	struct IntSort2 : ScalarTestBase<int> {
 		static constexpr const char Name[] = "Sorted copy of int&";
 
 
@@ -311,7 +311,7 @@ namespace EnumerableTests {
 
 
 
-	struct DblPositiveMinimums : public ScalarTestBase<double> {
+	struct DblPositiveMinimums : ScalarTestBase<double> {
 		static constexpr const char Name[] = "Positive Min. doubles";
 
 
@@ -345,7 +345,7 @@ namespace EnumerableTests {
 
 
 	template <class N>
-	struct NeighborDiffs : public ScalarTestBase<N> {
+	struct NeighborDiffs : ScalarTestBase<N> {
 		static const char Name[];
 
 
@@ -367,7 +367,7 @@ namespace EnumerableTests {
 
 
 
-	struct OrderByOtherField : public PairTestBase {
+	struct OrderByOtherField : PairTestBase {
 		static constexpr const char Name[] = "OrderBy a, Select b";
 
 
@@ -406,7 +406,7 @@ namespace EnumerableTests {
 	};
 
 
-	struct FilterByField : public PairTestBase {
+	struct FilterByField : PairTestBase {
 		static constexpr const char Name[] = "Filtered pairs";
 
 
@@ -433,7 +433,7 @@ namespace EnumerableTests {
 
 
 	// from LegacyTests
-	struct ProjectFiltered : public PairTestBase {
+	struct ProjectFiltered : PairTestBase {
 		static constexpr const char Name[] = "Filter and Project";
 
 
@@ -467,7 +467,7 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimumsOrdered : public PairMinimumsTestBase<true> {
+	struct PositiveMinimumsOrdered : PairMinimumsTestBase<true> {
 		static constexpr const char Name[] = "Pos.Min. a, OrderBy b";
 
 
@@ -512,7 +512,7 @@ namespace EnumerableTests {
 
 
 
-	struct PositiveMinimums : public PairMinimumsTestBase<true> {
+	struct PositiveMinimums : PairMinimumsTestBase<true> {
 		static constexpr const char Name[] = "Pos. Minimums by field";
 
 
@@ -551,7 +551,7 @@ namespace EnumerableTests {
 	};
 
 
-	struct MinSearch : public PairMinimumsTestBase<false> {
+	struct MinSearch : PairMinimumsTestBase<false> {
 		static constexpr const char Name[] = "Minimums by field";
 
 
@@ -585,7 +585,7 @@ namespace EnumerableTests {
 
 
 
-	struct SumField : public PairTestBase {
+	struct SumField : PairTestBase {
 		static constexpr const char Name[] = "Sum int field";
 
 
@@ -618,7 +618,7 @@ namespace EnumerableTests {
 	};
 
 
-	struct SumInts : public ScalarTestBase<int> {
+	struct SumInts : ScalarTestBase<int> {
 		static constexpr const char Name[] = "Sum simple ints";
 
 
@@ -650,7 +650,7 @@ namespace EnumerableTests {
 	};
 
 
-	struct SumDoubles : public ScalarTestBase<double> {
+	struct SumDoubles : ScalarTestBase<double> {
 		static constexpr const char Name[] = "Naive-sum doubles";
 
 		static void MixbackElem(double& nextIn, double res)
@@ -682,7 +682,7 @@ namespace EnumerableTests {
 	};
 
 
-	struct SumDoubles2 : public ScalarTestBase<double> {
+	struct SumDoubles2 : ScalarTestBase<double> {
 		static constexpr const char Name[] = "Compensated Sum doubles";
 
 		static void MixbackElem(double& nextIn, double res)
@@ -774,7 +774,7 @@ namespace EnumerableTests {
 
 	// common methods of tests producing vector<R>
 	template <class TestCase, bool UseInterface = false>
-	struct ListingTest : public Test<TestCase, UseInterface>  {
+	struct ListingTest : Test<TestCase, UseInterface>  {
 		using typename Test<TestCase, UseInterface>::InCollection;
 		using typename Test<TestCase, UseInterface>::Query;
 		using typename Test<TestCase, UseInterface>::Res;
@@ -816,7 +816,7 @@ namespace EnumerableTests {
 
 	// common methods of tests aggregating to single scalar - e.g. .Min(), .Aggregate(), ...
 	template <class TestCase, bool UseInterface = false>
-	struct AggregationTest : public Test<TestCase, UseInterface> {
+	struct AggregationTest : Test<TestCase, UseInterface> {
 		using typename Test<TestCase, UseInterface>::InCollection;
 		using typename Test<TestCase, UseInterface>::Query;
 		using typename Test<TestCase, UseInterface>::Res;

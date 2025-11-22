@@ -65,19 +65,19 @@ namespace EnumerableTests {
 			Base2(const Base2&) = default;
 		};
 
-		struct Derived1 : public Base1 {
+		struct Derived1 : Base1 {
 			unsigned u;
 
 			Derived1(int ib, unsigned u) : Base1 { ib }, u { u }  {}
 		};
 
-		struct Derived2 : public Base2 {
+		struct Derived2 : Base2 {
 			int i2;
 
 			Derived2(char cb, int i2) : Base2 { cb }, i2 { i2 }  {}
 		};
 
-		struct Derived12 : public Base1, public Base2 {
+		struct Derived12 : Base1, public Base2 {
 			Derived12(int ib, char cb) : Base1 { ib }, Base2 { cb }  {}
 		};
 
