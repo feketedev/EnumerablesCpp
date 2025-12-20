@@ -9,6 +9,7 @@
 
 
 #include "Enumerables_GenericStorage.hpp"
+#include "Enumerables_ConfigDefaults.hpp"
 
 
 
@@ -160,9 +161,16 @@ namespace TypeHelpers {
 
 	namespace InitListSupport
 	{
+		template <class I>
+		constexpr bool IsStringLiteralType = is_same<I, const char*>::value
+										  || is_same<I, const wchar_t*>::value
+										  || is_same<I, const char16_t*>::value
+										  || is_same<I, const char32_t*>::value;
+
 		template <class ForcedElem, class I>
 		constexpr bool CanDeduceRefs   = is_pointer<I>::value &&
-										 (	is_void<ForcedElem>::value
+										 (	is_void<ForcedElem>::value &&
+											(!ENUMERABLES_ADD_STRINGLIST_OVERLOADS || !IsStringLiteralType<I>)
 										 ||	is_reference<ForcedElem>::value &&
 											is_convertible<remove_pointer_t<I>&, ForcedElem>::value );
 
@@ -175,6 +183,53 @@ namespace TypeHelpers {
 
 		template <class ForcedElem, class I>
 		using IfDeduceValues = enable_if_t<CanDeduceValues<ForcedElem, I>, int>;
+
+
+		/// Conversion target for string literals
+		template <class E>
+		struct ArrayOnly {
+			E*	ptr;
+
+			constexpr operator E* () const noexcept  { return ptr; }
+
+			template <size_t N>
+			constexpr ArrayOnly(E (&arr)[N]) noexcept : ptr { arr }  {}
+		};
+
+		/// Conversion target against string literals
+		template <class E>
+		struct PtrOnly {
+			E*	ptr;
+
+			constexpr operator E* () const noexcept  { return ptr; }
+
+			template <class In, class = enable_if_t<is_same<E*, In>::value>>
+			constexpr PtrOnly(In&& in) noexcept : ptr { in }  {}
+		};
+
+
+		
+		/// Meta type-wrapper for init-lists of pointers, where their resolution (TElem = T* or T&)
+		/// is deferred to see if some other relevant sequence can help disambiguate (e.g. in Concat).
+		template <class T>	struct MaybeToDereference;
+		template <class V>	struct MaybeToDereference<V*> {};
+
+		template <class T> 
+		struct ResolveWithoutContext {
+			using type = T;
+		};
+		template <class V> 
+		struct ResolveWithoutContext<MaybeToDereference<V*>> {
+			using type = V&;
+		
+			static_assert (!ENUMERABLES_ADD_STRINGLIST_OVERLOADS || !IsStringLiteralType<V*>,
+						   "This function does not support disambiguation of string literals "
+						   "from const char pointers. Please specify element type explicitly!");
+		};
+
+		/// Decide a possibly ambiguous element type (i.e. MaybeToDereference<T>) by default rules if possible.
+		template <class T> 
+		using ResolveContextEndedT = typename ResolveWithoutContext<T>::type;
 	}
 
 
@@ -271,12 +326,34 @@ namespace TypeHelpers {
 					   "Neither element type points/references a public base class of the other. "
 					   "You may specify a common ancestor manually."							  );
 
+		// TODO: Deeper cv could be supported - again, CompatResultT...
 		using TCommon = conditional_t< HasConstValue<Vote1> || HasConstValue<Vote2>,
 										ConstValueT<CommonBaseVote>,
 										CommonBaseVote >;
 
 		static_assert (is_convertible<Vote1, TCommon>::value && is_convertible<Vote2, TCommon>::value,
 					   "Enumerables::Concat internal error. Try to specify forced element type.");
+
+		static_assert (is_reference<TCommon>::value || is_pointer<TCommon>::value || is_same<Vote1, Vote2>::value
+						|| !AreRefCompatible<Vote1, Vote2>,		"Possible slicing! Specify forced element type!");
+	};
+	template <class I1, class I2>
+	struct ConcatTypeDeducer<InitListSupport::MaybeToDereference<I1*>, InitListSupport::MaybeToDereference<I2*>> {
+		using TPtr	  = typename ConcatTypeDeducer<I1*, I2*>::TCommon;
+		using TCommon = InitListSupport::MaybeToDereference<TPtr>;
+	};
+	template <class Vote1, class I2>
+	struct ConcatTypeDeducer<Vote1, InitListSupport::MaybeToDereference<I2*>> {
+		// as far as main is symmetric for pointers (no distinct T1* <-> T2* convertible vice-versa)
+		using TCommon = typename ConcatTypeDeducer<InitListSupport::MaybeToDereference<I2*>, Vote1>::TCommon;
+	};
+	template <class I1, class Vote2>
+	struct ConcatTypeDeducer<InitListSupport::MaybeToDereference<I1*>, Vote2> {
+		// friendly assert to precede later error about incompatible references when the user meant simple pointers
+		static_assert (!is_lvalue_reference<Vote2>::value || !AreConvertiblePointers<BaseT<I1*>, BaseT<Vote2>>::value,
+					   "Can't Concat references with pr-values implicitly. Specify forced element type for clarity!");
+		using T1	  = conditional_t<is_lvalue_reference<Vote2>::value, I1&, I1*>;
+		using TCommon = typename ConcatTypeDeducer<T1, Vote2>::TCommon;
 	};
 
 #pragma endregion

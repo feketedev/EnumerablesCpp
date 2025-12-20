@@ -495,7 +495,8 @@ namespace Def {
 
 		// Augmentation overloads to form a Set parameter out of referred items via "capture-syntax".
 		// NOTE: This is merely to avoid copies, Set elements usually must not mutate after the set has formed!
-		
+		// CONSIDER: would be cleaner to lazy-create the filter set (at the cost of storing 1 additional list)...
+
 		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types [against const TElem&] injected directly to SetType used as filter
 		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &;
 		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
@@ -1363,10 +1364,10 @@ namespace Def {
 		return Enumerate<R>(BracedInitWithOptionalAlloc(init, alloc));
 	}
 
-	template <class R, class A, class V = remove_reference_t<R>, class = enable_if_t<is_reference<R>::value>>
+	template <class R, class A, class V = remove_reference_t<R>, IfReference<R, int> = 0>
 	auto InitEnumerable(initializer_list<V*>&& init, const A& alloc)
 	{
-		using  RB = remove_reference_t<R>;					// not necessarily V, can deduce sg else!
+		using  RB = remove_reference_t<R>;		// not necessarily V, can deduce sg else!
 		return Enumerate<RB*>(BracedInitWithOptionalAlloc(init, alloc)).Dereference();
 	}
 
@@ -1428,6 +1429,56 @@ namespace Def {
 			[&cont]() { return IteratorEnumerator<It, ForcedElem> { cont.begin(), cont.end() }; }
 		);
 	}
+
+
+	#if ENUMERABLES_ADD_STRINGLIST_OVERLOADS
+
+	// String literal overloads
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::ArrayOnly<const char>>&& strings, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char*>(BracedInitWithOptionalAlloc(strings, alloc));
+	}
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::PtrOnly<const char>>&& ptrs, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char*>(BracedInitWithOptionalAlloc(ptrs, alloc)).Dereference();
+	}
+
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::ArrayOnly<const wchar_t>>&& strings, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const wchar_t*>(BracedInitWithOptionalAlloc(strings, alloc));
+	}
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::PtrOnly<const wchar_t>>&& ptrs, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const wchar_t*>(BracedInitWithOptionalAlloc(ptrs, alloc)).Dereference();
+	}
+
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::ArrayOnly<const char16_t>>&& strings, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char16_t*>(BracedInitWithOptionalAlloc(strings, alloc));
+	}
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::PtrOnly<const char16_t>>&& ptrs, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char16_t*>(BracedInitWithOptionalAlloc(ptrs, alloc)).Dereference();
+	}
+
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::ArrayOnly<const char32_t>>&& strings, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char32_t*>(BracedInitWithOptionalAlloc(strings, alloc));
+	}
+	template <class = void, class CustomAllocator = None>
+	auto Enumerate(initializer_list<InitListSupport::PtrOnly<const char32_t>>&& ptrs, const CustomAllocator& alloc = {})
+	{
+		return Enumerate<const char32_t*>(BracedInitWithOptionalAlloc(ptrs, alloc)).Dereference();
+	}
+
+	#endif
 
 	#pragma endregion
 

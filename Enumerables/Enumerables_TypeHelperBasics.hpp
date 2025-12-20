@@ -259,6 +259,15 @@ namespace TypeHelpers {
 	using DeepConstT = typename DeepConst<T>::Type;
 
 
+	/// Provides @a value: Both types are [unqualified] pointers and either one is convertible to the other.
+	template <class T, class U>
+	struct AreConvertiblePointers : std::false_type {};
+	template <class T, class U>
+	struct AreConvertiblePointers<T*, U*> : std::bool_constant<is_convertible<T*, U*>::value
+															|| is_convertible<U*, T*>::value
+	> {};
+
+
 	// [void -> false]
 	template <class T>
 	constexpr bool HasConstValue	= is_same<ConstValueT<OverrideT<T, int>>, T>::value;

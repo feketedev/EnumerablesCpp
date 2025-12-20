@@ -386,7 +386,6 @@ namespace EnumerableTests {
 			ASSERT_EQ (std::string("apple"), *words2.First());
 			ASSERT_EQ (std::string("pie"),	 *words2.Last());
 
-
 			// Simulating the undesired scenario:
 			auto simExtraCopy = Enumerate(std::initializer_list<CountedCopy<std::string>> { "apple", "pie" });
 			ASSERT_EQ (2, simExtraCopy.First().copyCount);
@@ -428,9 +427,16 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (int*, ptrs);
 			ASSERT_EQ (&a, ptrs.Last());
 
-			// Beware of c-strings! Implicitly stored: they are pointers -> interpreted as char& !
-			// (Shortcoming of the generally useful &-syntax here...)
-			auto letters = Enumerate({ "ant", "brick" });
+			// Beware of c-strings can decay to pointers! Implicitly, pointers would be interpreted as char& elements.
+			// However, if ENUMERABLES_ADD_STRINGLIST_OVERLOADS is true, special overloads guard this situation.
+			// (Otherwise, explicit type is required to get pointer semantics.)
+			auto words = Enumerate/*<const char*>*/({ "ant", "brick" });
+			ASSERT_ELEM_TYPE (const char*, words);
+			ASSERT_EQ		 (2,     words.Count());
+			ASSERT_EQ		 ("ant", words.First());
+
+			const char c1 = 'a', c2 = 'b';
+			auto letters = Enumerate({ &c1, &c2 });
 			ASSERT_ELEM_TYPE (const char&, letters);
 			ASSERT_EQ		 (2,   letters.Count());
 
@@ -724,6 +730,170 @@ namespace EnumerableTests {
 			ASSERT (AreEqual({ "apple", "pie", "eaten" }, words2.Dereference()));
 		}
 
+		// Init-list implicit type deductions
+		{
+			// No further context: follow Enumerate({ ... }) rules
+			{
+				auto values = Concat({ 1, 2, 3 }, { 4, 5 }, { 6 });
+
+				// pointers => "ref-capture"
+				const int a = 1, b = 2, c = 3;
+				auto refs = Concat({ &a }, { &b, &c }, { &a });
+
+				ASSERT_ELEM_TYPE (int,		values);
+				ASSERT_ELEM_TYPE (const int&, refs);
+				ASSERT    (AreEqual(RangeBetween(1, 6), values));
+				ASSERT_EQ (a, refs.First());
+				ASSERT_EQ (4, refs.Count());
+				ASSERT_EQ (a, refs.Last());
+			}
+
+			// Pointer disambiguation by context (neighbor sequences)
+			{
+				int  nums[] = { 3, 2, 1 };
+				int  x = 5, y = 4;
+				auto byRef	= Concat(nums, { &x, &y });
+				auto copies = Concat(Enumerate(nums).Decay(), { x, y });	// no auto-decay (yet?)
+			 //	auto copiesB = Concat(nums, { x, y });						// CTE
+				ASSERT_ELEM_TYPE (int&,	 byRef);
+				ASSERT_ELEM_TYPE (int,	 copies);
+				ASSERT (AreEqual({ 3, 2, 1, 5, 4 }, byRef));
+				ASSERT (AreEqual({ 3, 2, 1, 5, 4 }, copies));
+
+				int* ptrs[]	= { nums + 0, nums + 1, nums + 2 };
+				int* p = &x;
+				auto byRefPtrs = Concat(ptrs, { &p });
+				auto copyPtrs  = Concat(Enumerate(ptrs).Decay(), { &x, &y });
+			 // auto copyPtrsB = Concat(ptrs, { &x, &y });					// CTE
+				ASSERT_ELEM_TYPE (int*&, byRefPtrs);
+				ASSERT_ELEM_TYPE (int*,  copyPtrs);
+				ASSERT    (AreEqual(byRef.Take(4).Addresses(), byRefPtrs));
+				ASSERT    (AreEqual(byRef.Addresses(),			copyPtrs));
+				ASSERT_EQ (&p, &byRefPtrs.Last());
+
+				// test some other overloads too:
+				auto byRef2	    = Concat({ &x }, nums, { &y });
+				auto byRefPtrs2 = Concat({ &p }, ptrs, { &p });
+				auto copyPtrs2  = Concat({ &x }, Enumerate(ptrs).Decay(), { p });
+				auto copies2    = Concat({ x },  Enumerate(nums).Decay(), { y });
+				ASSERT_ELEM_TYPE (int&,	 byRef2);
+				ASSERT_ELEM_TYPE (int*&, byRefPtrs2);
+				ASSERT_ELEM_TYPE (int*,  copyPtrs2);
+				ASSERT_ELEM_TYPE (int,	 copies2);
+				ASSERT    (AreEqual({ 5, 3, 2, 1, 4 }, byRef2));
+				ASSERT    (AreEqual({ 5, 3, 2, 1, 4 }, copies2));
+				ASSERT    (AreEqual(byRef2.Take(4).Addresses(), byRefPtrs2.Take(4)));
+				ASSERT_EQ (&p, &byRefPtrs2.Last());
+				ASSERT    (AreEqual(byRefPtrs2, copyPtrs2));
+
+				auto byRef3	    = Concat({ &x }, nums);
+				auto byRefPtrs3 = Concat({ &p }, ptrs);
+				auto copyPtrs3  = Concat({ &x }, Enumerate(ptrs).Decay());
+				auto copies3    = Concat({ x },  Enumerate(nums).Decay());
+				ASSERT_ELEM_TYPE (int&,	 byRef3);
+				ASSERT_ELEM_TYPE (int*&, byRefPtrs3);
+				ASSERT_ELEM_TYPE (int*,  copyPtrs3);
+				ASSERT_ELEM_TYPE (int,	 copies3);
+				ASSERT    (AreEqual({ 5, 3, 2, 1 }, byRef3));
+				ASSERT    (AreEqual({ 5, 3, 2, 1 }, copies3));
+				ASSERT    (AreEqual(byRef3.Addresses(), byRefPtrs3));
+				ASSERT_EQ (ptrs + 2, &byRefPtrs3.Last());
+				ASSERT    (AreEqual(byRefPtrs3, copyPtrs3));
+			}
+
+			// ref-capturing const character types is disallowed without explicit type:
+			// Concat doesn't have extra overload-pairs to disambiguate string literals!
+			{
+				auto chars = Concat({ 'a', 'b' }, { 'c' }, { 'd' });
+				char a, b;
+				auto charRefs = Concat({ &a, &b }, { &a }, { &b });		// non-const, OK
+				ASSERT_ELEM_TYPE (char,  chars);
+				ASSERT_ELEM_TYPE (char&, charRefs);
+				ASSERT_EQ ('d', chars.Last());
+				ASSERT_EQ (4,   chars.Count());
+				ASSERT_EQ (&b,  &charRefs.Last());
+				ASSERT_EQ (4,   charRefs.Count());
+				
+			 	const char k = 'a', l = 'b';
+			 //	auto constRefs = Concat({ &k, &l }, { &k });			// const char*, CTE
+			 //	auto strings   = Concat({ "apple" }, { "pie" });		//
+
+				// still should work explicitly
+				auto constRefs = Concat<const char&>({ &k, &l }, { &k });
+			 	auto strings   = Concat<const char*>({ "apple" }, { "pie" });
+				ASSERT_ELEM_TYPE (const char&, constRefs);
+				ASSERT_ELEM_TYPE (const char*, strings);
+				ASSERT_EQ (k, constRefs.Last());
+				ASSERT_EQ (3, constRefs.Count());
+				ASSERT_EQ (0, strcmp("pie", strings.Last()));
+			}
+
+			// String literals
+			{
+				const char* cstrings[] = { "apple", "pie" };
+
+				// Prefix/Suffix of const char* / const char& elems resolves the ambiguity of init-lists
+				auto s1 = Concat(Enumerate(cstrings).Decay(), { "baked" });
+				auto s2 = Concat({ "more" }, Enumerate(cstrings).Decay());
+				auto s3 = Concat({ "more" }, Enumerate(cstrings).Decay(), { "baked" });
+				auto s4 = Concat({ "send" }, { "more" }, Enumerate(cstrings).Decay());
+				ASSERT_ELEM_TYPE (const char*, s1);
+				ASSERT_ELEM_TYPE (const char*, s2);
+				ASSERT_ELEM_TYPE (const char*, s3);
+				ASSERT_ELEM_TYPE (const char*, s4);
+				auto strJoin = [](std::string acc, const char* s) { return acc + " " + s; };
+				ASSERT_EQ ("apple pie baked",		s1.Aggregate(strJoin));
+				ASSERT_EQ ("more apple pie",		s2.Aggregate(strJoin));
+				ASSERT_EQ ("more apple pie baked",	s3.Aggregate(strJoin));
+				ASSERT_EQ ("send more apple pie",	s4.Aggregate(strJoin));
+			 // ASSERT_EQ ("apple pie baked",		s1.Aggregate<std::string>(FUN(a,s, a + " " + s)));
+			 // TODO Aggregate: probably should compile  --------^
+
+				const char letters[] = { 'a', 'b', 'c', 'd' };
+				const char*   ptrs[] = { letters + 0, letters + 1 };
+				const char letter = 'X';
+
+				auto c1 = Concat(letters, { &letter });		
+				auto p1 = Concat(Enumerate(ptrs).Decay(), { &letter });
+				ASSERT_ELEM_TYPE (const char&, c1);
+				ASSERT_ELEM_TYPE (const char*, p1);
+				ASSERT_EQ ("abcdX",	c1				.Aggregate(FUN(c0, std::string(1, c0)), FUN(a,c, a += c)));
+				ASSERT_EQ ("abX",	p1.Dereference().Aggregate(FUN(c0, std::string(1, c0)), FUN(a,c, a += c)));
+
+				// non-const char pointers are unambiguous (can't be string literal)
+				char  mutLetters[] = { 'a', 'b' };
+				char* mutPtrs[]	   = { mutLetters + 0, mutLetters + 1 };
+				char  mutLetter = 'Y';
+				auto c2 = Concat(mutLetters, { &mutLetter });
+				auto p2 = Concat(Enumerate(mutPtrs).Decay(), { &mutLetter });
+				ASSERT_ELEM_TYPE (char&, c2);
+				ASSERT_ELEM_TYPE (char*, p2);
+				ASSERT (AreEqual({ 'a', 'b', 'Y' }, c2));
+				ASSERT (AreEqual(c2, p2.Dereference()));
+
+				// Still no auto-decay 
+				// auto b1 = Concat(cstrings, { "baked" });		// CTE (friendly error)
+
+				// However, constness should be propagated without any issue:
+				auto c3 = Concat(mutLetters, { &letter });
+				auto c4 = Concat(letters, { &mutLetter });
+				auto p3 = Concat(Enumerate(mutPtrs).Decay(), { &letter });
+				auto p4 = Concat(Enumerate(ptrs).Decay(), { &mutLetter });
+				ASSERT_ELEM_TYPE (const char&, c3);
+				ASSERT_ELEM_TYPE (const char&, c4);
+				ASSERT_ELEM_TYPE (const char*, p3);
+				ASSERT_ELEM_TYPE (const char*, p4);
+				ASSERT (AreEqual({ 'a', 'b', 'X' }, c3));
+				ASSERT (AreEqual({ 'a', 'b', 'c', 'd', 'Y' }, c4));
+				ASSERT_EQ (3, p3.Count());
+				ASSERT_EQ (3, p4.Count());
+				ASSERT_EQ (mutLetters,	p3.First());
+				ASSERT_EQ (letters,		p4.First());
+				ASSERT_EQ (&letter,		p3.Last());
+				ASSERT_EQ (&mutLetter,	p4.Last());
+			}
+		}
+
 		// Concat with fluent syntax - continuation must yield convertible elems!
 		{
 			// init_lists - with possible literal-conversion
@@ -737,6 +907,25 @@ namespace EnumerableTests {
 			ASSERT_EQ (4, *catBracedConv.First());
 			ASSERT_EQ (8, *catBracedConv.Last());
 			ASSERT_ELEM_TYPE (MoveOnly<int>, catBracedConv);
+
+			// string literals - work simply due to known TElem
+			auto catStrings = Enumerate<std::string>({ "apple", "and" }).Concat({ "orange", "pie" });
+			ASSERT_ELEM_TYPE (std::string, catStrings);
+			ASSERT_EQ (4, catStrings.Count());
+			ASSERT_EQ ("apple and orange pie", catStrings.Aggregate(FUN(a,s,  a + " " + s)));
+
+			auto catCstrings = Enumerate<const char*>({ "apple", "and" }).Concat({ "orange", "pie" });
+			ASSERT_ELEM_TYPE (const char*, catCstrings);
+			ASSERT_EQ (4, catCstrings.Count());
+			ASSERT_EQ (3, strlen(catCstrings.Last()));
+
+			// check const propagation (single-direction only due to fluent Concat)
+			const char word[] = "apple";
+			char letter = 'X';
+			auto catChars = Enumerate(word).Concat({ &letter });
+			ASSERT_ELEM_TYPE (const char&, catChars);
+			ASSERT_EQ (word,	&catChars.First());
+			ASSERT_EQ (&letter, &catChars.Last());
 
 			NO_MORE_HEAP;
 
@@ -906,14 +1095,37 @@ namespace EnumerableTests {
 			auto simplePtrs = Enumerate<Base*>({ &bases1[0], &bases1[1], &d1, &b1, &bases2[0], &bases2[1] });
 			ASSERT (AreEqual(simplePtrs, s2.Addresses()));
 
+			// Without further context, init-lists of pointers default to ref items - as with Enumerate({...})
+			// (of course init-lists need to be homogeneous to be deducible this implicitly)
+			auto implicitRefs = Concat({ &d1, &d2 }, { &bases1[0] });
+			ASSERT_EQ		 (3, implicitRefs.Count());
+			ASSERT_ELEM_TYPE (Base&, implicitRefs);
+
 			std::vector<Base*> basePtrs1 = Enumerate(bases1).Addresses().ToList();
 			std::vector<Base*> basePtrs2 = Enumerate(bases2).Addresses().ToList();
 
-			// To work with pointers directly, explicit type is mandatory
+			// Working with pointers requires explicit type if some elements need decay
+			// or no decisive container is present (init-lists only)
 			auto s3 = Concat<const Base*>(basePtrs1, { &d1, &b1 }, basePtrs2);
+			auto s31 = Concat<Base*>({ &d1 }, { &d2 });
 			ASSERT_EQ		 (6, s3.Count());
+			ASSERT_EQ		 (2, s31.Count());
 			ASSERT_ELEM_TYPE (const Base*, s3);
 			ASSERT (AreEqual(simplePtrs, s3));
+
+			// however, a readily instantiated neighbor sequence can decide between pointers or refs implicitly:
+			auto s32 = Concat(Enumerate(basePtrs1).Decay(), { &d1, &d2 });						// no auto-decay
+			auto s33 = Concat(bases1, { &d1, &d2 });
+			auto s34 = Concat({ &d1 }, { &d2 }, Enumerate(basePtrs1).Decay());
+			auto s35 = Concat({ &d1 }, { &d2 }, bases1);
+			ASSERT_ELEM_TYPE (Base*, s32);
+			ASSERT_ELEM_TYPE (Base*, s34);
+			ASSERT_ELEM_TYPE (Base&, s33);
+			ASSERT_ELEM_TYPE (Base&, s35);
+			ASSERT (AreEqual({ 1, 2, 50, 52 }, s32.Select(&Base::x)));
+			ASSERT (AreEqual({ 1, 2, 50, 52 }, s33.Select(&Base::x)));
+			ASSERT (AreEqual({ 50, 52, 1, 2 }, s34.Select(&Base::x)));
+			ASSERT (AreEqual({ 50, 52, 1, 2 }, s35.Select(&Base::x)));
 
 			auto s4 = Concat<Base*>(basePtrs1, { &d1, &d2 }, basePtrs2);
 			ASSERT_EQ		 (6, s4.Count());

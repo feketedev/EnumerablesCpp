@@ -178,6 +178,16 @@ namespace Enumerables {
 
 
 
+// When using braced-init syntax Enumerate({ "apple", "banana" }) with no explicit elem type,
+// without additional support, string literals decay to pointers - eventually interpreted as
+// char& elements, according to default Enumerate rules.
+// Enabling this setting adds 8 specific overloads to disambiguate string literals and pointers.
+#ifndef ENUMERABLES_ADD_STRINGLIST_OVERLOADS
+#	define ENUMERABLES_ADD_STRINGLIST_OVERLOADS		true
+#endif
+
+
+
 
 // ==== Define bindings to STL if needed ====================================================================
 

@@ -103,8 +103,9 @@
       <MinimalRebuild>false</MinimalRebuild>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
-      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,8 +126,9 @@
       <MinimalRebuild>false</MinimalRebuild>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <ConformanceMode Condition="'$(PlatformToolset)'!='v140'">true</ConformanceMode>
-      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'!='v140'">/Zc:nrvo- /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(PlatformToolset)'=='v140'">/Zc:referenceBinding,strictStrings /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
