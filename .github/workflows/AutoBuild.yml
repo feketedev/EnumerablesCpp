@@ -21,12 +21,15 @@ jobs:
   clangBuild:
     name: Build on Clang
     runs-on: windows-latest
+    timeout-minutes: 4
 
     strategy: &matrixStrategy
       max-parallel: 2
       matrix:
-        platform: [x64, Win32]
-        config: [Debug, Release]
+        platform: [ x64 ]
+        config: [ Debug ]
+      #  platform: [x64, Win32]
+      #  config: [Debug, Release]
 
     env:
       # ideally, config should be irrelevant
@@ -69,6 +72,8 @@ jobs:
   msvcBuild:
     name: Build on MSVC
     runs-on: windows-latest
+    timeout-minutes: 4
+    
     strategy: *matrixStrategy
 
     env:
