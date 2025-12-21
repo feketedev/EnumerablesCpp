@@ -432,8 +432,8 @@ namespace EnumerableTests {
 			// (Otherwise, explicit type is required to get pointer semantics.)
 			auto words = Enumerate/*<const char*>*/({ "ant", "brick" });
 			ASSERT_ELEM_TYPE (const char*, words);
-			ASSERT_EQ		 (2,     words.Count());
-			ASSERT_EQ		 ("ant", words.First());
+			ASSERT_EQ		 (2, words.Count());
+			ASSERT_EQ		 (0, strcmp("ant", words.First()));
 
 			const char c1 = 'a', c2 = 'b';
 			auto letters = Enumerate({ &c1, &c2 });
