@@ -26,10 +26,8 @@ jobs:
     strategy: &matrixStrategy
       max-parallel: 2
       matrix:
-        platform: [ x64 ]
-        config: [ Debug ]
-      #  platform: [x64, Win32]
-      #  config: [Debug, Release]
+        platform: [x64, Win32]
+        config: [Debug, Release]
 
     env:
       # ideally, config should be irrelevant
@@ -65,7 +63,7 @@ jobs:
           }
 
     - name: Run tests
-      run: TestsClang\${{matrix.platform}}\${{matrix.config}}\TestsClang\TestsClang.exe -Q
+      run: TestsClang\${{matrix.platform}}\${{matrix.config}}\TestsClang\TestsClang.exe -N -Q
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
 
@@ -98,6 +96,6 @@ jobs:
     - *warnCheck
 
     - name: Run tests
-      run: TestsMSVC\${{matrix.platform}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -Q
+      run: TestsMSVC\${{matrix.platform}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -N -Q
       working-directory: ${{env.GITHUB_WORKSPACE}}
 

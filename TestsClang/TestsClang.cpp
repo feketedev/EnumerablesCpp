@@ -11,7 +11,11 @@ int main(int argc, const char* argv[])
 	// simplification, implement when needed
 	const char* execPath = argv[0];
 
-	EnumerableTests::RunAll(execPath, argc, argv);
+	if (EnumerableTests::RunAll(execPath, argc, argv)) {
+		std::cout << "Finished." << std::endl;
+		return 0;
+	}
 
-	std::cout << "Finished." << std::endl;
+	std::cout << "Finished with errors." << std::endl;
+	return 1;
 }

@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <string>
 
 #ifdef __clang__
 #	pragma clang diagnostic ignored "-Wold-style-cast"
@@ -1334,19 +1333,14 @@ namespace EnumerableTests {
 	}
 
 
-	void NewPerfTests(int argc, const char* argv[])
+	void NewPerfTests(const CmdOption& summarizeTimes,
+					  const CmdOption& summarizeOverheads)
 	{
-		if (FindCmdOption('Q', argc, argv).first)
-			return;
+		const std::string& timesPath = summarizeTimes.value;
+		const std::string& ovrhdPath = summarizeOverheads.value;
 
-		std::pair<bool, std::string> compactTimes     = FindCmdOption('T', argc, argv);
-		std::pair<bool, std::string> compactOverheads = FindCmdOption('O', argc, argv);
-		
-		const std::string& timesPath = compactTimes.second;
-		const std::string& ovrhdPath = compactOverheads.second;
-
-		bool printTimes = compactTimes.first && timesPath.empty();
-		bool printOvrhd = compactOverheads.first && ovrhdPath.empty() && !printTimes;
+		bool printTimes = summarizeTimes.isSet && timesPath.empty();
+		bool printOvrhd = summarizeOverheads.isSet && ovrhdPath.empty() && !printTimes;
 
 		Greet(GreetTxt);
 		SectionBreak("  Long sequences...", 90);
