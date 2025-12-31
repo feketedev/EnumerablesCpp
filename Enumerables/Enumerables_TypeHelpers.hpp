@@ -166,23 +166,25 @@ namespace TypeHelpers {
 										  || is_same<I, const wchar_t*>::value
 										  || is_same<I, const char16_t*>::value
 										  || is_same<I, const char32_t*>::value;
+		
+		// NOTE: on old MSVC tparam "ForcedType" can clash with the "ForcedElem" of callers, hence the need for different names!
 
-		template <class ForcedElem, class I>
+		template <class ForcedType, class I>
 		constexpr bool CanDeduceRefs   = is_pointer<I>::value &&
-										 (	is_void<ForcedElem>::value &&
+										 (	is_void<ForcedType>::value &&
 											(!ENUMERABLES_ADD_STRINGLIST_OVERLOADS || !IsStringLiteralType<I>)
-										 ||	is_reference<ForcedElem>::value &&
-											is_convertible<remove_pointer_t<I>&, ForcedElem>::value );
+										 ||	is_reference<ForcedType>::value &&
+											is_convertible<remove_pointer_t<I>&, ForcedType>::value );
 
-		template <class ForcedElem, class I>
-		constexpr bool CanDeduceValues =   is_void<ForcedElem>::value && !is_pointer<I>::value
-										|| !is_scalar<ForcedElem>::value && is_convertible<I, ForcedElem>::value;
+		template <class ForcedType, class I>
+		constexpr bool CanDeduceValues =   is_void<ForcedType>::value && !is_pointer<I>::value
+										|| !is_scalar<ForcedType>::value && is_convertible<I, ForcedType>::value;
 
-		template <class ForcedElem, class I>
-		using IfDeduceRefs   = enable_if_t<CanDeduceRefs<ForcedElem, I>, int>;
+		template <class ForcedType, class I>
+		using IfDeduceRefs   = enable_if_t<CanDeduceRefs<ForcedType, I>, int>;
 
-		template <class ForcedElem, class I>
-		using IfDeduceValues = enable_if_t<CanDeduceValues<ForcedElem, I>, int>;
+		template <class ForcedType, class I>
+		using IfDeduceValues = enable_if_t<CanDeduceValues<ForcedType, I>, int>;
 
 
 		/// Conversion target for string literals

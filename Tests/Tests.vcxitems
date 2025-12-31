@@ -24,18 +24,16 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)CustomizedCollectionsTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)ConstructionTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)FiltrationTests.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Fundamentals.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Operations.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Examples.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)LambdaHandlingTests.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)LegacyTests.cpp">
-      <DeploymentContent>false</DeploymentContent>
-    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)LegacyTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)MiscellaneousTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)OptResultTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)PerfTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)TestsMain.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)TestUtils.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)Introduction_Fundamentals.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)TypeHelpersTests.cpp" />
   </ItemGroup>
 </Project>
