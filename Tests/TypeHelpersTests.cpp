@@ -453,9 +453,12 @@ namespace EnumerableTests {
 		}
 
 
-		// Note that the following tests require proper STL implementation of pair comparison operators,
+		// Note that the following tests require proper STL implementation of pair/tuple comparison operators,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
-		// (Didn't compile on old MSVC.)
+		// 
+		// Old MSVC only has that for tuple.
+		// Kept the pair version too. It illustrates that these tests depend on STL capabilities.
+#if !defined(_MSC_VER) || (_MSC_VER >= 1920)
 
 		// RefHolder transparent equality
 		{
@@ -539,6 +542,91 @@ namespace EnumerableTests {
 			ASSERT_EQ (false, refPair	 < refPairRef);
 			ASSERT_EQ (false, obj2		 < refPairRef);
 		}
+
+#else
+
+		// RefHolder transparent equality
+		{
+			std::tuple<int, char> obj1 { 1, 'a' };		// type with templated op==
+			std::tuple<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::tuple<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::tuple<int, char>> ref1 = obj1;
+
+			ASSERT (ref1 == cpy1);
+			ASSERT (ref1 != obj2);
+			ASSERT (cpy1 == ref1);
+			ASSERT (obj2 != ref1);
+
+			ASSERT (ref1.operator==({ 1, 'a'}));		// edge-case of default type argument
+
+
+			RefHolder<std::tuple<int, char>> ref2   = obj2;
+			RefHolder<std::tuple<int, char>> refcpy = ref1;
+
+			ASSERT (ref1 != ref2);
+			ASSERT (ref1 == refcpy);
+
+			// holding different, but equatable type
+			std::tuple<int&, char&> refPair { std::get<0>(obj1), std::get<1>(obj1) };
+
+			ASSERT (refPair == obj1);
+			ASSERT (obj1 == refPair);
+
+			RefHolder<std::tuple<int&, char&>> refPairRef = refPair;
+
+			ASSERT (refPairRef == refPair);
+			ASSERT (refPairRef == obj1);
+			ASSERT (refPair	== refPairRef);
+			ASSERT (obj1	== refPairRef);
+
+			int*			ptr	   = &std::get<0>(obj1);
+			RefHolder<int*> ptrRef = ptr;
+
+			ASSERT (ptrRef != nullptr);
+			ASSERT (nullptr != ptrRef);
+		}
+
+		// RefHolder transparent compare (for tree-sets)
+		{
+			std::tuple<int, char> obj1 { 1, 'a' };		// type with templated op<
+			std::tuple<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::tuple<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::tuple<int, char>> ref1 = obj1;
+
+			ASSERT_EQ (false, obj1 < cpy1);
+			ASSERT_EQ (true,  obj1 < obj2);
+
+			ASSERT_EQ (false, ref1 < cpy1);
+			ASSERT_EQ (false, cpy1 < ref1);
+			ASSERT_EQ (true,  ref1 < obj2);
+			ASSERT_EQ (false, obj2 < ref1);
+
+			ASSERT (ref1.operator<({1, 'b'}));			// edge-case of default type argument
+
+
+			RefHolder<std::tuple<int, char>> ref2   = obj2;
+			RefHolder<std::tuple<int, char>> refcpy = ref1;
+
+			ASSERT_EQ (true,  ref1 < ref2);
+			ASSERT_EQ (false, ref1 < refcpy);
+
+			// holding different, but comparable type
+			std::tuple<int&, char&> refPair = { std::get<0>(obj1), std::get<1>(obj1) };
+
+			ASSERT_EQ (true,  refPair < obj2);
+			ASSERT_EQ (false, refPair < obj1);
+			ASSERT_EQ (false, obj1 < refPair);
+
+			RefHolder<std::tuple<int&, char&>> refPairRef = refPair;
+
+			ASSERT_EQ (false, refPairRef < refPair);
+			ASSERT_EQ (true,  refPairRef < obj2);
+			ASSERT_EQ (false, refPair	 < refPairRef);
+			ASSERT_EQ (false, obj2		 < refPairRef);
+		}
+#endif
 
 
 		struct alignas(64) ConstStruct {
