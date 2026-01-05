@@ -26,7 +26,7 @@ jobs:
     strategy: &matrixStrategy
       max-parallel: 2
       matrix:
-        platform: [x64, Win32]
+        platform: [x64, x86]
         config: [Debug, Release]
 
     env:
@@ -69,7 +69,7 @@ jobs:
 
   msvcBuild:
     name: Build on MSVC
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 4
     
     strategy: *matrixStrategy
@@ -89,7 +89,7 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # only the latest toolset is available -> override project setting!
       run: >
-        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}},PlatformToolset=v143
+        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         EnumerablesCpp.sln /t:TestsMSVC
 
