@@ -560,6 +560,7 @@ namespace EnumerableTests {
 	void TestCollectionCustomizability()
 	{
 		Greet("Custom collection parameters");
+		RESULTSVIEW_DISABLES_ALLOCASSERTS;
 
 		CustomHashes();
 		CustomLists();

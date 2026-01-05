@@ -138,17 +138,9 @@ namespace Enumerables::TypeHelpers {
 	using NoDeduce = OverrideT<T, void>;
 
 
-	/// Just an arbitrary condition for AsDependentT
-	template <class... Traits>
-	struct FirstOrFalse : std::false_type {};
-	
-	template <class F, class... Tail>
-	struct FirstOrFalse<F, Tail...> : std::integral_constant<bool, F::value> {};
-
-
 	/// Make T a dependent-type on some arbitrary template parameters to enable SFINAE.
 	template <class T, class... FakeDeps>
-	using AsDependentT = conditional_t<FirstOrFalse<is_void<FakeDeps>...>::value, T, T>;
+	using AsDependentT = conditional_t<std::conjunction_v<is_void<FakeDeps>...>, T, T>;
 
 
 	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.

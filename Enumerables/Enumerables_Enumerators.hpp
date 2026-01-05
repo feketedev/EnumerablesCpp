@@ -796,13 +796,13 @@ namespace Enumerables::Def {
 		//						  Don't mess with direct values.
 		using CompBase = conditional_t<sizeof...(SetOptions) != 0, Op, CompatComparisonBaseT<TElem, Op>>;
 
-		static_assert (!is_void<CompBase>::value || !is_pointer<Op>::value || !is_pointer<remove_reference_t<TElem>>::value,
+		static_assert (!is_void<CompBase>() || !is_pointer<Op>() || !is_pointer<remove_reference_t<TElem>>(),
 					   "Source and Operator elements are incompatible or dissimilar pointers!");
-		static_assert (!is_void<CompBase>::value || is_convertible<Op, BaseT<TElem>>::value,
+		static_assert (!is_void<CompBase>() || is_convertible<Op, BaseT<TElem>>(),
 					   "Can't convert Operator elements to TElem for comparison. Use SetOptions to implement a transparent check!");
-		static_assert (!is_void<CompBase>::value || !is_lvalue_reference<Op>::value,
+		static_assert (!is_void<CompBase>() || !is_lvalue_reference<Op>(),
 					   "Operator elements are references, but not of any TElem descendant. Use SetOptions to implement a transparent check!");
-		static_assert (!is_void<CompBase>::value || !is_convertible<Op, BaseT<TElem>>::value || is_same<BaseT<Op>, BaseT<TElem>>::value || !HaveRefcompatibleRoots<TElem, Op>,
+		static_assert (!is_void<CompBase>() || !is_convertible<Op, BaseT<TElem>>() || is_same<BaseT<Op>, BaseT<TElem>>() || !HaveRefcompatibleRoots<TElem, Op>,
 					   "Converting elements for comparison could lose data. If the conversion is desired, use .As<T> explicitly!");
 
 		using S	   = StorableT<CompBase>;

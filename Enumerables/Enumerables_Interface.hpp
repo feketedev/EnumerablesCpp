@@ -335,7 +335,7 @@ namespace Enumerables::Def {
 		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem&>(forward<Mapper>(m)); }
 
 		// Special SFINAE variant for ToDictionary overloads - Not forcing Selector, as target is always decayed.
-		template <class Mapper, class = enable_if_t<!is_convertible_v<Mapper, size_t>>>
+		template <class Mapper, enable_if_t<!is_convertible_v<Mapper, size_t>, int> = 0>
 		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::CustomMapper<TElem>(forward<Mapper>(m)); }
 
 
@@ -720,9 +720,9 @@ namespace Enumerables::Def {
 		template <class E2>	auto Concat(E2&& continuation) const &	{ return   ChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
 		template <class E2>	auto Concat(E2&& continuation) &&		{ return MvChainJoined<E2, TElem, ConcatEnumerator>(continuation); }
 
-		template <class I2, class = IfNonScalar<AsDependentT<TElem, I2>>>
+		template <class I2, IfNonScalar<AsDependentT<TElem, I2>, int> = 0>
 		auto Concat(initializer_list<I2>&& conti) const &					{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
-		template <class I2, class = IfNonScalar<AsDependentT<TElem, I2>>>
+		template <class I2, IfNonScalar<AsDependentT<TElem, I2>, int> = 0>
 		auto Concat(initializer_list<I2>&& conti) &&						{ return MvChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
 
 		auto Concat(initializer_list<InitElemFor<TElem>>&& conti) const &	{ return   ChainJoined<decltype(conti), TElem, ConcatEnumerator>(conti); }
@@ -773,7 +773,7 @@ namespace Enumerables::Def {
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
 		
-		template <class Pred = PF, class = enable_if_t<!is_convertible_v<Pred, TElemConstParam>>>
+		template <class Pred = PF, enable_if_t<!is_convertible_v<Pred, TElemConstParam>, int> = 0>
 		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
 
@@ -1526,7 +1526,7 @@ namespace Enumerables::Def {
 	}
 
 	
-	template <class TForced = void, class I1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class I1, class I2, class I3, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), move(iList3), forward<Containers>(tail)...);
@@ -1538,7 +1538,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class I1, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class I1, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(initializer_list<I1>&& iList1, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<Containers>(tail)...);
@@ -1550,7 +1550,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class C1, class I2, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class C1, class I2, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(C1&& cont1, initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(iList2), forward<Containers>(tail)...);
@@ -1562,7 +1562,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class C1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class C1, class C2, class I3, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(C1&& cont1, C2&& cont2, initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), forward<C2>(cont2), move(ilist3), forward<Containers>(tail)...);
@@ -1574,7 +1574,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class I1, class I2, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class I1, class I2, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), move(iList2), forward<Containers>(tail)...);
@@ -1586,7 +1586,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class C1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class C1, class I2, class I3, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(C1&& cont1, initializer_list<I2>&& ilist2, initializer_list<I3>&& ilist3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(forward<C1>(cont1), move(ilist2), move(ilist3), forward<Containers>(tail)...);
@@ -1598,7 +1598,7 @@ namespace Enumerables::Def {
 	}
 
 
-	template <class TForced = void, class I1, class C2, class I3, class... Containers, class = IfNonScalar<TForced>>
+	template <class TForced = void, class I1, class C2, class I3, class... Containers, IfNonScalar<TForced, int> = 0>
 	auto Concat(initializer_list<I1>&& iList1, C2&& cont2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{
 		return ConcatInternal<TForced>(move(iList1), forward<C2>(cont2), move(iList3), forward<Containers>(tail)...);

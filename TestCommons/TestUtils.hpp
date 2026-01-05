@@ -150,7 +150,7 @@ namespace EnumerableTests {
 		const T&	operator *() const	{ return data; }
 		T&			operator *()		{ return data; }
 
-		template <class In, class = std::enable_if_t<!std::is_same<In&, CountedCopy&>::value>>
+		template <class In, class = std::enable_if_t<!std::is_same_v<In&, CountedCopy&>>>
 		CountedCopy(In&& init) : data { std::forward<In>(init) } {}
 
 		CountedCopy(const CountedCopy& src) noexcept(noexcept(T(src.data))) :
