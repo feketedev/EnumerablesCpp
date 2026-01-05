@@ -45,7 +45,7 @@ namespace Legacy {
 		RecB() = default;
 	};
 
-	struct Rec : public RecB {
+	struct Rec : RecB {
 		int n;
 		char c;
 
@@ -105,14 +105,14 @@ namespace Legacy {
 		virtual ~Noisy()																{ Print("dtor"); }
 	};
 
-	struct NoisyNoMove : public Noisy
+	struct NoisyNoMove : Noisy
 	{
 		using Noisy::Noisy;
 		NoisyNoMove(NoisyNoMove&&) = delete;
 		NoisyNoMove(const NoisyNoMove&) = default;
 	};
 
-	struct NoisyMoveOnly : public Noisy
+	struct NoisyMoveOnly : Noisy
 	{
 		using Noisy::Noisy;
 		NoisyMoveOnly(const NoisyMoveOnly&) = delete;

@@ -32,7 +32,7 @@ namespace Enumerables::TypeHelpers {
 		T* /*const*/ ptr;
 
 	public:
-		template <class Ref, class = enable_if_t<is_same_v<const T, const remove_reference_t<Ref>>>>
+		template <class Ref, class = enable_if_t<IsRefCompatible<T, Ref>>>
 		RefHolder(Ref&& ref) noexcept : ptr { &ref }
 		{
 			static_assert (is_lvalue_reference<Ref>(), "Reference stored from rvalue soon becomes dangling!");

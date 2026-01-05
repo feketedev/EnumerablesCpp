@@ -43,7 +43,7 @@ namespace EnumerableTests {
 	}
 
 
-	std::pair<bool, std::string> FindCmdOption(char letter, int argc, const char* argv[])
+	CmdOption FindCmdOption(char letter, int argc, const char* argv[])
 	{
 		std::string trg1 = "-";
 		std::string trg2 = trg1;
@@ -70,6 +70,7 @@ namespace EnumerableTests {
 
 	void PrintFail(const char* txt, const char* file, long line)
 	{
+		FailureDetected = true;
 		std::cout << "    Test assertion failed:  " << txt << "\n    at: "
 				  << file << ':' << line << std::endl;
 	}
@@ -120,7 +121,8 @@ namespace EnumerableTests {
 			return true;
 
 		PrintFail(txt, file, line);
-		AskForBreak(txt, file, line);
+		if (!NoAssertMessages)
+			AskForBreak(txt, file, line);
 		return false;
 	}
 

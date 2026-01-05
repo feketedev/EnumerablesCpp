@@ -14,10 +14,12 @@
     <ProjectCapability Include="SourceItemsFromImports" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)TestEnvironment.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)TestUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)TestCompileSetup.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)TestEnvironment.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)TestUtils.hpp" />
   </ItemGroup>
 </Project>

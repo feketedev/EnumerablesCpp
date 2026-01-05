@@ -1,7 +1,8 @@
 #pragma once
 
-#include "TestCompileSetup.hpp"
+#include "TestEnvironment.h"
 #include <iostream>
+#include <string>
 #include <utility>
 
 
@@ -37,15 +38,24 @@
 
 namespace EnumerableTests {
 
-	std::pair<bool, std::string>  FindCmdOption(char letter, int argc, const char* argv[]);
+	struct CmdOption {
+		bool		isSet;
+		std::string	value;
+
+		operator bool() const  { return isSet; }
+	};
+	CmdOption  FindCmdOption(char letter, int argc, const char* argv[]);
 
 	void Greet(const char* testName);
 
 	void PrintFail	(const char* errorTxt, const char* file, long line);
 	void AskForBreak(const char* errorTxt, const char* file, long line);
 
+
+
 	void MaskableClientBreak(const char* errorTxt);
 
+	// Temporarily suppress client-error checks for exception testing.
 	struct DisableClientBreaks {
 		DisableClientBreaks()  noexcept;
 		~DisableClientBreaks() noexcept;
@@ -218,7 +228,8 @@ namespace EnumerableTests {
 		PrintObj("\tExpected =  ", a);
 		PrintObj("\tActual   =  ", b);
 		PrintDiff(a, b);
-		AskForBreak(txt, file, line);
+		if (!NoAssertMessages)
+			AskForBreak(txt, file, line);
 		return false;
 	}
 

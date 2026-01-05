@@ -1,0 +1,101 @@
+name: Build clean17
+
+on:
+  push:
+    branches: [ "clean17" ]
+  pull_request:
+    branches: [ "clean17" ]
+
+env:
+  # path + common prefix
+  EXPECTED_WARNINGS: .github\workflows\ExpectedWarnings\WarningList
+  
+  # expecting windows paths
+  REDACT_LOCATIONS: >
+    %{ $_ -replace '(?<=\.[hc]pp)\(\d+,\d+\):',':' -replace '[A-Za-z]:\\(\w+\\)*EnumerablesCpp\\','EnumerablesCpp\' }
+
+permissions:
+  contents: read
+
+jobs:
+  clangBuild:
+    name: Build on Clang
+    runs-on: windows-latest
+    timeout-minutes: 4
+
+    strategy: &matrixStrategy
+      max-parallel: 2
+      matrix:
+        platform: [x64, Win32]
+        config: [Debug, Release]
+
+    env:
+      # ideally, config should be irrelevant
+      WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}.txt
+      WARNINGS_REFERENCE: Clang_${{matrix.platform}}.txt
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: >
+        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}
+        /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
+        TestsClang\TestsClang.vcxproj
+
+    - &warnCheck
+        name: Check warnings
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          $act = type $env:WARNINGS_LOG | ${{env.REDACT_LOCATIONS}}
+          $exp = type ${{env.EXPECTED_WARNINGS}}_${{env.WARNINGS_REFERENCE}}
+          compare $act $exp | tee -variable diff
+          if ($diff) {
+              echo "`n ---- Actual WarningList ----"
+              echo $act
+              exit 1
+          } else {
+              echo 'All warnings were expected.'
+          }
+
+    - name: Run tests
+      run: TestsClang\${{matrix.platform}}\${{matrix.config}}\TestsClang\TestsClang.exe -N -Q
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+
+
+  msvcBuild:
+    name: Build on MSVC
+    runs-on: windows-latest
+    timeout-minutes: 4
+    
+    strategy: *matrixStrategy
+
+    env:
+      # ideally, config should be irrelevant
+      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform}}_${{matrix.config}}.txt
+      WARNINGS_REFERENCE: MSVC_${{matrix.platform}}.txt
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      # only the latest toolset is available -> override project setting!
+      run: >
+        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}},PlatformToolset=v143
+        /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
+        TestsMSVC\TestsMSVC.vcxproj
+
+    - *warnCheck
+
+    - name: Run tests
+      run: TestsMSVC\${{matrix.platform}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -N -Q
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+
