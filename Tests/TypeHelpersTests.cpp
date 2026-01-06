@@ -453,12 +453,12 @@ namespace EnumerableTests {
 		}
 
 
-		// In old MS STL, pair has no comparison operators for compatible (different) types,
+		// In older MS STL, pair has no comparison operators for compatible (different) types,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
 		//
 		// The same works with tuples (see below endif)!
 		// Still kept the original pair version, showing that these tests depend on STL capability.
-#if !defined(_MSC_VER) || (_MSC_VER > 1900)
+#if !defined(_MSC_VER) || (_MSC_VER > 1930)
 
 		// RefHolder transparent equality
 		{

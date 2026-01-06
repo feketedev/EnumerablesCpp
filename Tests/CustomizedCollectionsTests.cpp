@@ -529,8 +529,8 @@ namespace EnumerableTests {
 				allocations.Reset();
 			}
 
-#		if defined(_DEBUG) && !defined(__clang__)
-			// Yet again: MSVC doesn't apply NRVO in debug + its move ctor does allocate!
+#		if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
+			// Yet again: Older MSVC doesn't apply NRVO in debug + its move ctor does allocate!
 			constexpr size_t dbgExtra = 4;
 #		else
 			constexpr size_t dbgExtra = 0;
