@@ -577,8 +577,8 @@ namespace EnumerableTests {
 
 			std::unordered_set<double> rootSet = roots.ToSet();
 
-#		if defined(_DEBUG) && !defined(__clang__)
-			// MSVC doesn't apply NRVO in debug + its move ctor does allocate!
+#		if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
+			// Older MSVC doesn't apply NRVO in debug + its move ctor does allocate!
 			allocations.AssertFreshCount(2 * setMoveAllocs + setAllocs);
 #		else
 			allocations.AssertFreshCount(setAllocs);
