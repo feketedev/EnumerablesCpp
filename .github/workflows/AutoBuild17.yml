@@ -14,6 +14,10 @@ env:
   REDACT_LOCATIONS: >
     %{ $_ -replace '(?<=\.[hc]pp)\(\d+,\d+\):',':' -replace '[A-Za-z]:\\(\w+\\)*EnumerablesCpp\\','EnumerablesCpp\' }
 
+  # some versions use guids or ordinal numbers
+  REDACT_LAMBDAS: >
+    %{ $_ -replace '<lambda_[a-fA-F\d]+>','<lambda_###>' }
+
 permissions:
   contents: read
 
@@ -26,13 +30,17 @@ jobs:
     strategy: &matrixStrategy
       max-parallel: 2
       matrix:
-        platform: [x64, x86]
         config: [Debug, Release]
+        platform:
+        - sln: x64
+          proj: x64
+        - sln: x86
+          proj: Win32
 
     env:
       # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}.txt
-      WARNINGS_REFERENCE: Clang_${{matrix.platform}}.txt
+      WARNINGS_LOG: Warnings_Clang_${{matrix.platform.proj}}_${{matrix.config}}.txt
+      WARNINGS_REFERENCE: Clang_${{matrix.platform.proj}}.txt
 
     steps:
     - uses: actions/checkout@v4
@@ -43,7 +51,7 @@ jobs:
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: >
-        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}
+        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         EnumerablesCpp.sln /t:TestsClang
 
@@ -51,7 +59,7 @@ jobs:
         name: Check warnings
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          $act = type $env:WARNINGS_LOG | ${{env.REDACT_LOCATIONS}}
+          $act = type $env:WARNINGS_LOG | ${{env.REDACT_LOCATIONS}} | ${{env.REDACT_LAMBDAS}}
           $exp = type ${{env.EXPECTED_WARNINGS}}_${{env.WARNINGS_REFERENCE}}
           compare $act $exp | tee -variable diff
           if ($diff) {
@@ -63,7 +71,7 @@ jobs:
           }
 
     - name: Run tests
-      run: ${{matrix.platform}}\${{matrix.config}}\TestsClang\TestsClang.exe -N -Q
+      run: ${{matrix.platform.proj}}\${{matrix.config}}\TestsClang\TestsClang.exe -N -Q
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
 
@@ -76,8 +84,8 @@ jobs:
 
     env:
       # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform}}_${{matrix.config}}.txt
-      WARNINGS_REFERENCE: MSVC_${{matrix.platform}}.txt
+      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform.proj}}_${{matrix.config}}.txt
+      WARNINGS_REFERENCE: MSVC_${{matrix.platform.proj}}.txt
 
     steps:
     - uses: actions/checkout@v4
@@ -87,15 +95,14 @@ jobs:
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      # only the latest toolset is available -> override project setting!
       run: >
-        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}
+        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         EnumerablesCpp.sln /t:TestsMSVC
 
     - *warnCheck
 
     - name: Run tests
-      run: ${{matrix.platform}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -N -Q
+      run: ${{matrix.platform.proj}}\${{matrix.config}}\TestsMSVC\TestsMSVC.exe -N -Q
       working-directory: ${{env.GITHUB_WORKSPACE}}
 
