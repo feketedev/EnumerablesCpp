@@ -456,9 +456,9 @@ namespace EnumerableTests {
 		// Note that the following tests require proper STL implementation of pair/tuple comparison operators,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
 		// 
-		// Old MSVC only has that for tuple.
+		// Older MS libraries only have that for tuple.
 		// Kept the pair version too. It illustrates that these tests depend on STL capabilities.
-#if !defined(_MSC_VER) || (_MSC_VER >= 1920)
+#if !defined(_MSC_VER) || (_MSC_VER >= 1930)
 
 		// RefHolder transparent equality
 		{
