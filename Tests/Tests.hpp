@@ -6,10 +6,17 @@
 
 namespace EnumerableTests {
 
+	struct CmdOption;
+
+
+	void RunAll(const char myPath[], int argc, const char* argv[]);
+
+
 	void LegacyTests(const char myPath[]);
 	void LegacyPerfTests();
 
-	void NewPerfTests(int argc, const char* argv[]);
+	void NewPerfTests(const CmdOption& summarizeTimes, const CmdOption& summarizeOverheads);
+
 
 	void RunIntroduction1();
 	void RunIntroduction2();
@@ -26,28 +33,5 @@ namespace EnumerableTests {
 
 	void TestFeatures17();
 	void TestFeatures20();
-
-
-
-	inline void RunAll(const char myPath[], int argc, const char* argv[])
-	{
-		LegacyTests(myPath);
-		RunIntroduction1();
-		RunIntroduction2();
-		RunIntroduction3();
-		TestConstruction();
-		TestTypeHelpers();
-		TestOptResult();
-		TestFiltration();
-		TestLambdaUsage();
-		TestArithmetics();
-		TestMisc();
-		TestCollectionCustomizability();
-		TestFeatures17();
-		TestFeatures20();
-
-		NewPerfTests(argc, argv);
-	 // LegacyPerfTests();
-	}
 
 }

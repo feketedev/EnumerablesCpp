@@ -394,9 +394,9 @@ namespace EnumerableTests {
 			refs.push_back(nums[1]);
 			refs.push_back(nums[2]);
 
-			static_assert(is_same<int&,			decltype(Revive(refs.front()))>(), "type check");
-			static_assert(is_same<const int&,	decltype(ReviveConst(refs[1]))>(), "type check");
-			static_assert(is_same<int&,			decltype(PassRevived(refs[2]))>(), "type check");	// refs are lvalues
+			static_assert (is_same<int&,		decltype(Revive(refs.front()))>(), "type check");
+			static_assert (is_same<const int&,	decltype(ReviveConst(refs[1]))>(), "type check");
+			static_assert (is_same<int&,		decltype(PassRevived(refs[2]))>(), "type check");	// refs are lvalues
 
 			int&		i0 = Revive(refs.front());
 			const int&	i1 = ReviveConst(refs[1]);
@@ -412,50 +412,53 @@ namespace EnumerableTests {
 			ASSERT_EQ (3, i1);
 			ASSERT_EQ (4, i2);
 
-			static_assert(is_same<int&,			decltype(Revive(nums.front()))>(), "type check");
-			static_assert(is_same<const int&,	decltype(ReviveConst(nums[1]))>(), "type check");
-			static_assert(is_same<int&&,		decltype(PassRevived(nums[2]))>(), "type check");
+			static_assert (is_same<int&,		decltype(Revive(nums.front()))>(), "type check");
+			static_assert (is_same<const int&,	decltype(ReviveConst(nums[1]))>(), "type check");
+			static_assert (is_same<int&&,		decltype(PassRevived(nums[2]))>(), "type check");
 		}
 
 
 		// Reverse StorableT type-transformation (static)
 		{
 			// identities - & stripped
-			static_assert(is_same<int,					RestorableT<int>>(),					"type check");
-			static_assert(is_same<int,					RestorableT<int&>>(),					"type check");
-			static_assert(is_same<const int,			RestorableT<const int>>(),				"type check");
-			static_assert(is_same<const int,			RestorableT<const int&>>(),				"type check");
-			static_assert(is_same<const volatile int,	RestorableT<const volatile int>>(),		"type check");
-			static_assert(is_same<const volatile int,	RestorableT<const volatile int&>>(),	"type check");
+			static_assert (is_same<int,					RestorableT<int>>(),					"type check");
+			static_assert (is_same<int,					RestorableT<int&>>(),					"type check");
+			static_assert (is_same<const int,			RestorableT<const int>>(),				"type check");
+			static_assert (is_same<const int,			RestorableT<const int&>>(),				"type check");
+			static_assert (is_same<const volatile int,	RestorableT<const volatile int>>(),		"type check");
+			static_assert (is_same<const volatile int,	RestorableT<const volatile int&>>(),	"type check");
 
-			static_assert(is_same<int [],				RestorableT<int []>>(),					"type check");
-			static_assert(is_same<int [4],				RestorableT<int (&)[4]>>(),				"type check");
-			static_assert(is_same<int (*)(),			RestorableT<int (*)()>>(),				"type check");
-			static_assert(is_same<int (*)(),			RestorableT<int (*&)()>>(),				"type check");
-			static_assert(is_same<int (* const)(),		RestorableT<int (* const)()>>(),		"type check");
-			static_assert(is_same<int (* const)(),		RestorableT<int (* const &)()>>(),		"type check");
+			static_assert (is_same<int [],				RestorableT<int []>>(),					"type check");
+			static_assert (is_same<int [4],				RestorableT<int (&)[4]>>(),				"type check");
+			static_assert (is_same<int (*)(),			RestorableT<int (*)()>>(),				"type check");
+			static_assert (is_same<int (*)(),			RestorableT<int (*&)()>>(),				"type check");
+			static_assert (is_same<int (* const)(),		RestorableT<int (* const)()>>(),		"type check");
+			static_assert (is_same<int (* const)(),		RestorableT<int (* const &)()>>(),		"type check");
 
 
 			// Restore & - volatile RefHolder is unexpected
-			static_assert(is_same<int&,				RestorableT<RefHolder<int>>>(),				"type check");
-			static_assert(is_same<int&,				RestorableT<RefHolder<int>&>>(),			"type check");
-			static_assert(is_same<const int&,		RestorableT<RefHolder<const int>>>(),		"type check");
-			static_assert(is_same<const int&,		RestorableT<RefHolder<const int>&>>(),		"type check");
-			static_assert(is_same<volatile int&,	RestorableT<RefHolder<volatile int>>>(),	"type check");
-			static_assert(is_same<volatile int&,	RestorableT<RefHolder<volatile int>&>>(),	"type check");
+			static_assert (is_same<int&,			RestorableT<RefHolder<int>>>(),				"type check");
+			static_assert (is_same<int&,			RestorableT<RefHolder<int>&>>(),			"type check");
+			static_assert (is_same<const int&,		RestorableT<RefHolder<const int>>>(),		"type check");
+			static_assert (is_same<const int&,		RestorableT<RefHolder<const int>&>>(),		"type check");
+			static_assert (is_same<volatile int&,	RestorableT<RefHolder<volatile int>>>(),	"type check");
+			static_assert (is_same<volatile int&,	RestorableT<RefHolder<volatile int>&>>(),	"type check");
 
-			static_assert(is_same<int&,				RestorableT<const RefHolder<int>>>(),			"type check");
-			static_assert(is_same<int&,				RestorableT<const RefHolder<int>&>>(),			"type check");
-			static_assert(is_same<const int&,		RestorableT<const RefHolder<const int>>>(),		"type check");
-			static_assert(is_same<const int&,		RestorableT<const RefHolder<const int>&>>(),	"type check");
-			static_assert(is_same<volatile int&,	RestorableT<const RefHolder<volatile int>>>(),	"type check");
-			static_assert(is_same<volatile int&,	RestorableT<const RefHolder<volatile int>&>>(),	"type check");
+			static_assert (is_same<int&,			RestorableT<const RefHolder<int>>>(),			"type check");
+			static_assert (is_same<int&,			RestorableT<const RefHolder<int>&>>(),			"type check");
+			static_assert (is_same<const int&,		RestorableT<const RefHolder<const int>>>(),		"type check");
+			static_assert (is_same<const int&,		RestorableT<const RefHolder<const int>&>>(),	"type check");
+			static_assert (is_same<volatile int&,	RestorableT<const RefHolder<volatile int>>>(),	"type check");
+			static_assert (is_same<volatile int&,	RestorableT<const RefHolder<volatile int>&>>(),	"type check");
 		}
 
 
-		// Note that the following tests require proper STL implementation of pair comparison operators,
+		// Note that the following tests require proper STL implementation of pair/tuple comparison operators,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
-		// (Didn't compile on old MSVC.)
+		// 
+		// Older MS libraries only have that for tuple.
+		// Kept the pair version too. It illustrates that these tests depend on STL capabilities.
+#if !defined(_MSC_VER) || (_MSC_VER >= 1930)
 
 		// RefHolder transparent equality
 		{
@@ -540,6 +543,91 @@ namespace EnumerableTests {
 			ASSERT_EQ (false, obj2		 < refPairRef);
 		}
 
+#else
+
+		// RefHolder transparent equality
+		{
+			std::tuple<int, char> obj1 { 1, 'a' };		// type with templated op==
+			std::tuple<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::tuple<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::tuple<int, char>> ref1 = obj1;
+
+			ASSERT (ref1 == cpy1);
+			ASSERT (ref1 != obj2);
+			ASSERT (cpy1 == ref1);
+			ASSERT (obj2 != ref1);
+
+			ASSERT (ref1.operator==({ 1, 'a'}));		// edge-case of default type argument
+
+
+			RefHolder<std::tuple<int, char>> ref2   = obj2;
+			RefHolder<std::tuple<int, char>> refcpy = ref1;
+
+			ASSERT (ref1 != ref2);
+			ASSERT (ref1 == refcpy);
+
+			// holding different, but equatable type
+			std::tuple<int&, char&> refPair { std::get<0>(obj1), std::get<1>(obj1) };
+
+			ASSERT (refPair == obj1);
+			ASSERT (obj1 == refPair);
+
+			RefHolder<std::tuple<int&, char&>> refPairRef = refPair;
+
+			ASSERT (refPairRef == refPair);
+			ASSERT (refPairRef == obj1);
+			ASSERT (refPair	== refPairRef);
+			ASSERT (obj1	== refPairRef);
+
+			int*			ptr	   = &std::get<0>(obj1);
+			RefHolder<int*> ptrRef = ptr;
+
+			ASSERT (ptrRef != nullptr);
+			ASSERT (nullptr != ptrRef);
+		}
+
+		// RefHolder transparent compare (for tree-sets)
+		{
+			std::tuple<int, char> obj1 { 1, 'a' };		// type with templated op<
+			std::tuple<int, char> cpy1 { 1, 'a' };		// => conversion operator won't help!
+			std::tuple<int, char> obj2 { 2, 'a' };
+
+			RefHolder<std::tuple<int, char>> ref1 = obj1;
+
+			ASSERT_EQ (false, obj1 < cpy1);
+			ASSERT_EQ (true,  obj1 < obj2);
+
+			ASSERT_EQ (false, ref1 < cpy1);
+			ASSERT_EQ (false, cpy1 < ref1);
+			ASSERT_EQ (true,  ref1 < obj2);
+			ASSERT_EQ (false, obj2 < ref1);
+
+			ASSERT (ref1.operator<({1, 'b'}));			// edge-case of default type argument
+
+
+			RefHolder<std::tuple<int, char>> ref2   = obj2;
+			RefHolder<std::tuple<int, char>> refcpy = ref1;
+
+			ASSERT_EQ (true,  ref1 < ref2);
+			ASSERT_EQ (false, ref1 < refcpy);
+
+			// holding different, but comparable type
+			std::tuple<int&, char&> refPair = { std::get<0>(obj1), std::get<1>(obj1) };
+
+			ASSERT_EQ (true,  refPair < obj2);
+			ASSERT_EQ (false, refPair < obj1);
+			ASSERT_EQ (false, obj1 < refPair);
+
+			RefHolder<std::tuple<int&, char&>> refPairRef = refPair;
+
+			ASSERT_EQ (false, refPairRef < refPair);
+			ASSERT_EQ (true,  refPairRef < obj2);
+			ASSERT_EQ (false, refPair	 < refPairRef);
+			ASSERT_EQ (false, obj2		 < refPairRef);
+		}
+#endif
+
 
 		struct alignas(64) ConstStruct {
 			const int				id;
@@ -559,8 +647,8 @@ namespace EnumerableTests {
 			ASSERT_EQ (1,	s1->id);
 			ASSERT_EQ (1.1,	*s1->payload);
 
-			static_assert(is_same<ConstStruct&,  decltype(*s1)>(),			  "type check");
-			static_assert(is_same<ConstStruct&&, decltype(*std::move(s1))>(), "type check");
+			static_assert (is_same<ConstStruct&,  decltype(*s1)>(),			   "type check");
+			static_assert (is_same<ConstStruct&&, decltype(*std::move(s1))>(), "type check");
 
 			Reassignable<ConstStruct> s2 = std::move(s1);
 			ASSERT_EQ (1,	s2->id);
@@ -622,8 +710,8 @@ namespace EnumerableTests {
 			Deferred<ConstStruct> s;
 			ASSERT (!s.IsInitialized());
 
-			static_assert(is_same<ConstStruct&,  decltype(*s)>(),			 "type check");
-			static_assert(is_same<ConstStruct&&, decltype(*std::move(s))>(), "type check");
+			static_assert (is_same<ConstStruct&,  decltype(*s)>(),			  "type check");
+			static_assert (is_same<ConstStruct&&, decltype(*std::move(s))>(), "type check");
 
 			s = ConstStruct { 1, 1.1 };
 			ASSERT (s.IsInitialized());
@@ -789,8 +877,10 @@ namespace EnumerableTests {
 		struct Base {
 			int data;
 		};
-		struct Derived1 : public Base {};
-		struct Derived2 : public Base {};
+		struct Derived1 : Base {};
+		struct Derived2 : Base {
+			Derived2 (const Base& b);
+		};
 
 		static_assert (is_same< Base 	   &,			CompatResultT<Derived1 		 &,	Base 	   &	>>(), "Err");
 		static_assert (is_same< Base const &,			CompatResultT<Derived1 const &,	Base 	   &	>>(), "Err");
@@ -807,6 +897,123 @@ namespace EnumerableTests {
 
 		// member pointers should pass too
 		static_assert (is_same< int	Base::*,			CompatResultT<int	Base::*,	decltype(&Derived1::data) >>(), "Err");
+
+		// Compatible roots, but dissimilar
+		static_assert (is_same< void,					CompatResultT<Base 		** &,	Base	* &		>>(), "Err");
+		static_assert (is_same< void,					CompatResultT<Derived1 	** &,	Base	* &		>>(), "Err");
+		static_assert (is_same< void,					CompatResultT<Base 		(&)[],	Base	* &		>>(), "Err");
+		static_assert (is_same< void,					CompatResultT<int 		(&)[],	int		* &		>>(), "Err");
+
+
+		// ----- Temporary storage deduction for (set based) comparisons -----
+
+		// 0. Basics
+		//		- Note that DecayIfScalar may be added by Enumerators for perf resons - not assessed here
+		//		- StorableT is applied where containers instantiated, refs can pass here
+		static_assert (is_same< int,				CompatComparisonBaseT<int,					int 		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int const,			int 		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int,					int const	>>(), "Err");	// top cv dropped (will copy object)
+		static_assert (is_same< int,				CompatComparisonBaseT<int &,				int 		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int const & ,			int 		>>(), "Err");
+		static_assert (is_same< int &,				CompatComparisonBaseT<int,					int &		>>(), "Err");
+		static_assert (is_same< int const &,		CompatComparisonBaseT<int,					int const &	>>(), "Err");
+		static_assert (is_same< int &,				CompatComparisonBaseT<int &,				int &		>>(), "Err");
+		static_assert (is_same< int const &,		CompatComparisonBaseT<int &,				int const &	>>(), "Err");
+
+		// r-value refs (though not specificly supported as TElem) require decay to be stored
+		static_assert (is_same< int,				CompatComparisonBaseT<int const &,			int &&		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int &,				int &&		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int &&,				int &&		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int,					int &&		>>(), "Err");
+		static_assert (is_same< int,				CompatComparisonBaseT<int,					int const &&>>(), "Err");
+
+
+		// 1. Pointers can be ubiquitously compared -> store their common type
+		static_assert (is_same< int		  *,		CompatComparisonBaseT<int 		* ,			int 	  *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int const * ,			int 	  *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int const * ,			int const *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int 		* ,			int const *	>>(), "Err");
+		static_assert (is_same< int	const * const *, CompatComparisonBaseT<int const * *,		int * const *>>(), "Err");
+
+		// -- currently we let them decay by common type as a simplification due to usage with DecayIfScalar
+		static_assert (is_same< int		  *,		CompatComparisonBaseT<int 		*,			int 	  *&>>(), "Err");
+		static_assert (is_same< int		  *,		CompatComparisonBaseT<int 		*&,			int 	  *	>>(), "Err");
+		static_assert (is_same< int		  *,		CompatComparisonBaseT<int 		*&,			int 	  *&>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int const * &,		int 	  *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int 		* &,		int const *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int * const &,		int const *	>>(), "Err");
+		static_assert (is_same< int	const *,		CompatComparisonBaseT<int * const &,		int const * const &>>(), "Err");
+
+		// related pointers should work both ways
+		static_assert (is_same< Base 	   *,		CompatComparisonBaseT<Base	   		 *,		Derived1 	   * >>(), "Err");
+		static_assert (is_same< Base const *,		CompatComparisonBaseT<Base	   const *,		Derived1 const * >>(), "Err");
+		static_assert (is_same< Base const *,		CompatComparisonBaseT<Base	   const *,		Derived1	   * >>(), "Err");
+		static_assert (is_same< Base 	   *,		CompatComparisonBaseT<Derived1 		 *,		Base	 	   * >>(), "Err");
+		static_assert (is_same< Base const *,		CompatComparisonBaseT<Derived1 const *,		Base	 const * >>(), "Err");
+		static_assert (is_same< Base const *,		CompatComparisonBaseT<Derived1 const *,		Base		   * >>(), "Err");
+
+		// incompatible pointers
+		static_assert (is_same< void,	CompatComparisonBaseT<Base const * const *,		Derived1 const * const * >>(), "Err");
+
+
+		// 2. Store reference for derived types only (propagate const)
+		static_assert (is_same< Base &,				CompatComparisonBaseT<Base,					Derived1 &		 >>(), "Err");
+		static_assert (is_same< Base const &,		CompatComparisonBaseT<Base const,			Derived1 &		 >>(), "Err");
+		static_assert (is_same< Base const &,		CompatComparisonBaseT<Base,					Derived1 const & >>(), "Err");
+
+		// -- the dynamic type being filtered can be unknown, I consider this the programmer's responsibility
+		static_assert (is_same< Base &,				CompatComparisonBaseT<Base &,				Derived1 &		 >>(), "Err");
+		static_assert (is_same< Base const &,		CompatComparisonBaseT<Base &,				Derived1 const & >>(), "Err");
+		static_assert (is_same< Base const &,		CompatComparisonBaseT<Base const &,			Derived1 &		 >>(), "Err");
+		static_assert (is_same< Base const &,		CompatComparisonBaseT<Base&,				Derived1 const & >>(), "Err");
+
+		// -- the other way is forbidden - convert explicitly [.As<Base>()] to ignore part of the objects!
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2,				Base &		>>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2 &,			Base &		>>(), "Err");
+
+		// 3. Conversion *to* filtered type is allowed for *unrelated* types
+		//		- so that the basis of comparison is always the filtered type!
+		static_assert (is_same< double,				CompatComparisonBaseT<double,				int			>>(),	"Err");
+		static_assert (is_same< double,				CompatComparisonBaseT<double,				int		  &	>>(),	"Err");
+		static_assert (is_same< double,				CompatComparisonBaseT<double,				int	const &	>>(),	"Err");
+		static_assert (is_same< double,				CompatComparisonBaseT<double 	   &,		int			>>(),	"Err");
+		static_assert (is_same< double,				CompatComparisonBaseT<double const &,		int			>>(),	"Err");
+
+		// -- conversion exists, but related types -> require explicit .As<Derived2>()
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2 &,			Base		 >>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2,				Base		 >>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2 &,			Base &		 >>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<Derived2,				Base &		 >>(), "Err");
+		//    and avoid slicing
+		static_assert (is_same< void,				CompatComparisonBaseT<Base,					Derived1	 >>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<Base &,				Derived1	 >>(), "Err");
+
+
+		// 4. further tests from CompatResultT
+		
+		// incompatibles
+		static_assert (is_same< void,				CompatComparisonBaseT<int,		double *	>>(),	"Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<double *,	int			>>(),	"Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int,		int *		>>(),	"Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int *,	int			>>(),	"Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int &,	int *		>>(),	"Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int *,	int	&		>>(),	"Err");
+
+		// passing free-functions should work
+		static_assert (is_same<  float (*)(float),	CompatComparisonBaseT<float (*)(float),	decltype(&std::fabsf)	>>(),	"Err");
+		static_assert (is_same<  float (&)(float),	CompatComparisonBaseT<float (&)(float),	decltype(std::fabsf) &	>>(),	"Err");
+
+		// pointers to arrays
+		static_assert (is_same< int	(*)[3],			CompatComparisonBaseT<int (*)[3] ,			int (*)[3]	>>(), "Err");
+		static_assert (is_same< int	(&)[3],			CompatComparisonBaseT<int (&)[3] ,			int (&)[3]	>>(), "Err");
+		static_assert (is_same< const int (*)[3],	CompatComparisonBaseT<int (*)[3] ,	  const int (*)[3]	>>(), "Err");
+		static_assert (is_same< const int (&)[3],	CompatComparisonBaseT<int (&)[3] ,	  const int (&)[3]	>>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int (*)[3] ,			int (*)[4]	>>(), "Err");
+		static_assert (is_same< void,				CompatComparisonBaseT<int (&)[3] ,			int (&)[4]	>>(), "Err");
+
+		// Theoretical, but CONTRARY to CompatResultT, plain arrays are not forbidden here
+		static_assert (is_same< int[3],				CompatComparisonBaseT<int [3] ,			int [3]	>>(), "Err");
+		static_assert (is_same< int[],				CompatComparisonBaseT<int [] ,			int []	>>(), "Err");
 	}
 
 	
@@ -908,47 +1115,47 @@ namespace EnumerableTests {
 		using V2   = Vector2D<double>;
 		using Plus = decltype(&V2::operator+);
 
-		static_assert(IsCallableMember<V2,		  Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<V2*,		  Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<V2&,		  Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<V2&&,	  Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<const V2,  Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<const V2*, Plus, V2>::value,	"Error");
-		static_assert(IsCallableMember<const V2&, Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2,		   Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2*,	   Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&,	   Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&&,	   Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2,  Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2*, Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2&, Plus, V2>::value,	"Error");
 
-		static_assert(IsCallableMember<V2,		  Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<V2*,		  Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<V2&,		  Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<V2&&,	  Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<const V2,  Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<const V2*, Plus, V2&>::value, "Error");
-		static_assert(IsCallableMember<const V2&, Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2,		   Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2*,	   Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&,	   Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,	   Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2,  Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2*, Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2&, Plus, V2&>::value, "Error");
 
-		static_assert(IsCallableMember<V2,		  Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<V2*,		  Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<V2&,		  Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<V2&&,	  Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<const V2,  Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<const V2*, Plus, V2&&>::value, "Error");
-		static_assert(IsCallableMember<const V2&, Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2,		   Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2*,	   Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&,	   Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,	   Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2,  Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2*, Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2&, Plus, V2&&>::value, "Error");
 
 		// ----
 
-		static_assert(!IsCallableMember<V2,			Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<V2*,		Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<V2&,		Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<V2&&,		Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<const V2,	Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<const V2*,	Plus, V2*>::value,	"Error");
-		static_assert(!IsCallableMember<const V2&,	Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2,		Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2*,		Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2&&,		Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<const V2,	Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<const V2*,	Plus, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	Plus, V2*>::value,	"Error");
 
-		static_assert(!IsCallableMember<V2,			Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<V2*,		Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<V2&,		Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<V2&&,		Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<const V2,	Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<const V2*,	Plus, int>::value,	"Error");
-		static_assert(!IsCallableMember<const V2&,	Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<V2,		Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<V2*,		Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<V2&&,		Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<const V2,	Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<const V2*,	Plus, int>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	Plus, int>::value,	"Error");
 
 	}
 
@@ -957,22 +1164,22 @@ namespace EnumerableTests {
 	namespace TestBasicTypeHelpers {		// static test
 
 		// somewhat exotic cases
-		static_assert(is_same<const void *,			ConstValueT<void *>>(),			 "Err");
-		static_assert(is_same<float (*)(float),		ConstValueT<decltype(&sinf)>>(), "Err");
-		static_assert(is_same<float (&)(float),		ConstValueT<decltype(sinf)&>>(), "Err");
-		static_assert(is_same<const int [],			ConstValueT<int []>>(),			 "Err");
-		static_assert(is_same<const int (&) [3],	ConstValueT<int (&)[3]>>(),		 "Err");
-		static_assert(is_same<const int (*) [3],	ConstValueT<int (*)[3]>>(),		 "Err");
+		static_assert (is_same<const void *,		ConstValueT<void *>>(),			 "Err");
+		static_assert (is_same<float (*)(float),	ConstValueT<decltype(&sinf)>>(), "Err");
+		static_assert (is_same<float (&)(float),	ConstValueT<decltype(sinf)&>>(), "Err");
+		static_assert (is_same<const int [],		ConstValueT<int []>>(),			 "Err");
+		static_assert (is_same<const int (&) [3],	ConstValueT<int (&)[3]>>(),		 "Err");
+		static_assert (is_same<const int (*) [3],	ConstValueT<int (*)[3]>>(),		 "Err");
 
 		// Member-pointers: consting is not planned, only follows the "default" branch.
 		//					But don't qualify the function itself!
 		using Pair = std::pair<int, char>;
 
-		static_assert(is_same<int   Pair::* const,					ConstValueT<decltype(&Pair::first)>>(),	"Err");
+		static_assert (is_same<int   Pair::* const,						ConstValueT<decltype(&Pair::first)>>(),	"Err");
 #if !CPP23_ENABLED
-		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
+		static_assert (is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<decltype(&Pair::swap)>>(),	"Err");
 #else
-		static_assert(is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<void (Pair::*)(Pair&) noexcept>>(),	"Err");
+		static_assert (is_same<void (Pair::* const)(Pair&) noexcept,	ConstValueT<void (Pair::*)(Pair&) noexcept>>(),	"Err");
 #endif
 	}
 
@@ -1011,12 +1218,12 @@ namespace EnumerableTests {
 		using std::tuple;
 
 
-		static_assert(is_same<tuple<char>,						OverriddenNthArgT<tuple<int>, 0, char>>(), "Err");
-		static_assert(is_same<tuple<int>,						OverriddenNthArgT<tuple<int>, 0, None>>(), "Err");
-		static_assert(is_same<tuple<char, int, double>,			OverriddenNthArgT<tuple<unsigned, int, double>, 0, char>>(), "Err");
-		static_assert(is_same<tuple<unsigned, char, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 1, char>>(), "Err");
-		static_assert(is_same<tuple<unsigned, int, char>,		OverriddenNthArgT<tuple<unsigned, int, double>, 2, char>>(), "Err");
-		static_assert(is_same<tuple<unsigned, int, double>,		OverriddenNthArgT<tuple<unsigned, int, double>, 2, None>>(), "Err");
+		static_assert (is_same<tuple<char>,						OverriddenNthArgT<tuple<int>, 0, char>>(), "Err");
+		static_assert (is_same<tuple<int>,						OverriddenNthArgT<tuple<int>, 0, None>>(), "Err");
+		static_assert (is_same<tuple<char, int, double>,		OverriddenNthArgT<tuple<unsigned, int, double>, 0, char>>(), "Err");
+		static_assert (is_same<tuple<unsigned, char, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 1, char>>(), "Err");
+		static_assert (is_same<tuple<unsigned, int, char>,		OverriddenNthArgT<tuple<unsigned, int, double>, 2, char>>(), "Err");
+		static_assert (is_same<tuple<unsigned, int, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 2, None>>(), "Err");
 		
 	 // Friendly assertions (CTE):
 	 //	using Bad1 = OverriddenNthArgT<tuple<unsigned, int, double>, 3, char>;
@@ -1032,17 +1239,17 @@ namespace EnumerableTests {
 		};
 
 
-		static_assert(is_same<std::tuple<int>,			CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<std::tuple<int, char>,	CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int, char>, SizeList<>>>(), "Err");
-		static_assert(is_same<std::tuple<int>,			CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<void,						CustomAllocatedT<TestBindingNoAllocVal,		TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<void,						CustomAllocatedT<TestBindingNoAllocVal,		TypeList<int, char>, SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int>,			CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int, char>,	CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int, char>, SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int>,			CustomAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<void,					CustomAllocatedT<TestBindingNoAllocVal,		TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<void,					CustomAllocatedT<TestBindingNoAllocVal,		TypeList<int, char>, SizeList<>>>(), "Err");
 
-		static_assert(is_same<std::tuple<int>,			RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<std::tuple<int, char>,	RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int, char>, SizeList<>>>(), "Err");
-		static_assert(is_same<std::tuple<int>,			RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<int,						RequiredAllocatedT<TestBindingNoAllocVal,		TypeList<int>,		 SizeList<>>>(), "Err");
-		static_assert(is_same<char,						RequiredAllocatedT<TestBindingNoAllocVal,		TypeList<int, char>, SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int>,			RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int, char>,	RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int, char>, SizeList<>>>(), "Err");
+		static_assert (is_same<std::tuple<int>,			RequiredAllocatedT<TestBindingCustomAllocVal,	TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<int,						RequiredAllocatedT<TestBindingNoAllocVal,		TypeList<int>,		 SizeList<>>>(), "Err");
+		static_assert (is_same<char,					RequiredAllocatedT<TestBindingNoAllocVal,		TypeList<int, char>, SizeList<>>>(), "Err");
 							// ^-- arbitrary default: last component, as for V in Dictionary<K, V>
 
 
@@ -1054,40 +1261,40 @@ namespace EnumerableTests {
 		using AdjustedWithCustomT = AdjustedAllocatorT<A, TestBindingCustomAllocVal, TypeList<Components...>, SizeList<>>;
 
 
-		static_assert(is_same<std::allocator<int>,					AdjustedWithDefaultT<std::allocator<int>,			int>						>(), "Err");
-		static_assert(is_same<std::allocator<int*>,					AdjustedWithDefaultT<std::allocator<int*>,			int*>						>(), "Err");
-		static_assert(is_same<std::allocator<RefHolder<int>>,		AdjustedWithDefaultT<std::allocator<int*>,			RefHolder<int>>				>(), "Err");
-		static_assert(is_same<std::allocator<RefHolder<const int>>,	AdjustedWithDefaultT<std::allocator<const int*>,	RefHolder<const int>>		>(), "Err");
-		static_assert(is_same<std::allocator<char>,					AdjustedWithDefaultT<std::allocator<char>,			int, char>					>(), "Err");
-		static_assert(is_same<std::allocator<char*>,				AdjustedWithDefaultT<std::allocator<char*>,			int, char*>					>(), "Err");
-		static_assert(is_same<std::allocator<RefHolder<int>>,		AdjustedWithDefaultT<std::allocator<int*>,			char, RefHolder<int>>		>(), "Err");
-		static_assert(is_same<std::allocator<RefHolder<const int>>,	AdjustedWithDefaultT<std::allocator<const int*>,	char, RefHolder<const int>>	>(), "Err");
+		static_assert (is_same<std::allocator<int>,						AdjustedWithDefaultT<std::allocator<int>,			int>						>(), "Err");
+		static_assert (is_same<std::allocator<int*>,					AdjustedWithDefaultT<std::allocator<int*>,			int*>						>(), "Err");
+		static_assert (is_same<std::allocator<RefHolder<int>>,			AdjustedWithDefaultT<std::allocator<int*>,			RefHolder<int>>				>(), "Err");
+		static_assert (is_same<std::allocator<RefHolder<const int>>,	AdjustedWithDefaultT<std::allocator<const int*>,	RefHolder<const int>>		>(), "Err");
+		static_assert (is_same<std::allocator<char>,					AdjustedWithDefaultT<std::allocator<char>,			int, char>					>(), "Err");
+		static_assert (is_same<std::allocator<char*>,					AdjustedWithDefaultT<std::allocator<char*>,			int, char*>					>(), "Err");
+		static_assert (is_same<std::allocator<RefHolder<int>>,			AdjustedWithDefaultT<std::allocator<int*>,			char, RefHolder<int>>		>(), "Err");
+		static_assert (is_same<std::allocator<RefHolder<const int>>,	AdjustedWithDefaultT<std::allocator<const int*>,	char, RefHolder<const int>>	>(), "Err");
 
-		static_assert(is_same<std::allocator<std::tuple<int>>,						  AdjustedWithCustomT<std::allocator<std::tuple<int>>,				int>						>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<int*>>,						  AdjustedWithCustomT<std::allocator<std::tuple<int*>>,				int*>						>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<RefHolder<int>>>,			  AdjustedWithCustomT<std::allocator<std::tuple<int*>>,				RefHolder<int>>				>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<RefHolder<const int>>>,		  AdjustedWithCustomT<std::allocator<std::tuple<const int*>>,		RefHolder<const int>>		>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<int, char>>,				  AdjustedWithCustomT<std::allocator<std::tuple<int, char>>,		int, char>					>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<int*, char>>,				  AdjustedWithCustomT<std::allocator<std::tuple<int*, char>>,		int*, char>					>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<RefHolder<int>, char>>,		  AdjustedWithCustomT<std::allocator<std::tuple<int*, char>>,		RefHolder<int>, char>		>(), "Err");
-		static_assert(is_same<std::allocator<std::tuple<RefHolder<const int>, char>>, AdjustedWithCustomT<std::allocator<std::tuple<const int*, char>>,	RefHolder<const int>, char>	>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<int>>,							AdjustedWithCustomT<std::allocator<std::tuple<int>>,				int>						>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<int*>>,						AdjustedWithCustomT<std::allocator<std::tuple<int*>>,				int*>						>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<RefHolder<int>>>,				AdjustedWithCustomT<std::allocator<std::tuple<int*>>,				RefHolder<int>>				>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<RefHolder<const int>>>,		AdjustedWithCustomT<std::allocator<std::tuple<const int*>>,			RefHolder<const int>>		>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<int, char>>,					AdjustedWithCustomT<std::allocator<std::tuple<int, char>>,			int, char>					>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<int*, char>>,					AdjustedWithCustomT<std::allocator<std::tuple<int*, char>>,			int*, char>					>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<RefHolder<int>, char>>,		AdjustedWithCustomT<std::allocator<std::tuple<int*, char>>,			RefHolder<int>, char>		>(), "Err");
+		static_assert (is_same<std::allocator<std::tuple<RefHolder<const int>, char>>,	AdjustedWithCustomT<std::allocator<std::tuple<const int*, char>>,	RefHolder<const int>, char>	>(), "Err");
 
-		static_assert(is_same<TestAllocator<int, 5>,									AdjustedWithDefaultT<TestAllocator<int, 5>,							int>						>(), "Err");
-		static_assert(is_same<TestAllocator<int*, 5>,									AdjustedWithDefaultT<TestAllocator<int*, 5>,						int*>						>(), "Err");
-		static_assert(is_same<TestAllocator<RefHolder<int>, 5>,							AdjustedWithDefaultT<TestAllocator<int*, 5>,						RefHolder<int>>				>(), "Err");
-		static_assert(is_same<TestAllocator<RefHolder<const int>, 5>,					AdjustedWithDefaultT<TestAllocator<const int*, 5>,					RefHolder<const int>>		>(), "Err");
-		static_assert(is_same<TestAllocator<char, 5>,									AdjustedWithDefaultT<TestAllocator<char, 5>,							int, char>					>(), "Err");
-		static_assert(is_same<TestAllocator<char*, 5>,									AdjustedWithDefaultT<TestAllocator<char*, 5>,						int, char*>					>(), "Err");
-		static_assert(is_same<TestAllocator<RefHolder<int>, 5>,							AdjustedWithDefaultT<TestAllocator<int*, 5>,						char, RefHolder<int>>		>(), "Err");
-		static_assert(is_same<TestAllocator<RefHolder<const int>, 5>,					AdjustedWithDefaultT<TestAllocator<const int*, 5>,					char, RefHolder<const int>>	>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<int>, 5>,						AdjustedWithCustomT<TestAllocator<std::tuple<int>, 5>,				int>						>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<int*>, 5>,						AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				int*>						>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<RefHolder<int>>, 5>,				AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				RefHolder<int>>				>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<RefHolder<int>>, 5>,				AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				RefHolder<int>>				>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<int, char>, 5>,					AdjustedWithCustomT<TestAllocator<std::tuple<int, char>, 5>,		int, char>					>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<int*, char>, 5>,					AdjustedWithCustomT<TestAllocator<std::tuple<int*, char>, 5>,		int*, char>					>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<RefHolder<int>, char>, 5>,		AdjustedWithCustomT<TestAllocator<std::tuple<int*, char>, 5>,		RefHolder<int>, char>		>(), "Err");
-		static_assert(is_same<TestAllocator<std::tuple<RefHolder<const int>, char>, 5>,	AdjustedWithCustomT<TestAllocator<std::tuple<const int*, char>, 5>,	RefHolder<const int>, char>	>(), "Err");
+		static_assert (is_same<TestAllocator<int, 5>,										AdjustedWithDefaultT<TestAllocator<int, 5>,							int>						>(), "Err");
+		static_assert (is_same<TestAllocator<int*, 5>,										AdjustedWithDefaultT<TestAllocator<int*, 5>,						int*>						>(), "Err");
+		static_assert (is_same<TestAllocator<RefHolder<int>, 5>,							AdjustedWithDefaultT<TestAllocator<int*, 5>,						RefHolder<int>>				>(), "Err");
+		static_assert (is_same<TestAllocator<RefHolder<const int>, 5>,						AdjustedWithDefaultT<TestAllocator<const int*, 5>,					RefHolder<const int>>		>(), "Err");
+		static_assert (is_same<TestAllocator<char, 5>,										AdjustedWithDefaultT<TestAllocator<char, 5>,						int, char>					>(), "Err");
+		static_assert (is_same<TestAllocator<char*, 5>,										AdjustedWithDefaultT<TestAllocator<char*, 5>,						int, char*>					>(), "Err");
+		static_assert (is_same<TestAllocator<RefHolder<int>, 5>,							AdjustedWithDefaultT<TestAllocator<int*, 5>,						char, RefHolder<int>>		>(), "Err");
+		static_assert (is_same<TestAllocator<RefHolder<const int>, 5>,						AdjustedWithDefaultT<TestAllocator<const int*, 5>,					char, RefHolder<const int>>	>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<int>, 5>,							AdjustedWithCustomT<TestAllocator<std::tuple<int>, 5>,				int>						>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<int*>, 5>,							AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				int*>						>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<RefHolder<int>>, 5>,				AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				RefHolder<int>>				>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<RefHolder<int>>, 5>,				AdjustedWithCustomT<TestAllocator<std::tuple<int*>, 5>,				RefHolder<int>>				>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<int, char>, 5>,						AdjustedWithCustomT<TestAllocator<std::tuple<int, char>, 5>,		int, char>					>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<int*, char>, 5>,					AdjustedWithCustomT<TestAllocator<std::tuple<int*, char>, 5>,		int*, char>					>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<RefHolder<int>, char>, 5>,			AdjustedWithCustomT<TestAllocator<std::tuple<int*, char>, 5>,		RefHolder<int>, char>		>(), "Err");
+		static_assert (is_same<TestAllocator<std::tuple<RefHolder<const int>, char>, 5>,	AdjustedWithCustomT<TestAllocator<std::tuple<const int*, char>, 5>,	RefHolder<const int>, char>	>(), "Err");
 
 
 		// Try a more complex, imaginary binding too (value type not to make sense)
@@ -1096,34 +1303,33 @@ namespace EnumerableTests {
 			using AllocatedValueT = std::array<std::pair<K, const V>, N>;
 		};
 
-		static_assert(is_same<std::allocator<std::array<std::pair<RefHolder<const int>, const char>, 15>>,
-							  AdjustedAllocatorT<std::allocator<std::array<std::pair<const int*, const char>, 15>>,
-												 TestBindingSmallDict,
-												 TypeList<RefHolder<const int>, char>,
-												 SizeList<15>,
-												 int, None>
-					  >(), "Err");
+		static_assert (is_same<std::allocator<std::array<std::pair<RefHolder<const int>, const char>, 15>>,
+							   AdjustedAllocatorT<std::allocator<std::array<std::pair<const int*, const char>, 15>>,
+												  TestBindingSmallDict,
+												  TypeList<RefHolder<const int>, char>,
+												  SizeList<15>,
+												  int, None>											>(), "Err");
 
 
 
 		using Enumerables::ListOperations;
 		using Enumerables::SetOperations;
 
-		static_assert(is_same<std::vector<int>,										 AdjustedContainerT<ListOperations, int>>(), "Err");
-		static_assert(is_same<std::vector<int>,										 AdjustedContainerT<ListOperations, int, std::allocator<int>>>(), "Err");
-		static_assert(is_same<std::vector<int, TestAllocator<int, 4>>,				 AdjustedContainerT<ListOperations, int, TestAllocator<int, 4>>>(), "Err");
-		static_assert(is_same<std::vector<const int*>,								 AdjustedContainerT<ListOperations, const int*>>(), "Err");
-		static_assert(is_same<std::vector<const int*>,								 AdjustedContainerT<ListOperations, const int*, std::allocator<const int*>>>(), "Err");
-		static_assert(is_same<std::vector<const int*, TestAllocator<const int*, 4>>, AdjustedContainerT<ListOperations, const int*, TestAllocator<const int*, 4>>>(), "Err");
+		static_assert (is_same<std::vector<int>,									  AdjustedContainerT<ListOperations, int>>(), "Err");
+		static_assert (is_same<std::vector<int>,									  AdjustedContainerT<ListOperations, int, std::allocator<int>>>(), "Err");
+		static_assert (is_same<std::vector<int, TestAllocator<int, 4>>,				  AdjustedContainerT<ListOperations, int, TestAllocator<int, 4>>>(), "Err");
+		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*>>(), "Err");
+		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*, std::allocator<const int*>>>(), "Err");
+		static_assert (is_same<std::vector<const int*, TestAllocator<const int*, 4>>, AdjustedContainerT<ListOperations, const int*, TestAllocator<const int*, 4>>>(), "Err");
 		
 		// default allocator will be correct ofc.
-		static_assert(is_same<std::vector<RefHolder<int>>,							 AdjustedContainerT<ListOperations, RefHolder<int>>>(), "Err");
+		static_assert (is_same<std::vector<RefHolder<int>>,							 AdjustedContainerT<ListOperations, RefHolder<int>>>(), "Err");
 
 		// The actual adjustment: simply expect int* value_type from user, hiding internals
-		static_assert(is_same<std::vector<RefHolder<int>>,													AdjustedContainerT<ListOperations, RefHolder<int>,		 std::allocator<int*>>>(), "Err");
-		static_assert(is_same<std::vector<RefHolder<const int>>,											AdjustedContainerT<ListOperations, RefHolder<const int>, std::allocator<const int*>>>(), "Err");
-		static_assert(is_same<std::vector<RefHolder<const int>, TestAllocator<RefHolder<const int>, 4>>,	AdjustedContainerT<ListOperations, RefHolder<const int>, TestAllocator<const int*, 4>>>(), "Err");
-		static_assert(is_same<std::vector<RefHolder<int>,		TestAllocator<RefHolder<int>, 4>>,			AdjustedContainerT<ListOperations, RefHolder<int>, TestAllocator<int*, 4>>>(), "Err");
+		static_assert (is_same<std::vector<RefHolder<int>>,													AdjustedContainerT<ListOperations, RefHolder<int>,		 std::allocator<int*>>>(), "Err");
+		static_assert (is_same<std::vector<RefHolder<const int>>,											AdjustedContainerT<ListOperations, RefHolder<const int>, std::allocator<const int*>>>(), "Err");
+		static_assert (is_same<std::vector<RefHolder<const int>, TestAllocator<RefHolder<const int>, 4>>,	AdjustedContainerT<ListOperations, RefHolder<const int>, TestAllocator<const int*, 4>>>(), "Err");
+		static_assert (is_same<std::vector<RefHolder<int>,		 TestAllocator<RefHolder<int>, 4>>,			AdjustedContainerT<ListOperations, RefHolder<int>,		 TestAllocator<int*, 4>>>(), "Err");
 
 	}
 

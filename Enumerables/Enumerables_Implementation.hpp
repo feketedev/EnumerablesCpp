@@ -111,6 +111,40 @@ namespace Enumerables {
 
 
 
+namespace Enumerables::TypeHelpers::InitListSupport {
+
+
+	template <class Cont, class TForced = void>
+	struct WeakEnumerableElem {
+		using type = EnumerableT<decltype(Enumerate<TForced>(declval<Cont>()))>;
+	};
+	template <class I>
+	struct WeakEnumerableElem<std::initializer_list<I*>, void> {
+		using type = MaybeToDereference<I*>;
+	};
+	template <class I, class F>
+	struct WeakEnumerableElem<std::initializer_list<I*>, F> {
+		using type = F;
+
+		static_assert (is_convertible<I*, F>() || is_convertible<I&, F>(),
+					   "No possible way to yield the requested type. (Internal error?)");
+	};
+
+
+	/// Given any iterable type, deduces the possible TElem of the result of Enumerate(...).
+	/// For init-lists that carry ambiguous meaning, result is marked as MaybeToDereference.
+	/// @remarks
+	///		This workaround is for Concat(...) and similar, where the intention of some init-list of pointers 
+	///		can be clarified by some other relevant sequence (based on it containing & or * elements).
+	template <class Cont, class TForced = void>
+	using WeakElemT = typename WeakEnumerableElem<Cont, TForced>::type;
+
+
+}	// namespace Enumerables::TypeHelpers::InitListSupport
+
+
+
+
 namespace Enumerables::Def {
 
 
@@ -141,48 +175,71 @@ namespace Enumerables::Def {
 	}
 
 	template <class I, class B>
-	bool AreEqual(std::initializer_list<I>&& lhs, B&& rhs)
+	bool AreEqual(initializer_list<I>&& lhs, B&& rhs)
 	{
 		return AreEqual(lhs, rhs);
 	}
 
 	template <class I, class A>
-	bool AreEqual(A&& lhs, std::initializer_list<I>&& rhs)
+	bool AreEqual(A&& lhs, initializer_list<I>&& rhs)
 	{
 		return AreEqual(lhs, rhs);
+	}
+
+
+	/// Bypasses tedious braced-init overloads of Enumerate when both the
+	/// explicit target type and a deduced init-list is readily given.
+	/// @remarks
+	///		Using Enumerate directly in such situation can cause compilation error
+	///		if ENUMERABLES_ADD_STRINGLIST_OVERLOADS is enabled and the specified
+	///		target elem doesn't correspont to the init-list item (including qualifiers).
+	/// 
+	///		Init-list deduction occurs directly on top-level anyway, thus it
+	///		is reasonable to bypass such Enumerate overloads when forwarding.
+	template <class TForced = void, class C>
+	auto EnumerateForwarded(C&& container)
+	{
+		return Enumerate<TForced>(forward<C>(container));
+	}
+	template <class TForced, class I, enable_if_t<!is_void<TForced>::value, int> = 0>
+	auto EnumerateForwarded(initializer_list<I>&& initToSave)
+	{
+		return InitEnumerable<TForced>(move(initToSave), None {});
+		// TODO: Handle allocator param when there's a supporting caller.
 	}
 
 
 	template <class TForced, class TCommon0, class C1, class C2>
 	auto ConcatInternal(C1&& cont1, C2&& cont2)
 	{
-		using Eb1 = decltype(Enumerate<TForced>(forward<C1>(cont1)));
-		using Eb2 = decltype(Enumerate<TForced>(forward<C2>(cont2)));
+		using E1 = InitListSupport::WeakElemT<C1, TForced>;
+		using E2 = InitListSupport::WeakElemT<C2, TForced>;
 
-		using THead	   = OverrideT<TCommon0, EnumerableT<Eb1>>;
-		using TCommon1 = typename ConcatTypeDeducer<THead, EnumerableT<Eb1>>::TCommon;
-		using TCommon  = typename ConcatTypeDeducer<TCommon1, EnumerableT<Eb2>>::TCommon;
+		using THead		  = OverrideT<TCommon0, E1>;
+		using TCommon1	  = typename ConcatTypeDeducer<THead, E1>::TCommon;
+		using TCommonWeak = typename ConcatTypeDeducer<TCommon1, E2>::TCommon;
+		using TCommon	  = InitListSupport::ResolveContextEndedT<TCommonWeak>;
 
-		return Enumerate<TCommon>(forward<C1>(cont1))
-				.Concat(Enumerate<TCommon>(forward<C2>(cont2)));
+		return EnumerateForwarded<TCommon>(forward<C1>(cont1))
+				.Concat(EnumerateForwarded<TCommon>(forward<C2>(cont2)));
 	}
 
 
-	// Avoiding less then 2 parameters... Should it be even supported for generic programming?
+	// CONSIDER: Forbids less then 2 parameters - Should it be even supported for generic programming?
 	template <class TForced, class TCommon0, class C1, class C2, class... CMore>
 	auto ConcatInternal(C1&& cont1, C2&& cont2, CMore&&... tailConts)
 	{
-		using Eb1      = decltype(Enumerate<TForced>(forward<C1>(cont1)));
-		using Eb2      = decltype(Enumerate<TForced>(forward<C2>(cont2)));
-		using THead	   = OverrideT<TCommon0, EnumerableT<Eb1>>;
-		using TCommon2 = typename ConcatTypeDeducer<THead, EnumerableT<Eb2>>::TCommon;
+		using E1 = InitListSupport::WeakElemT<C1, TForced>;
+		
+		using THead	   = OverrideT<TCommon0, E1>;
+		using TCommon1 = typename ConcatTypeDeducer<THead, E1>::TCommon;
 
 		// must look ahead too for final consensus!
-		using EbTail  = decltype(ConcatInternal<TForced, TCommon2>(forward<C2>(cont2), forward<CMore>(tailConts)...));
-		using TCommon = typename ConcatTypeDeducer<TCommon2, EnumerableT<EbTail>>::TCommon;
+		using EbTail  = decltype(ConcatInternal<TForced, TCommon1>(forward<C2>(cont2), forward<CMore>(tailConts)...));
+		using TCommon = typename EbTail::TElem;
 
-		return Enumerate<TCommon>(forward<C1>(cont1))
-				.Concat(ConcatInternal<TForced, TCommon>(forward<C2>(cont2), forward<CMore>(tailConts)...));
+		return EnumerateForwarded<TCommon>(forward<C1>(cont1))
+				.Concat(ConcatInternal<TCommon>(forward<C2>(cont2), forward<CMore>(tailConts)...));
 	}
 
 
@@ -236,6 +293,21 @@ namespace Enumerables::Def {
 	}
 
 #endif
+
+	
+
+	template <class T, class... Os>
+	SetType<RefHolder<T>> InitRefholderSet(const initializer_list<T*>& elems, const Os&... opts)
+	{
+		static_assert (!is_scalar<T>::value,
+					   "Capturing set elements by reference is only meant to save copies - no sense for scalars. "
+					   "Since the set is formed eagerly in this case, referred elements can't mutate until query!");
+
+		auto set = SetOperations::Init<SetType<RefHolder<T>>>(elems.size(), opts...);
+		for (auto* e : elems)
+			SetOperations::Add(set, *e);
+		return set;
+	}
 
 #pragma endregion
 
@@ -756,6 +828,86 @@ namespace Enumerables::Def {
 
 
 
+#pragma region AutoEnumerable Convenience Overloads
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) const &
+	{
+		return Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) &&
+	{
+		return Move().Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) const &
+	{
+		return Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class ...Os>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os & ...setOptions) &&
+	{
+		return Move().Where([set = InitRefholderSet(elems, setOptions...)](TElemConstParam x) {
+			return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &
+	{
+		return Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+			return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Except(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&
+	{
+ 		return Move().Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return !SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &
+	{
+ 		return Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+	template<class TFactory>
+	template<class... SetOptions>
+	auto AutoEnumerable<TFactory>::Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&
+	{
+ 		return Move().Where([set = InitRefholderSet(elems, SetOptions {}...)](TElemConstParam x) {
+				return SetOperations::Contains<RefHolder<const DeepConstT<TElemDecayed>>>(set, x);
+		});
+	}
+
+#pragma endregion
+
+
+
+
 #pragma region AutoEnumerable internals
 
 	template <class TFactory>
@@ -784,11 +936,11 @@ namespace Enumerables::Def {
 	{
 		ViewTrigger();
 
-		// Here Enumerate() serves:
+		// Here Enumerate() /upd.: EnumerateForwarded/ serves:
 		//	* as a way to uniformize calls where "second" is a direct Container (either & or &&)
 		//	* as an appropriate closure in those cases (Container&& -> copy; Container& -> reference)
 		//    Note that ChainedFactory itself does not store references currently.
-		auto wrapped2    = Enumerate<TForced>(forward<Enumerable2>(second));
+		auto wrapped2    = EnumerateForwarded<TForced>(forward<Enumerable2>(second));
 		auto factoryRefs = std::forward_as_tuple(factory, move(wrapped2.factory));
 		auto nextFactory = JoinFactories<NextEnumerator, TypeArgs...>(factoryRefs, forward<Args>(args)...);
 
@@ -799,7 +951,7 @@ namespace Enumerables::Def {
 	template <class Enumerable2, class TForced, template <class...> class NextEnumerator, class... TypeArgs, class... Args>
 	auto AutoEnumerable<TFactory>::MvChainJoined(Enumerable2& second, Args&& ...args)
 	{
-		auto wrapped2    = Enumerate<TForced>(forward<Enumerable2>(second));
+		auto wrapped2    = EnumerateForwarded<TForced>(forward<Enumerable2>(second));
 		auto factoryRefs = std::forward_as_tuple(move(factory), move(wrapped2.factory));
 		auto nextFactory = JoinFactories<NextEnumerator, TypeArgs...>(factoryRefs, forward<Args>(args)...);
 

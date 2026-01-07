@@ -9,4 +9,4 @@
 
 
 
-void   TESTSALT_MSVC_DLLEXPORT   RunAltTestsMsvc();
+bool   TESTSALT_MSVC_DLLEXPORT   RunAltTestsMsvc(int argc, const char* argv[]);

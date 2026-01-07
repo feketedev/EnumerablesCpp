@@ -143,9 +143,9 @@ namespace Enumerables::TypeHelpers {
 	using NoDeduce = OverrideT<T, void>;
 
 
-	/// Make T a dependent-type on some arbitrary template parameter to enable SFINAE.
-	template <class FakeDep, class T>
-	using AsDependentT = conditional_t<is_void_v<FakeDep>, T, T>;
+	/// Make T a dependent-type on some arbitrary template parameters to enable SFINAE.
+	template <class T, class... FakeDeps>
+	using AsDependentT = conditional_t<std::conjunction_v<is_void<FakeDeps>...>, T, T>;
 
 
 	/// Provides ::type alias if receives at least 2 types. SFINAE helper to substitute sizeof...(Ts) > 0.
@@ -231,13 +231,25 @@ namespace Enumerables::TypeHelpers {
 	using RootPointedBaseT = std::remove_cv_t<typename RootPointed<T>::Type>;
 
 
-	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
-	template <class T>
-	using ConstValueT =
+	/// Inject const inside top-level pointer/reference - leave top-level qualifiers intact. [T must not be void.]
+	template <class T, class FallbackIfDirectValue = T>
+	using ConstPointedT =
 		conditional_t< is_pointer_v<T> && !is_reference_v<T>,	std::add_const_t<remove_pointer_t<remove_reference_t<T>>>*,
 		conditional_t< is_lvalue_reference_v<T>,				std::add_const_t<remove_reference_t<T>>&,
 		conditional_t< is_rvalue_reference_v<T>,				std::add_const_t<remove_reference_t<T>>&&,
-																std::add_const_t<T>										>>>;
+																FallbackIfDirectValue									>>>;
+
+	/// Inject const inside top-level pointer/reference, or simply before value type. [T must not be void.]
+	template <class T>
+	using ConstValueT = ConstPointedT<T, std::add_const_t<T>>;
+
+
+	template <class T>
+	const T&	AsConstRef(T& obj)	{ return obj; }
+	template <class T>
+	const T&&	AsConstRef(T&& obj)	{ return move(obj); }
+
+
 
 	/// Implementation of DeepConstT.
 	template <class T>
@@ -254,19 +266,28 @@ namespace Enumerables::TypeHelpers {
 	template <class T>
 	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
 	template <class T>
-	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &; };
+	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &; };
 	template <class T>		
-	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> const &&; };
+	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &&; };
 	template <class T>		
-	struct DeepConst<T[]>				{ using Type = typename DeepConst<T>::Type const []; };
+	struct DeepConst<T[]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> []; };
 	template <class T, size_t N>		
-	struct DeepConst<T[N]>				{ using Type = typename DeepConst<T>::Type const [N]; };
+	struct DeepConst<T[N]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> [N]; };
 
 	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
 	/// @remarks
 	///		Any less const-qualified similar type should be convertible into the result.
 	template <class T>
 	using DeepConstT = typename DeepConst<T>::Type;
+
+
+	/// Provides @a value: Both types are [unqualified] pointers and either one is convertible to the other.
+	template <class T, class U>
+	struct AreConvertiblePointers : std::false_type {};
+	template <class T, class U>
+	struct AreConvertiblePointers<T*, U*> : std::bool_constant<is_convertible_v<T*, U*>
+															|| is_convertible_v<U*, T*>> {
+	};
 
 
 	// [void -> false]
@@ -292,6 +313,10 @@ namespace Enumerables::TypeHelpers {
 	constexpr bool HaveRefcompatibleRoots = HasRefcompatibleRoot<T, U>
 										 || HasRefcompatibleRoot<U, T>;
 
+	
+	template <class T>
+	constexpr bool IsUnknownBoundArray = std::is_array_v<T> && std::extent_v<T> == 0;
+
 
 	/// Graceful variant of std::commontype: falling back to void instead of substitution failure.
 	template <class T, class U, class = void>
@@ -299,7 +324,10 @@ namespace Enumerables::TypeHelpers {
 		using Type = void;
 	};
 	template <class T, class U>
-	struct CommonOrVoid<T, U, std::void_t<std::common_type_t<T, U>>> {
+	struct CommonOrVoid<T, U, void_t< std::common_type_t<T, U>,
+									  enable_if_t<!is_void_v<T> && !is_void_v<U>>,	// guard UB
+									  enable_if_t< !IsUnknownBoundArray<T> 
+												&& !IsUnknownBoundArray<U>>		 >> {
 		using Type = std::common_type_t<T, U>;
 	};
 
@@ -322,6 +350,21 @@ namespace Enumerables::TypeHelpers {
 						  conditional_t< is_convertible_v<Sec, BaseT<Pri>>,
 										 BaseT<Pri>,
 						  void >>>>;
+
+
+	/// Viable common type to store for later comparisons. [& can pass if compatible with T]
+	/// @tparam T: incoming elements compared
+	/// @tparam O: "operands" to be stored as filter, in some compatible form
+	template <class T, class O>
+	using CompatComparisonBaseT = conditional_t< is_pointer_v<remove_reference_t<T>> && is_pointer_v<remove_reference_t<O>>,
+					   							 typename CommonOrVoid<T, O>::Type,
+								  conditional_t< is_lvalue_reference_v<O> && HasRefcompatibleRoot<T, O>,
+					   							 std::add_lvalue_reference_t<QualifiedCommonT<T, O>>,
+								  conditional_t< is_same_v<BaseT<O>, BaseT<T>>
+											  || is_convertible_v<O, BaseT<T>> && !HaveRefcompatibleRoots<T, O>,
+												 BaseT<T>,
+								  void >>>;
+
 
 
 	/// Simplified, unchecked version of std::align.
@@ -534,6 +577,7 @@ namespace Enumerables::TypeHelpers {
 
 
 	// ===== Enable_if shorthands =====================================================================================
+
 	template <class T, class S = T>
 	using IfNonvoidVal	= enable_if_t<std::is_object_v<T>, S>;
 

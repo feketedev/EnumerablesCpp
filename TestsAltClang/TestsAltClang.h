@@ -9,4 +9,4 @@
 
 
 
-void   TESTSALT_CLANG_DLLEXPORT   RunAltTestsClang();
+bool   TESTSALT_CLANG_DLLEXPORT   RunAltTestsClang(int argc, const char* argv[]);
