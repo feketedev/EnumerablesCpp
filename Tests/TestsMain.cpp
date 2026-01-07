@@ -24,6 +24,7 @@ namespace EnumerableTests {
 		TestArithmetics();
 		TestMisc();
 		TestCollectionCustomizability();
+		TestFeatures17();
 
 		if (!quick) {
 			NewPerfTests(summarizeTimes, summarizeOverheads);
