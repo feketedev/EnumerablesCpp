@@ -895,7 +895,7 @@ namespace Legacy {
 
 		while (reference.getline(line, MaxChunk)) {
 			if (!act.getline(actLine, MaxChunk)) {
-				std::cout << "  FAILED Reference comparison: reached end of actual output!" << std::endl;
+				std::cout << "    FAILED Reference comparison: reached end of actual output!" << std::endl;
 				return false;
 			}
 
@@ -908,7 +908,7 @@ namespace Legacy {
 			++ln;
 		}
 		if (act.getline(actLine, 2)) {
-			std::cout << "  FAILED Reference comparison: reached end of reference output!" << std::endl;
+			std::cout << "    FAILED Reference comparison: reached end of reference output!" << std::endl;
 			return false;
 		}
 		return true;
@@ -957,7 +957,10 @@ namespace Legacy {
 			scannerTest();
 		}
 
-		CheckTranscript(GetDir(myPath), transcript);
+		if (ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 0)
+			CheckTranscript(GetDir(myPath), transcript);
+		else
+			std::cout << "    SKIPPED Reference comparison: ResultsView is enabled!" << std::endl;
 	}
 
 

@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *  									  Enumerables for C++   v2.0.4										  *
+	 *  									  Enumerables for C++   v2.0.5										  *
 	 *  																										  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
@@ -112,10 +112,12 @@ namespace Def {
 	struct ResultBuffer {
 		using TDebugValue = std::remove_cv_t<StorableT<T>>;
 
-#	if ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 0
-		const char* Status = "Not evaluated.  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
-#	else
+#	if ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 2
+		const char* Status = "Not evaluated by default - trivial wrapping.  Call Test() or Print() from Immediate window.";
+#	elif ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 1
 		const char* Status = "Not evaluated.  Step over first (&) method call, or invoke Test()/Print() from Immediate window.  See ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
+#	else
+		const char* Status = "Not evaluated.  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
 #	endif
 
 		SmallListType<TDebugValue, 4>	Elements;
@@ -228,7 +230,7 @@ namespace Def {
 
 	// =========== Constructors ======================================================================================================
 	#pragma region
-	
+
 		/// Main constructor. Wraps an Enumerator-factory directly. Intended for usage through creator functions.
 		/// @param pureSource:  enumerating is sideeffect-free, allows auto-evaluation for debugging.
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
@@ -239,7 +241,7 @@ namespace Def {
 #		if ENUMERABLES_USE_RESULTSVIEW
 #			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
 				if (stepToDebug)
-					ResultsView.Fill(factory, isPure, true);
+					ResultsView.Fill(this->factory, isPure, true);
 #			endif
 			testResultsViewPtr  = &AutoEnumerable::Test;
 			printResultsViewPtr = &AutoEnumerable::Print;
@@ -435,14 +437,14 @@ namespace Def {
 
 	// =========== Transformations ===================================================================================================
 	#pragma region
-	
+
 		/// Disables ResultsView auto-evaluation for debugging, when really necessary.
 		/// @remarks
 		///		Enumerables with side-effects are discouraged. However, when really needed,
 		///		a NonPure call keeps them functional under debugging by shielding downstream
 		///		filters from auto-evaluating ther contets, which could alter program state.
-		AutoEnumerable<TEnumerator> NonPure() const &	{ return AutoEnumerable { CloneFactory(), false }; }
-		AutoEnumerable<TEnumerator> NonPure() &&		{ return AutoEnumerable { move(factory),  false }; }
+		AutoEnumerable	NonPure() const &	{ return { CloneFactory(), false }; }
+		AutoEnumerable	NonPure() &&		{ return { move(factory),  false }; }
 
 
 	// ----- Filtration / Truncation -------------------------------------------------------------------------------------------------
@@ -476,7 +478,7 @@ namespace Def {
 
 
 		// --- Boolean operations capturing readily available sets [can form in-place using braced-initializer] ---
-		
+
 		// NOTE: Result is not a set! Duplicated elements of this sequence (where accepted) will pass through.
 
 		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, !SetOperations::Contains(set, x))); }
@@ -502,7 +504,7 @@ namespace Def {
 		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
 		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &;
 		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
-		
+
 		/// @param setOptions:    hash/equal_to/etc. strategy objects [against const TElem&] injected directly to SetType used as filter
 		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) const &;
 		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) &&;
@@ -511,13 +513,13 @@ namespace Def {
 
 
 		// --- Boolean operations evaluating other iterables ---
-		
+
 		// NOTE: 2nd operand gets evaluated lazily, before enumeration - forming a temporary SetType [scalars decayed for efficiency].
 		//		 For further convenience, default mode supports filtration (via conversion) by:
 		//			- compatible and similar pointers
 		//			- descendant references [r-values forbidden]
 		//			- unrelated(!) types convertible to TElem (compared as such)
-		//		 If user SetOptions are present, operand type is left as is 
+		//		 If user SetOptions are present, operand type is left as is
 		//			-> SetOptions may implement "transparent" check as needed.
 
 		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types injected directly to SetType used as filter internally
@@ -525,7 +527,7 @@ namespace Def {
 		template <class... SetOptions, class E>	 auto Except   (E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
 		template <class... SetOptions, class E>	 auto Intersect(E&& elems) const &	{ return   ChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
 		template <class... SetOptions, class E>	 auto Intersect(E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
-		
+
 		/// @param setOptions:    hash/equal_to/etc. strategy objects injected to the internally constructed SetType used as filter
 		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
 		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
@@ -766,7 +768,7 @@ namespace Def {
 		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(p).LastIfAny();    }
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
-		
+
 		template <class Pred = PF, class = enable_if_t<!is_convertible<Pred, TElemConstParam>::value>>
 		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
@@ -861,7 +863,7 @@ namespace Def {
 
 	// =========== Materialization / Lifetime-utils ==================================================================================
 	#pragma region
-		
+
 		// ----- Container creators --------------------------------------------------------------------------------------------------
 
 		// NOTE: For the customizability of the resulting containers, any further constructor arguments
@@ -879,7 +881,7 @@ namespace Def {
 		/// @tparam Options:  Additional arguments for ListType
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0) const;
-		
+
 		/// Form a List with predefined inline buffer for N elements.
 		/// @tparam N:		  size of inline buffer
 		/// @tparam Options:  Additional arguments for SmallListType
@@ -890,7 +892,7 @@ namespace Def {
 		/// Can be ordered or based on hash, according to configuration.
 		/// @tparam Options:  Additional arguments for SetType
 		///					  (typ.: Hasher, Equality comparer, Allocator)
-		template <class... Options>	
+		template <class... Options>
 		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint = 0) const;
 
 
@@ -901,7 +903,7 @@ namespace Def {
 		auto ToDictionary(KeyMap&& toKey, size_t sizeHint = 0)			 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
 																								 TElemDecayed,
 																								 Options...>;
-		
+
 		/// Map sequence elements to unique keys by a pointer to possibly const-overloaded getter.
 		/// @tparam  K:		  Explicit type of keys (required)
 		template <class K, class... Options>
@@ -930,7 +932,7 @@ namespace Def {
 
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...) const;
-		
+
 		template <size_t N, class... Options>
 		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...) const;
 
@@ -960,12 +962,12 @@ namespace Def {
 		/// Evaluate current query and pass it as a self-contained enumeration (an abstract collection).
 		template <class Output = TElem>
 		auto ToMaterialized()  const;
-		
+
 		/// Cache calculation results (For & elements => not totally self-contained!)
 		auto ToSnapshot()	   const;
 
 		/// Fork a temporary instance referencing this (just like a container), when a heavy copy would be undesired.
-		/// @remarks	
+		/// @remarks
 		///		Mostly an internal tool for utilizing existing Enumerators to implement terminal operations concisely.
 		///		CONSIDER: for usage somehow at parameters, like EnumerableRef<T> ?
 		auto ToReferenced() const &  noexcept
@@ -1282,20 +1284,20 @@ namespace Def {
 	#pragma region Wrap Containers by Reference
 
 	/// Shortcuts to enable some generic code (to Enumerate either a container or any AutoEnumerable)
-	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, IfNonvoid<decltype(declval<Fact>()().Current()), int> = 0>
 	auto Enumerate(const AutoEnumerable<Fact>& eb)
 	{
 		// note: unnecessary conversions are bypassed inside As
 		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, IfNonvoid<decltype(declval<Fact>()().Current()), int> = 0>
 	auto Enumerate(AutoEnumerable<Fact>& eb)
 	{
 		return eb.template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
 	}
 
-	template <class ForcedElem = void, class Fact, class = EnumeratedT<decltype(declval<Fact>()())>>
+	template <class ForcedElem = void, class Fact, IfNonvoid<decltype(declval<Fact>()().Current()), int> = 0>
 	auto Enumerate(AutoEnumerable<Fact>&& eb)
 	{
 		return move(eb).template As<OverrideT<ForcedElem, typename AutoEnumerable<Fact>::TElem>>();
@@ -1409,7 +1411,7 @@ namespace Def {
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
-	/// @remarks 
+	/// @remarks
 	///		For internal reasons (Concat), must also accept a list of compatible pointers
 	///		in the explicit case, should those be already deduced and mismatch ForcedElem.
 	template <class ForcedElem = void, class CustomAllocator = None,
@@ -1527,7 +1529,7 @@ namespace Def {
 		return ConcatInternal<TForced>(forward<Containers>(conts)...);
 	}
 
-	
+
 	template <class TForced = void, class I1, class I2, class I3, class... Containers, class = IfNonScalar<TForced>>
 	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{

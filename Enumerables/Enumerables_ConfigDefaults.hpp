@@ -83,7 +83,7 @@ namespace Enumerables {
 //		0 - manual only [Test() or Print() from immediate window]
 //		1 - on l-value usage: when a derived query is "forked" or GetEnumerator called
 //			[includes terminal operations except the container-creator ones]
-//		2 - right after creation
+//		2 - right after creation - except trivial container wrappings
 //			[most convinient, but each chained operation will allocate its ResultView!]
 #ifndef ENUMERABLES_RESULTSVIEW_AUTO_EVAL
 #	define ENUMERABLES_RESULTSVIEW_AUTO_EVAL		1

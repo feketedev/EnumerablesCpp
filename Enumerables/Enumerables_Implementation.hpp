@@ -63,9 +63,9 @@ namespace Enumerables {
 
 	inline SizeInfo		SizeInfo::Limit(size_t max) const
 	{
-		return HasValue() ? SizeInfo { kind, std::min(value, max) }
+		return   HasValue() ? SizeInfo { kind, std::min(value, max) }
 			: IsUnbounded() ? SizeInfo { Boundedness::Exact, max }
-		: SizeInfo { Boundedness::KnownBound, max };
+			: SizeInfo { Boundedness::KnownBound, max };
 	}
 
 
@@ -993,28 +993,34 @@ namespace Def {
 		if (autoCall && (GetSize(Elements) > 0 || Status[0] == 'E'))
 			return;
 
-		if (isPure) {
-			auto	 et	 = getEnumerator();
-			SizeInfo si  = et.Measure();
-			size_t	 cap = si.IsExact() ? si.value : 0u;
-
-			Elements = SmallListOperations::template Init<decltype(Elements)>(cap);
-
-			size_t count = 0;
-			while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
-				SmallListOperations::Add(Elements, et.Current());
-				++count;
-			}
-			Status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
-				? "Evaluation successful."
-				: "Showing first" ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) "elements.";
-		}
-		else {
+		if (!isPure) {
 			Status = "Not available - enumeration is marked as having side-effects.";
 			if (!autoCall)
 				ENUMERABLES_CLIENT_BREAK ("Disabled for having side-effects - cannot build debug buffer.");
+			return;
 		}
 
+		auto     et = getEnumerator();
+		SizeInfo si = et.Measure();
+		if (autoCall && si.IsUnbounded()) {
+			Status = "Not evaluated by default - the sequence is Unbounded. "
+					 "Such enumerations often rely on chained steps to terminate. "
+					 "Attempt Test() or Print() from Immediate window to examine.";
+			return;
+		}
+
+		SizeInfo display = si.Limit(ENUMERABLES_RESULTSVIEW_MAX_ELEMS);
+		size_t   cap     = display.IsExact() ? display.value : 0u;
+		Elements = SmallListOperations::template Init<decltype(Elements)>(cap);
+
+		size_t count = 0;
+		while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
+			SmallListOperations::Add(Elements, et.Current());
+			++count;
+		}
+		Status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
+			? "Evaluation successful."
+			: "Showing first" ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) "elements.";
 	}
 
 	template <class T>

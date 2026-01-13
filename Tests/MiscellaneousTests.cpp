@@ -49,10 +49,10 @@ namespace EnumerableTests {
 
 		struct Base1 {
 			int  i;
-		
+
 			Base1(int i) : i { i }  {}
 			virtual ~Base1() = default;
-			
+
 			Base1(const Base1&) = default;
 		};
 
@@ -61,7 +61,7 @@ namespace EnumerableTests {
 
 			explicit Base2(char c) : c { c }  {}
 			virtual ~Base2() = default;
-			
+
 			Base2(const Base2&) = default;
 		};
 
@@ -259,10 +259,10 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (unsigned short, ushorts2);
 			ASSERT			 (AreEqual(integers, ushorts1));
 			ASSERT			 (AreEqual(integers, ushorts2));
-		
+
 			auto convertedObjs1 = integers.As<Base1>();					// using conversion ctor
 			auto convertedObjs2 = integers.Cast<Base1>();				//
-			
+
 			ASSERT (AreEqual(integers, convertedObjs1.Select(&Base1::i)));
 			ASSERT (AreEqual(integers, convertedObjs2.Select(&Base1::i)));
 
@@ -270,7 +270,7 @@ namespace EnumerableTests {
 
 		 //	auto explicitObjs1 = letters.As<Base2>();					// CTE: explicit ctor!
 			auto explicitObjs2 = letters.Cast<Base2>();
-			
+
 			ASSERT    (AreEqual(letters, explicitObjs2.Select(&Base2::c)));
 			ASSERT_EQ ('e', explicitObjs2.Last().c);
 		}
@@ -311,7 +311,7 @@ namespace EnumerableTests {
 
 			AssertEndsLength(bases1.Select(&Base1::i), -1,  -5,  2);
 			AssertEndsLength(bases2.Select(&Base2::c), 'a', 'c', 2);
-			
+
 			auto basePtrs1 = Enumerate(objs1).Addresses().As<Base1*>();
 			auto basePtrs2 = Enumerate(objs2).Addresses().Cast<Base2*>();
 
@@ -332,7 +332,7 @@ namespace EnumerableTests {
 
 			auto derivedsA = bases.Cast<Derived1&>();
 			auto derivedsB = bases.DynamicCast<Derived1&>();
-		
+
 			ASSERT_ELEM_TYPE (Derived1&, derivedsA);
 			ASSERT_ELEM_TYPE (Derived1&, derivedsB);
 			ASSERT (AreEqual(ptrs1, derivedsA.Addresses()));
@@ -346,7 +346,7 @@ namespace EnumerableTests {
 			ASSERT (AreEqual(ptrs1, asDerived1.NonNulls()));
 			ASSERT_EQ (ptrs1.Count() + ptrs12.Count(),	asDerived1.Count());
 			ASSERT_EQ (ptrs12.Count(),					asDerived1.Count(nullptr));
-			
+
 			auto onlyDerived1 = ofBase1.OfType<Derived1&>();
 			auto onlyDerived2 = ofBase1.OfType<Derived2&>();
 
@@ -358,7 +358,7 @@ namespace EnumerableTests {
 
 			auto ptrsOnlyDerived1 = ptrsBase1.OfType<Derived1*>();
 			auto ptrsOnlyDerived2 = ptrsBase1.OfType<Derived2*>();
-			
+
 			ASSERT (AreEqual(ptrs1, ptrsOnlyDerived1));
 			ASSERT (!ptrsOnlyDerived2.Any());
 		}
@@ -385,6 +385,49 @@ namespace EnumerableTests {
 
 
 
+	// Manually disable debug evaluation when having side-effects. [Discouraged style.]
+	// See also LambdaHandlingTests/NonPureProjections for automatism with non-copiable types.
+	static void SideEffects()
+	{
+		// state side-effect
+		{
+			int counter = 1;
+			auto query = Enumerate({ 'a', 'b', 'c' }).NonPure()
+													 .Map(FUN(c, std::make_pair(c, counter++)));
+
+			ASSERT_EQ (1, counter);		// could increase depending on ENUMERABLES_RESULTSVIEW_AUTO_EVAL
+
+			ASSERT_EQ (std::make_pair('c', 3), query.Last());
+			ASSERT_EQ (4, counter);
+			ASSERT_EQ (std::make_pair('c', 6), query.Last());
+		}
+
+		// manual move
+		{
+			std::vector<int> part1 { 1, 2, 3 };
+			std::vector<int> part2 { 6, 7 };
+			std::vector<int> part3 { 11, 12, 13 };
+
+			AllocationCounter allocs;
+
+			auto query = Enumerate({ &part1, &part2, &part3 }).Where(FUN(v,  v.size() > 2))
+															  .NonPure()
+															  .MapTo<std::vector<int>>(FUN(v, std::move(v)));
+
+			std::vector<std::vector<int>> selected = query.ToList(2);
+
+			allocs.AssertFreshCount(2);			// store braced-init + ToList
+			ASSERT_EQ (0, part1.size());
+			ASSERT_EQ (0, part3.size());
+
+			ASSERT_EQ (2, selected.size());
+			ASSERT_EQ (1,  selected[0].front());
+			ASSERT_EQ (11, selected[1].front());
+		}
+	}
+
+
+
 	void TestMisc()
 	{
 		Greet("Misc");
@@ -395,6 +438,7 @@ namespace EnumerableTests {
 		ElemAccess();
 		CastConvertElements();
 		CastRelatedElements();
+		SideEffects();
 	}
 
 }	// namespace EnumerableTests

@@ -18,7 +18,7 @@
 	// Implementation for tests: can bypass bypassing assertions for exception-tests.
 	#define ENUMERABLES_CLIENT_BREAK(txt)		EnumerableTests::MaskableClientBreak(txt)
 
-	// Automatically fill 'ResultsView' debug buffer for supported types (2 = at creation;  1 = on lvalue usage)
+	// Automatically fill 'ResultsView' debug buffer for supported types (2 = at non-trivial creation;  1 = on lvalue usage)
 	// - now disabled for sake of allocation tests
 	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	0
 

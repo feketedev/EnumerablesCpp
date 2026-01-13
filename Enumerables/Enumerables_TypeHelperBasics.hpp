@@ -100,7 +100,7 @@ namespace TypeHelpers {
 	// NOTE: utilizing IsNone here -----------------------------^
 	//		 causes old MSVC to complain about (C2970) internal linkage
 	//		 vs non-type argument when invoked under OverrideOp::Apply!
-	
+
 	template <class Override>
 	struct OverrideOp {
 		template <class Default>
@@ -116,7 +116,7 @@ namespace TypeHelpers {
 	/// Just an arbitrary condition for AsDependentT
 	template <class... Traits>
 	struct FirstOrFalse : std::false_type {};
-	
+
 	template <class F, class... Tail>
 	struct FirstOrFalse<F, Tail...> : std::integral_constant<bool, F::value> {};
 
@@ -245,11 +245,11 @@ namespace TypeHelpers {
 	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
 	template <class T>
 	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &&; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T[]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> []; };
-	template <class T, size_t N>		
+	template <class T, size_t N>
 	struct DeepConst<T[N]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> [N]; };
 
 	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
@@ -291,7 +291,7 @@ namespace TypeHelpers {
 	constexpr bool HaveRefcompatibleRoots = HasRefcompatibleRoot<T, U>
 										 || HasRefcompatibleRoot<U, T>;
 
-	
+
 	template <class T>
 	constexpr bool IsUnknownBoundArray = std::is_array<T>::value && std::extent<T>::value == 0;
 
@@ -305,7 +305,7 @@ namespace TypeHelpers {
 	struct CommonOrVoid<T, U, void_t< decltype(false ? declval<T>() : declval<U>()),		  // hardened SFINAE for old STL (VS2015)
 									  std::common_type_t<T, U>					   ,
 									  enable_if_t<!is_void<T>::value && !is_void<U>::value>,  // guard UB
-									  enable_if_t< !IsUnknownBoundArray<T> 
+									  enable_if_t< !IsUnknownBoundArray<T>
 												&& !IsUnknownBoundArray<U>>				   >> {
 		using Type = std::common_type_t<T, U>;
 	};
@@ -402,7 +402,7 @@ namespace TypeHelpers {
 		using Tail     = typename MapTypeList<TypeList<Ts...>, Mapping>::typeList;
 		using typeList = typename PrependType<Mapping<H>, Tail>::typeList;
 	};
-	
+
 
 	/// Implementation of BindChangingNthT / ChangedNthArgT.
 	template <template <class...> class Trg, template <class> class Change, unsigned n, class ProcessedList, class... OrigArgs>
@@ -554,6 +554,9 @@ namespace TypeHelpers {
 
 
 	// ===== Enable_if shorthands =====================================================================================
+
+	template <class T, class S = T>
+	using IfNonvoid = enable_if_t<!is_void<T>::value, S>;
 
 	template <class T, class S = T>
 	using IfNonvoidValue = enable_if_t<std::is_object<T>::value, S>;

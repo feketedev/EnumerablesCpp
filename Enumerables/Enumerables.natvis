@@ -24,6 +24,7 @@
     <DisplayString IncludeView="elemType">{"$T1",sb}</DisplayString>
     <DisplayString Condition="Status[0] == 'N'" ExcludeView="elemType">{Status,na}</DisplayString>
     <DisplayString Condition="Status[0] != 'N'" ExcludeView="elemType">{Elements}</DisplayString>
+    <DisplayString ExcludeView="elemType">Uninitialized variable.</DisplayString>
     <Expand>
       <!--<Item Name="TElement">"$T1"</Item>-->
       <Item Name="Status"   ExcludeView="elemType">Status,sb</Item>
