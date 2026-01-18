@@ -112,13 +112,19 @@ namespace Def {
 	struct ResultBuffer {
 		using TDebugValue = std::remove_cv_t<StorableT<T>>;
 
-#	if ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 2
-		const char* Status = "Not evaluated by default - trivial wrapping.  Call Test() or Print() from Immediate window.";
-#	elif ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 1
-		const char* Status = "Not evaluated.  Step over first (&) method call, or invoke Test()/Print() from Immediate window.  See ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
-#	else
-		const char* Status = "Not evaluated.  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
-#	endif
+		const char* Status =
+#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1
+				"Not evaluated until first (&) method call."
+#			elif ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2
+				"Not evaluated by default - trivial construction."
+#			else
+				"Not evaluated."
+#			endif
+#			if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+				"  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
+#			else
+				"  See ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
+#			endif
 
 		SmallListType<TDebugValue, 4>	Elements;
 
@@ -212,16 +218,16 @@ namespace Def {
 #	if ENUMERABLES_USE_RESULTSVIEW
 		mutable ResultBuffer<TElem>		ResultsView;
 
-		// force the compiler to generate those functions for immediate window...
-		const char*						(AutoEnumerable::*	testResultsViewPtr)()  const = nullptr;
-		decltype(ResultsView.Elements)&	(AutoEnumerable::*	printResultsViewPtr)() const = nullptr;
+#		if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+			// force the compiler to generate those functions for immediate window...
+			decltype(ResultsView.Elements)&	(AutoEnumerable::*	printResultsViewPtr)() const = nullptr;
 
+			/// Fill the debug buffer with yielded values if possible. For immediate window.
+			ENUMERABLES_NOINLINE const char* Test()	 const;
 
-		/// Fill the debug buffer with yielded values if possible. For immediate window.
-		ENUMERABLES_NOINLINE const char* Test()	 const;
-
-		/// Print yielded values if possible. For immediate window.
-		ENUMERABLES_NOINLINE auto		 Print() const -> decltype(ResultsView.Elements)&;
+			/// Print yielded values if possible. For immediate window.
+			ENUMERABLES_NOINLINE auto		 Print() const -> decltype(ResultsView.Elements)&;
+#		endif
 #	endif
 
 	public:
@@ -239,12 +245,13 @@ namespace Def {
 			isPure  { pureSource && is_copy_constructible<TElem>::value }
 		{
 #		if ENUMERABLES_USE_RESULTSVIEW
-#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
+#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2
 				if (stepToDebug)
 					ResultsView.Fill(this->factory, isPure, true);
 #			endif
-			testResultsViewPtr  = &AutoEnumerable::Test;
-			printResultsViewPtr = &AutoEnumerable::Print;
+#			if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+				printResultsViewPtr = &AutoEnumerable::Print;
+#			endif
 #		endif
 		}
 

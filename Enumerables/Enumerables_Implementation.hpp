@@ -130,7 +130,7 @@ namespace Enumerables {
 		/// Given any iterable type, deduces the possible TElem of the result of Enumerate(...).
 		/// For init-lists that carry ambiguous meaning, result is marked as MaybeToDereference.
 		/// @remarks
-		///		This workaround is for Concat(...) and similar, where the intention of some init-list of pointers 
+		///		This workaround is for Concat(...) and similar, where the intention of some init-list of pointers
 		///		can be clarified by some other relevant sequence (based on it containing & or * elements).
 		template <class Cont, class TForced = void>
 		using WeakElemT = typename WeakEnumerableElem<Cont, TForced>::type;
@@ -192,7 +192,7 @@ namespace Def {
 	///		Using Enumerate directly in such situation can cause compilation error
 	///		if ENUMERABLES_ADD_STRINGLIST_OVERLOADS is enabled and the specified
 	///		target elem doesn't correspont to the init-list item (including qualifiers).
-	/// 
+	///
 	///		Init-list deduction occurs directly on top-level anyway, thus it
 	///		is reasonable to bypass such Enumerate overloads when forwarding.
 	template <class TForced = void, class C>
@@ -229,7 +229,7 @@ namespace Def {
 	auto ConcatInternal(C1&& cont1, C2&& cont2, CMore&&... tailConts)
 	{
 		using E1 = InitListSupport::WeakElemT<C1, TForced>;
-		
+
 		using THead	   = OverrideT<TCommon0, E1>;
 		using TCommon1 = typename ConcatTypeDeducer<THead, E1>::TCommon;
 
@@ -297,7 +297,7 @@ namespace Def {
 
 #endif
 
-	
+
 
 	template <class T, class... Os>
 	SetType<RefHolder<T>> InitRefholderSet(const initializer_list<T*>& elems, const Os&... opts)
@@ -559,8 +559,8 @@ namespace Def {
 		while (etor.FetchNext())
 			sum = *sum + etor.Current();
 
-		return *move(sum);	
-		
+		return *move(sum);
+
 		// CONSIDER: has no RVO. Tail-recursion maybe? - Then also for anything else consistently?
 	}
 
@@ -740,7 +740,7 @@ namespace Def {
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, Options {}...);
 	}
-	
+
 	template<class TFactory>
 	template<class K, class... Options>
 	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint, const Options&... opts) const
@@ -974,8 +974,8 @@ namespace Def {
 	template<class TFactory>
 	void AutoEnumerable<TFactory>::ViewTrigger() const
 	{
-#	if ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 1
-		ResultsView.Fill(factory, isPure, true);
+#	if ENUMERABLES_USE_RESULTSVIEW && (ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1)
+			ResultsView.Fill(factory, isPure, true);
 #	endif
 	}
 
@@ -990,8 +990,10 @@ namespace Def {
 	template <class V, class Factory>
 	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall, enable_if_t<is_copy_constructible<V>::value>*)
 	{
+#	if !(ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 4)
 		if (autoCall && (GetSize(Elements) > 0 || Status[0] == 'E'))
 			return;
+#	endif
 
 		if (!isPure) {
 			Status = "Not available - enumeration is marked as having side-effects.";
@@ -1004,8 +1006,11 @@ namespace Def {
 		SizeInfo si = et.Measure();
 		if (autoCall && si.IsUnbounded()) {
 			Status = "Not evaluated by default - the sequence is Unbounded. "
-					 "Such enumerations often rely on chained steps to terminate. "
-					 "Attempt Test() or Print() from Immediate window to examine.";
+					 "Such enumerations often rely on chained steps to terminate."
+#				if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+					 "  Attempt Test() or Print() from Immediate window if safe to examine."
+#				endif
+					 ;
 			return;
 		}
 
@@ -1020,7 +1025,7 @@ namespace Def {
 		}
 		Status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
 			? "Evaluation successful."
-			: "Showing first" ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) "elements.";
+			: "Showing first " ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) " elements.";
 	}
 
 	template <class T>
@@ -1034,6 +1039,7 @@ namespace Def {
 	}
 
 
+#	if ENUMERABLES_RESULTSVIEW_MANU_EVAL
 
 	/// Fill the debug buffer with yielded values if possible. For immediate window.
 	template<class TFactory>
@@ -1052,6 +1058,8 @@ namespace Def {
 		Test();
 		return ResultsView.Elements;
 	}
+
+#	endif
 
 #endif	// ENUMERABLES_USE_RESULTSVIEW
 
