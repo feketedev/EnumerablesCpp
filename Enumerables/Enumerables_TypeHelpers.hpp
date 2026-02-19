@@ -928,18 +928,25 @@ namespace TypeHelpers {
 		using Storage = ReassignableStorageFor<T>;
 
 	public:
-		using Storage::Storage;		// ctor - "ReassignableStorageFor" had fun compiler differences around injected class name :D
-
 		Reassignable() = delete;
 
-		template <class TT = T, class = enable_if_t<IsBraceConstructible<T, TT>::value>>
-		Reassignable(TT&& val) : Storage { ForwardParams, forward<TT>(val) }
+		template <class... Args, class = enable_if_t<IsBraceConstructible<T, Args...>::value>>
+		Reassignable(Args&&... args)
 		{
+			this->Construct(forward<Args>(args)...);
 		}
+
+		template <class Fact>
+		Reassignable(FactoryInvokeSelector, Fact& create)
+		{
+			this->InvokeFactory(create);
+		}
+
 		Reassignable(const Reassignable& src)	{ this->CopyFrom(src); }
 		Reassignable(Reassignable&& src)		{ this->MoveFrom(src); }
 
 		~Reassignable()							{ this->Destroy(); }
+
 
 		using Storage::Value;
 		using Storage::PassValue;

@@ -152,8 +152,9 @@ namespace Enumerables {
 
 	public:
 		template <class... Args, class = std::enable_if_t<TypeHelpers::IsBraceConstructible<T, Args...>::value>>
-		OptResult(Args&&... args)	: storage { TypeHelpers::ForwardParams, std::forward<Args>(args)... }
+		OptResult(Args&&... args)
 		{
+			storage.Construct(std::forward<Args>(args)...);
 		}
 
 		OptResult(StopReason code)	: error	  { code }

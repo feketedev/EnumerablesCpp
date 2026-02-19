@@ -643,7 +643,17 @@ namespace EnumerableTests {
 
 		// Reassignable
 		{
-			Reassignable<ConstStruct> s1 { ForwardParams, 1, 1.1 };
+			struct ConvSource {
+				int id;
+				operator ConstStruct() const { return { id, 15.0 }; }
+			};
+			ConvSource src { 5 };
+
+			Reassignable<ConstStruct> converted = src;
+			ASSERT_EQ (5,	 converted->id);
+			ASSERT_EQ (15.0, *converted->payload);
+
+			Reassignable<ConstStruct> s1 { 1, 1.1 };
 			ASSERT_EQ (1,	s1->id);
 			ASSERT_EQ (1.1,	*s1->payload);
 
@@ -672,7 +682,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (4,	s2->id);
 			ASSERT_EQ (4.4,	*s2->payload);
 
-			Reassignable<ConstStruct&> r1 { ForwardParams, *s1 };
+			Reassignable<ConstStruct&> r1 { *s1 };
 			ASSERT_EQ (3.3, *r1->payload);
 		 // r1.Reconstruct(5, 5.5);			// CTE
 			r1 = so;
@@ -683,11 +693,11 @@ namespace EnumerableTests {
 			std::vector<int> nums2 { 1, 2, 3, 4 };
 			std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
 
-			Reassignable<std::vector<int>> v1 { ForwardParams, nums1 };
+			Reassignable<std::vector<int>> v1 { nums1 };
 
 			NO_MORE_HEAP;
 
-			Reassignable<std::vector<int>> v2 { ForwardParams, std::move(nums1) };
+			Reassignable<std::vector<int>> v2 { std::move(nums1) };
 			ASSERT_EQ (5, v2->size());
 			ASSERT_EQ (5, v1->size());
 

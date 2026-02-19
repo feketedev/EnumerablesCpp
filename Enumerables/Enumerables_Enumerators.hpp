@@ -389,7 +389,7 @@ namespace Def {
 	///		  CachingEnumerator<ListOperations::Container<T>>
 	///		have different RTTI.
 	template <class Cache>
-	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {	
+	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {
 
 		struct State {
 			Cache					results;
@@ -625,7 +625,7 @@ namespace Def {
 		SizeInfo			Measure()   const override	{ return Boundedness::Unbounded; }
 		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
-		SequenceEnumerator(const V& start, const Stepper& step) : curr { ForwardParams, start }, step { step }  {}
+		SequenceEnumerator(const V& start, const Stepper& step) : curr { start }, step { step }  {}
 		SequenceEnumerator(SequenceEnumerator&&) = default;
 	};
 
@@ -857,13 +857,13 @@ namespace Def {
 	};
 
 
-	
+
 	// for cases when the operand can't be readily captured as a SetType<T>
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
-	
+
 	private:
 		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
 		using Op = DecayIfScalarT<EnumeratedT<OpSource>>;
@@ -1027,7 +1027,7 @@ namespace Def {
 	public:
 		static_assert (is_pointer<typename Source::TElem>::value || is_reference<typename Source::TElem>::value,
 					   "Only pointer or reference elements can hide a different dynamic type!"				   );
-		
+
 		static_assert (is_pointer<TWanted>::value || is_reference<TWanted>::value,
 					   "Please specify the desired pointer or reference type exactly for readability.");
 
@@ -1135,7 +1135,7 @@ namespace Def {
 		MapperEnumerator(MapperEnumerator&&) = default;
 	};
 
-	
+
 
 	template <class Source>
 	class IndexerEnumerator final : public IEnumerator<Indexed<EnumeratedT<Source>>> {
@@ -1165,7 +1165,7 @@ namespace Def {
 	// NOTE: Could be replaced with ScannerEnumerator  -  Acc = (curr, prev * curr),
 	//		 But:  for Current() TElem would need to be copyable.
 	template <class Source, class Combiner>
-	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {		
+	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {
 		using V = EnumeratedT<Source>;
 
 		Source				source;
@@ -1243,7 +1243,7 @@ namespace Def {
 
 
 	#pragma region Concatenations
-	
+
 	template <class Source, class ContinuationSource>
 	class ConcatEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 		static_assert (is_convertible<EnumeratedT<ContinuationSource>, EnumeratedT<Source>>::value, "Concat: Incompatible continuation.");
@@ -1435,7 +1435,7 @@ namespace Def {
 		ScannerBase(Factory&& getSource, const Combiner& combiner, const StorableT<TAcc>& init) :
 			source		{ getSource() },
 			combine		{ combiner },
-			accumulator	{ ForwardParams, Revive(init) }
+			accumulator	{ Revive(init) }
 		{
 		}
 

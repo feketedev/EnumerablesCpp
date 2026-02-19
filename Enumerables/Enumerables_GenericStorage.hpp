@@ -143,7 +143,6 @@ namespace TypeHelpers {
 
 	// Constructor selectors
 	enum FactoryInvokeSelector { InvokeFactory };
-	enum ParamForwardSelector  { ForwardParams };
 
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
@@ -185,8 +184,8 @@ namespace TypeHelpers {
 
 		// ---- Outsourced lifetime management (!) ----
 
-		GenericStorage()	{}
-		~GenericStorage()	{}
+		GenericStorage()  = default;
+		~GenericStorage() = default;
 
 		void Destroy()		{ val.Get().~S(); }
 
@@ -208,17 +207,6 @@ namespace TypeHelpers {
 
 
 		// ---- Construction/assignment ops ----
-
-		template <class... Args>
-		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { ForwardParams, forward<Args>(ctorArgs)... }
-		{
-		}
-
-		template <class Fact>
-		GenericStorage(FactoryInvokeSelector, Fact& create) : val { TypeHelpers::InvokeFactory, create }
-		{
-		}
-
 
 		template <class... Args>
 		void Construct(Args&&... ctorArgs)
@@ -252,8 +240,8 @@ namespace TypeHelpers {
 
 
 		/// only if already initialized!
-		template <class Src, class Trg = T>
-		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<Trg, Src>>* = nullptr)
+		template <class Src>
+		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src>>* = nullptr)
 		{
 			if (IsNotSelf(src)) {
 				Destroy();
@@ -263,8 +251,8 @@ namespace TypeHelpers {
 		}
 
 		/// only if already initialized!
-		template <class Src, class Trg = T>
-		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<Trg, Src>>* = nullptr)
+		template <class Src>
+		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<T, Src>>* = nullptr)
 		{
 			static_assert (!is_reference<T>::value, "GenericStorage Internal error.");
 			T& v = Value();
@@ -293,22 +281,11 @@ namespace TypeHelpers {
 		T&			Get()				{ return *GetBuffer(); }
 
 		BytesHolder() = default;
-
-		template <class... Args>
-		BytesHolder(ParamForwardSelector, Args&&... ctorArgs)
-		{
-			new (buffer) T { forward<Args>(ctorArgs)... };
-		}
-
-		template <class Fact>
-		BytesHolder(FactoryInvokeSelector, Fact& create)
-		{
-			new (buffer) RvoEmplacer<Fact> { create };
-		}
 	};
 
 
-	// Better for intellisense, no casts - but should not be reassigned without std::launder!
+	// Better for debugger, no casts - but should not reconstruct T without std::launder!
+	// NOTE: P1971R0 alleviates restrictions retroactively, however that happend in 2019.
 	template <class T>
 	class UnionHolder final {
 
@@ -321,16 +298,6 @@ namespace TypeHelpers {
 
 		~UnionHolder() {}			// user responsibility!
 		UnionHolder()  {}
-
-		template <class... Args>
-		UnionHolder(ParamForwardSelector, Args&&... ctorArgs)	: val { forward<Args>(ctorArgs)... }
-		{
-		}
-
-		template <class Fact>
-		UnionHolder(FactoryInvokeSelector, Fact& create)		: val { create() }
-		{
-		}
 	};
 
 #pragma endregion
