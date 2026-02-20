@@ -142,7 +142,7 @@ namespace Enumerables {
 			if (HasValue())
 				return;
 
-			ENUMERABLES_CLIENT_BREAK(ReasonOfMissText());
+			ENUMERABLES_CLIENT_BREAK (ReasonOfMissText());
 			throw LogicException(ReasonOfMissText());
 		}
 
@@ -151,13 +151,13 @@ namespace Enumerables {
 		OptResult(LateInitSelector) {}
 
 	public:
-		template <class... Args, class = std::enable_if_t<TypeHelpers::IsBraceConstructible<T, Args...>::value>>
+		template <class... Args, class = std::enable_if_t<TypeHelpers::IsConstructibleAnyway<T, Args...>>>
 		OptResult(Args&&... args)
 		{
-			storage.Construct(std::forward<Args>(args)...);
+			storage.ConstructParensPreferred(std::forward<Args>(args)...);
 		}
 
-		OptResult(StopReason code)	: error	  { code }
+		OptResult(StopReason code) : error { code }
 		{
 			ENUMERABLES_INTERNAL_ASSERT (code != StopReason::None);
 		}
@@ -189,14 +189,14 @@ namespace Enumerables {
 		OptResult(OptResult<S>&& src)		: error { src.ReasonOfMiss() }
 		{
 			if (src.HasValue())
-				storage.Construct(src.Value());
+				storage.ConstructParens(src.Value());
 		}
 
 		template <class S>
 		OptResult(const OptResult<S>& src)	: error { src.ReasonOfMiss() }
 		{
 			if (src.HasValue())
-				storage.Construct(src.Value());
+				storage.ConstructParens(src.Value());
 		}
 
 		template <class S>

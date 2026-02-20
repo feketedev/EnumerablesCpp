@@ -25,6 +25,11 @@ namespace TypeHelpers {
 
 	/// Holds a pointer bypassing a reference for unified storage/access in generic code.
 	/// Convertible to and std::hashable as the referred lvalue.
+	/// @remarks
+	///		The pointer is semantically const.
+	///		- RefHolder must be assignable (swappable) as a whole for container algorithms.
+	///		- Any other assignments are forbidden, for being rather ambiguous!
+	///		- Otherwise the conversion to T& and comparisons are provided.
 	template <class T>
 	class RefHolder {
 		static_assert (!is_reference<T>::value, "Use with (qualified) decayed type.");
@@ -32,11 +37,14 @@ namespace TypeHelpers {
 		T* /*const*/ ptr;
 
 	public:
-		template <class Ref, class = enable_if_t<IsRefCompatible<T, Ref>>>
-		RefHolder(Ref&& ref) noexcept : ptr { &ref }
+		RefHolder(T& ref) noexcept : ptr { &ref }
 		{
-			static_assert (is_lvalue_reference<Ref>::value, "Reference stored from rvalue soon becomes dangling!");
 		}
+
+		RefHolder(const RefHolder&)				= default;
+		RefHolder& operator =(const RefHolder&)	= default;		// OK to swap refs by algorithms
+		RefHolder& operator =(const T&)			= delete;		// would be ambiguous!
+
 
 		T&		 Get() const noexcept	{ return *ptr; }
 		operator T&()  const noexcept	{ return *ptr; }
@@ -45,13 +53,13 @@ namespace TypeHelpers {
 		// let's have full transparency with equality-checks
 		template <class RH = T>
 		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
-		
+
 		template <class RH = T>
 		bool operator !=(const RH& rhs)				const	 noexcept(noexcept(Get() != rhs))		{ return Get() != rhs; }
 
 		template <class RT>
 		bool operator ==(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() == rhs.Get()))	{ return Get() == rhs.Get(); }
-		
+
 		template <class RT>
 		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
 
@@ -143,6 +151,7 @@ namespace TypeHelpers {
 
 	// Constructor selectors
 	enum FactoryInvokeSelector { InvokeFactory };
+	enum ForcedBracesSelector  { ConstructBraced };
 
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
@@ -209,9 +218,31 @@ namespace TypeHelpers {
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		void Construct(Args&&... ctorArgs)
+		void ConstructBraced(Args&&... ctorArgs)
 		{
 			new (val.GetBuffer()) S { forward<Args>(ctorArgs)... };
+		}
+
+
+		template <class... Args>
+		void ConstructParens(Args&&... ctorArgs)
+		{
+			new (val.GetBuffer()) S (forward<Args>(ctorArgs)...);
+		}
+
+
+		template <class... Args>
+		enable_if_t<is_constructible<S, Args...>::value>
+		ConstructParensPreferred(Args&&... ctorArgs)
+		{
+			ConstructParens(forward<Args>(ctorArgs)...);
+		}
+
+		template <class... Args>
+		enable_if_t<IsBraceConstructible<S, Args...>::value && !is_constructible<S, Args...>::value>
+		ConstructParensPreferred(Args&&... ctorArgs)
+		{
+			ConstructBraced(forward<Args>(ctorArgs)...);
 		}
 
 
@@ -239,18 +270,18 @@ namespace TypeHelpers {
 		bool		   IsNotSelf(const T& src) const	{ return &src != &Value(); }
 
 
-		/// only if already initialized!
+		/// Assign or Reconstruct depending on type capability.
+		/// Only if already initialized!
 		template <class Src>
-		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src>>* = nullptr)
+		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src> && is_constructible<T, Src>::value>* = nullptr)
 		{
 			if (IsNotSelf(src)) {
 				Destroy();
-				Construct(forward<Src>(src));
+				ConstructParens(forward<Src>(src));
 			}
 			return Value();
 		}
 
-		/// only if already initialized!
 		template <class Src>
 		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<T, Src>>* = nullptr)
 		{

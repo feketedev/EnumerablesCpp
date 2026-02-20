@@ -629,140 +629,268 @@ namespace EnumerableTests {
 		}
 
 
-		struct alignas(64) ConstStruct {
+		struct alignas(64) ConstCtorStruct {
 			const int				id;
 			std::unique_ptr<double> payload;
 
-			ConstStruct(int id, double pl) : id { id }, payload { std::make_unique<double>(pl) }
+			ConstCtorStruct(int id, double pl) : id { id }, payload { std::make_unique<double>(pl) }
 			{
 			}
 		};
 
-		auto getStruct = []() { return ConstStruct { 4, 4.4 }; };
+		struct ConstAggregate {
+			const int				id;
+			std::unique_ptr<double> payload;
+		};
+
+		auto getCtorStruct = []() { return ConstCtorStruct { 4, 4.4 }; };
+		auto getStruct     = []() { return ConstAggregate  { 4, std::make_unique<double>(4.4) }; };
 
 
 		// Reassignable
 		{
-			struct ConvSource {
-				int id;
-				operator ConstStruct() const { return { id, 15.0 }; }
-			};
-			ConvSource src { 5 };
+			// construct via conversion op
+			{
+				struct ConvSource {
+					int id;
+					operator ConstCtorStruct() const { return { id, 15.0 }; }
+				};
+				ConvSource src { 5 };
 
-			Reassignable<ConstStruct> converted = src;
-			ASSERT_EQ (5,	 converted->id);
-			ASSERT_EQ (15.0, *converted->payload);
+				Reassignable<ConstCtorStruct> converted = src;
+				ASSERT_EQ (5,    converted->id);
+				ASSERT_EQ (15.0, *converted->payload);
+			}
 
-			Reassignable<ConstStruct> s1 { 1, 1.1 };
-			ASSERT_EQ (1,	s1->id);
-			ASSERT_EQ (1.1,	*s1->payload);
+			// construct transparently - caution: () preferred by default (narrowing if needed)
+			Reassignable<ConstCtorStruct> s1 { 1, 1.1 };
+			Reassignable<ConstAggregate>  a1 { 3, std::make_unique<double>(1.3) };
+			Reassignable<ConstAggregate>  a0 { 5 };		// value-init omitted field of aggregate
+			ASSERT_EQ (1, s1->id);
+			ASSERT_EQ (3, a1->id);
+			ASSERT_EQ (5, a0->id);
+			ASSERT_EQ (1.1, *s1->payload);
+			ASSERT_EQ (1.3, *a1->payload);
+			ASSERT_EQ (nullptr, a0->payload);			// zeroed
 
-			static_assert (is_same<ConstStruct&,  decltype(*s1)>(),			   "type check");
-			static_assert (is_same<ConstStruct&&, decltype(*std::move(s1))>(), "type check");
+			static_assert (is_same<ConstCtorStruct&,  decltype(*s1)>(),			   "type check");
+			static_assert (is_same<ConstCtorStruct&&, decltype(*std::move(s1))>(), "type check");
 
-			Reassignable<ConstStruct> s2 = std::move(s1);
-			ASSERT_EQ (1,	s2->id);
-			ASSERT_EQ (1.1,	*s2->payload);
+			// basics on object vs. aggregate
+			{
+				Reassignable<ConstCtorStruct> s2 = std::move(s1);
+				Reassignable<ConstAggregate>  a2 = std::move(a1);
+				ASSERT_EQ (1, s2->id);
+				ASSERT_EQ (3, a2->id);
+				ASSERT_EQ (1.1, *s2->payload);
+				ASSERT_EQ (1.3, *a2->payload);
 
-			s2.Reconstruct(2, 2.2);
-			s1.Reconstruct(3, 3.3);
-			ASSERT_EQ (3,	s1->id);
-			ASSERT_EQ (3.3,	*s1->payload);
-			ASSERT_EQ (2,	s2->id);
-			ASSERT_EQ (2.2,	*s2->payload);
+				s1.Reconstruct(3, 3.3);
+				ASSERT_EQ (3, s1->id);
+				ASSERT_EQ (3.3, *s1->payload);
 
-			ConstStruct so = s2.PassValue();
-			ASSERT_EQ (2,	so.id);
-			ASSERT_EQ (2.2,	*so.payload);
+				a0.Reconstruct(4, std::make_unique<double>(4.4));	// works because of fallback to {}
+				a1.ReconstructAggregate(5);							// force use {}
+				ASSERT_EQ (4, a0->id);
+				ASSERT_EQ (4.4, *a0->payload);
+				ASSERT_EQ (5, a1->id);
+				ASSERT_EQ (nullptr, a1->payload);					// value-initialized
 
-			Reassignable<ConstStruct> s4 { InvokeFactory, getStruct };
-			s2.AcceptRvo(getStruct);
-			ASSERT_EQ (4,	s4->id);
-			ASSERT_EQ (4.4,	*s4->payload);
-			ASSERT_EQ (4,	s2->id);
-			ASSERT_EQ (4.4,	*s2->payload);
+				ConstCtorStruct so = s2.PassValue();
+				ConstAggregate  ao = a2.PassValue();
+				ASSERT_EQ (1,	so.id);
+				ASSERT_EQ (3,	ao.id);
+				ASSERT_EQ (1.1,	*so.payload);
+				ASSERT_EQ (1.3,	*ao.payload);
 
-			Reassignable<ConstStruct&> r1 { *s1 };
-			ASSERT_EQ (3.3, *r1->payload);
-		 // r1.Reconstruct(5, 5.5);			// CTE
-			r1 = so;
-			ASSERT_EQ (2.2, *r1->payload);
+				s2.AcceptRvo(getCtorStruct);
+				a2.AcceptRvo(getStruct);
+				ASSERT_EQ (4,	s2->id);
+				ASSERT_EQ (4,	a2->id);
+				ASSERT_EQ (4.4,	*s2->payload);
+				ASSERT_EQ (4.4,	*a2->payload);
+			}
 
-			// But if assignment is available, it should be used!
-			std::vector<int> nums1 { 1, 2, 3, 4, 5 };
-			std::vector<int> nums2 { 1, 2, 3, 4 };
-			std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+			// prefer copy/move ctor call even when ambiguous for aggregates
+			{
+				struct Convertible;
 
-			Reassignable<std::vector<int>> v1 { nums1 };
+				struct Ambig {
+					const Convertible& ref;
+					int x;
+				};
 
-			NO_MORE_HEAP;
+				struct Convertible {
+					int x;
+					operator Ambig() const & { return Ambig { *this, x }; }
+				};
 
-			Reassignable<std::vector<int>> v2 { std::move(nums1) };
-			ASSERT_EQ (5, v2->size());
-			ASSERT_EQ (5, v1->size());
+				Convertible content { 5 };
 
-			v2 = nums2;
-			v1 = v2;
-			ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
-			ASSERT_EQ (4, v1->size());
+				// language rules
+				{
+					Ambig amb1 { content };
+					Ambig amb2 (content);
+					ASSERT_EQ (0, amb1.x);
+					ASSERT_EQ (5, amb2.x);
+				}
 
-			v2 = std::move(nums3);		// size increased, but move -> no realloc
-			ASSERT_EQ (6, v2->size());
+				// Reassignable: prefer ctor!
+				{
+					Reassignable<Ambig> amb1 { content };
+					Reassignable<Ambig> amb2 (content);		// ofc. outer format does not matter due to delegation
+					ASSERT_EQ (5, amb1->x);
+					ASSERT_EQ (5, amb2->x);
+				}
 
-			v1 = std::move(v2);
-			ASSERT_EQ (6, v1->size());
+				// Reassignable: force braced-init
+				{
+					Reassignable<Ambig> amb { ConstructBraced, content };
+					ASSERT_EQ (0, amb->x);
+				}
+			}
+
+			// RVO placement; references
+			{
+				Reassignable<ConstCtorStruct> s4 { InvokeFactory, getCtorStruct };
+				ASSERT_EQ (4, s4->id);
+				ASSERT_EQ (4.4, *s4->payload);
+
+				Reassignable<ConstCtorStruct&> r1 { *s1 };
+				ASSERT_EQ (3.3, *r1->payload);
+				r1 = s4;						// implicit conversion
+				ASSERT_EQ (4.4, *r1->payload);
+				ASSERT_EQ (3.3, *s1->payload);
+
+			  // r1.Reconstruct(5, 5.5);		// CTE
+				r1.Reconstruct(*s1);
+				ASSERT_EQ (3.3, *r1->payload);
+				ASSERT_EQ (4.4, *s4->payload);
+			}
+
+			// If assignment is available, it should be used!
+			{
+				std::vector<int> nums1 { 1, 2, 3, 4, 5 };
+				std::vector<int> nums2 { 1, 2, 3, 4 };
+				std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+
+				Reassignable<std::vector<int>> v1 { nums1 };
+
+				NO_MORE_HEAP;
+
+				Reassignable<std::vector<int>> v2 { std::move(nums1) };
+				ASSERT_EQ (5, v2->size());
+				ASSERT_EQ (5, v1->size());
+
+				v2 = nums2;
+				v1 = v2;
+				ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
+				ASSERT_EQ (4, v1->size());
+
+				v2 = std::move(nums3);		// size increased, but move -> no realloc
+				ASSERT_EQ (6, v2->size());
+
+				v1 = std::move(v2);
+				ASSERT_EQ (6, v1->size());
+			}
 
 			static_assert (!std::is_default_constructible<Reassignable<int>>(), "Should be forbidden.");
 		}
 
 		// Deferred
 		{
-			Deferred<ConstStruct> s;
-			ASSERT (!s.IsInitialized());
+			// Basics
+			{
+				Deferred<ConstCtorStruct> s;
+				ASSERT (!s.IsInitialized());
 
-			static_assert (is_same<ConstStruct&,  decltype(*s)>(),			  "type check");
-			static_assert (is_same<ConstStruct&&, decltype(*std::move(s))>(), "type check");
+				static_assert (is_same<ConstCtorStruct&,  decltype(*s)>(),			  "type check");
+				static_assert (is_same<ConstCtorStruct&&, decltype(*std::move(s))>(), "type check");
 
-			s = ConstStruct { 1, 1.1 };
-			ASSERT (s.IsInitialized());
-			ASSERT_EQ (1,	s->id);
-			ASSERT_EQ (1.1,	*s->payload);
+				s = ConstCtorStruct { 1, 1.1 };
+				ASSERT (s.IsInitialized());
+				ASSERT_EQ (1,	s->id);
+				ASSERT_EQ (1.1,	*s->payload);
 
-			s.AcceptRvo(getStruct);
-			ASSERT_EQ (4,	s->id);
-			ASSERT_EQ (4.4,	*s->payload);
+				s.AcceptRvo(getCtorStruct);
+				ASSERT_EQ (4,	s->id);
+				ASSERT_EQ (4.4,	*s->payload);
 
-			ConstStruct so = s.PassValue();
-			ASSERT_EQ (4,	so.id);
-			ASSERT_EQ (4.4,	*so.payload);
-			ASSERT (s.IsInitialized());		// only moved!
+				ConstCtorStruct so = s.PassValue();
+				ASSERT_EQ (4,	so.id);
+				ASSERT_EQ (4.4,	*so.payload);
+				ASSERT (s.IsInitialized());		// only moved!
+			}
+
+			// Braced vs. Parenthesized construction
+			{
+				Deferred<std::vector<unsigned>> v1;
+				Deferred<std::vector<unsigned>> v2;
+
+				v1.Reconstruct(5u, 42u);
+				v2.ReconstructAggregate(5u, 42u);
+
+				ASSERT (v1.IsInitialized() && v2.IsInitialized());
+				ASSERT_EQ (5, v1->size());
+				ASSERT_EQ (2, v2->size());
+				ASSERT_EQ (42, v1->front());
+				ASSERT_EQ (5, v2->front());
+			}
+
+			// RVO placement; references
+			{
+				Deferred<ConstCtorStruct> val;
+				val.AcceptRvo(getCtorStruct);
+				ASSERT_EQ (4,   val->id);
+				ASSERT_EQ (4.4, *val->payload);
+
+				Deferred<ConstCtorStruct&> ref;
+				ref = val;						// implicit conversion
+				ASSERT_EQ (4,   ref->id);
+				ASSERT_EQ (4.4, *ref->payload);
+
+				val.AcceptRvo([]() { return ConstCtorStruct { 5, 5.5 }; });
+				ASSERT_EQ (5,   val->id);
+				ASSERT_EQ (5.5, *val->payload);
+				ASSERT_EQ (5,   ref->id);
+				ASSERT_EQ (5.5, *ref->payload);
+
+				ConstCtorStruct plain { 6, 6.6 };
+				ref = plain;
+				ASSERT_EQ (6,   ref->id);
+				ASSERT_EQ (6.6, *ref->payload);
+				ASSERT_EQ (5,   val->id);
+				ASSERT_EQ (5.5, *val->payload);
+			}
 
 			// Same checks for assignment as for Reassignable
-			std::vector<int> nums1 { 1, 2, 3, 4, 5 };
-			std::vector<int> nums2 { 1, 2, 3, 4 };
-			std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+			{
+				std::vector<int> nums1 { 1, 2, 3, 4, 5 };
+				std::vector<int> nums2 { 1, 2, 3, 4 };
+				std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
 
-			Deferred<std::vector<int>> v1;
-			v1 = nums1;
+				Deferred<std::vector<int>> v1;
+				v1 = nums1;
 
-			NO_MORE_HEAP;
+				NO_MORE_HEAP;
 
-			Deferred<std::vector<int>> v2;
-			v2 = std::move(nums1);
+				Deferred<std::vector<int>> v2;
+				v2 = std::move(nums1);
 
-			ASSERT_EQ (5, v2->size());
-			ASSERT_EQ (5, v1->size());
+				ASSERT_EQ (5, v2->size());
+				ASSERT_EQ (5, v1->size());
 
-			v2 = nums2;
-			v1 = v2;
-			ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
-			ASSERT_EQ (4, v1->size());
+				v2 = nums2;
+				v1 = v2;
+				ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
+				ASSERT_EQ (4, v1->size());
 
-			v2 = std::move(nums3);		// size increased, but move -> no realloc
-			ASSERT_EQ (6, v2->size());
+				v2 = std::move(nums3);		// size increased, but move -> no realloc
+				ASSERT_EQ (6, v2->size());
 
-			v1 = std::move(v2);
-			ASSERT_EQ (6, v1->size());
+				v1 = std::move(v2);
+				ASSERT_EQ (6, v1->size());
+			}
 		}
 	}
 
@@ -1000,7 +1128,7 @@ namespace EnumerableTests {
 
 
 		// 4. further tests from CompatResultT
-		
+
 		// incompatibles
 		static_assert (is_same< void,				CompatComparisonBaseT<int,		double *	>>(),	"Err");
 		static_assert (is_same< void,				CompatComparisonBaseT<double *,	int			>>(),	"Err");
@@ -1026,10 +1154,10 @@ namespace EnumerableTests {
 		static_assert (is_same< int[],				CompatComparisonBaseT<int [] ,			int []	>>(), "Err");
 	}
 
-	
-	
+
+
 	namespace TestDeepConst {		// static test
-		
+
 		// Result is "Deep-only const", top-level is left intact, easy to qualify manually
 		static_assert (is_same< int,				DeepConstT<int>				  >(),	"Err");
 		static_assert (is_same< int	const,			DeepConstT<int const>		  >(),	"Err");
@@ -1101,7 +1229,7 @@ namespace EnumerableTests {
 		static_assert (is_same< int	const	  [][4],	DeepConstT<int			 [][4]>	 >(),	"Err");
 		static_assert (is_same< int	const (&) [][4],	DeepConstT<int (&)		 [][4]>	 >(),	"Err");
 		static_assert (is_same< int	const (&) [][4],	DeepConstT<int const (&) [][4]>	 >(),	"Err");
-		
+
 		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int			(*)	[4]>   >(),	"Err");
 		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int const	(*) [4]>   >(),	"Err");
 		static_assert (is_same< int	const volatile (*) [4],		DeepConstT<int volatile (*) [4]>   >(),	"Err");
@@ -1187,7 +1315,7 @@ namespace EnumerableTests {
 
 		static_assert (is_same<int   Pair::* const,					 ConstValueT<decltype(&Pair::first)>>(), "Err");
 		static_assert (is_same<void (Pair::* const)(Pair&) noexcept, ConstValueT<decltype(&Pair::swap)>>(),  "Err");
-	
+
 	}
 
 
@@ -1234,7 +1362,7 @@ namespace EnumerableTests {
 		static_assert (is_same<tuple<unsigned, char, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 1, char>>(), "Err");
 		static_assert (is_same<tuple<unsigned, int, char>,		OverriddenNthArgT<tuple<unsigned, int, double>, 2, char>>(), "Err");
 		static_assert (is_same<tuple<unsigned, int, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 2, None>>(), "Err");
-		
+
 	 // Friendly assertions (CTE):
 	 //	using Bad1 = OverriddenNthArgT<tuple<unsigned, int, double>, 3, char>;
 	 //	using Bad2 = OverriddenNthArgT<tuple<>, 0, char>;
@@ -1331,7 +1459,7 @@ namespace EnumerableTests {
 		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*>>(), "Err");
 		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*, std::allocator<const int*>>>(), "Err");
 		static_assert (is_same<std::vector<const int*, TestAllocator<const int*, 4>>, AdjustedContainerT<ListOperations, const int*, TestAllocator<const int*, 4>>>(), "Err");
-		
+
 		// default allocator will be correct ofc.
 		static_assert (is_same<std::vector<RefHolder<int>>,							 AdjustedContainerT<ListOperations, RefHolder<int>>>(), "Err");
 

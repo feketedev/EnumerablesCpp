@@ -133,7 +133,7 @@ namespace TypeHelpers {
 					   "Const & output for a materialized enumerable is possible only with compatible types!");
 	};
 
-	
+
 
 	/// Ref-access guard for a temporarily held "Current" value stored in an Enumerator.
 	/// @remarks
@@ -166,7 +166,7 @@ namespace TypeHelpers {
 										  || is_same<I, const wchar_t*>::value
 										  || is_same<I, const char16_t*>::value
 										  || is_same<I, const char32_t*>::value;
-		
+
 		// NOTE: on old MSVC tparam "ForcedType" can clash with the "ForcedElem" of callers, hence the need for different names!
 
 		template <class ForcedType, class I>
@@ -210,27 +210,27 @@ namespace TypeHelpers {
 		};
 
 
-		
+
 		/// Meta type-wrapper for init-lists of pointers, where their resolution (TElem = T* or T&)
 		/// is deferred to see if some other relevant sequence can help disambiguate (e.g. in Concat).
 		template <class T>	struct MaybeToDereference;
 		template <class V>	struct MaybeToDereference<V*> {};
 
-		template <class T> 
+		template <class T>
 		struct ResolveWithoutContext {
 			using type = T;
 		};
-		template <class V> 
+		template <class V>
 		struct ResolveWithoutContext<MaybeToDereference<V*>> {
 			using type = V&;
-		
+
 			static_assert (!ENUMERABLES_ADD_STRINGLIST_OVERLOADS || !IsStringLiteralType<V*>,
 						   "This function does not support disambiguation of string literals "
 						   "from const char pointers. Please specify element type explicitly!");
 		};
 
 		/// Decide a possibly ambiguous element type (i.e. MaybeToDereference<T>) by default rules if possible.
-		template <class T> 
+		template <class T>
 		using ResolveContextEndedT = typename ResolveWithoutContext<T>::type;
 	}
 
@@ -930,10 +930,16 @@ namespace TypeHelpers {
 	public:
 		Reassignable() = delete;
 
-		template <class... Args, class = enable_if_t<IsBraceConstructible<T, Args...>::value>>
+		template <class... Args, class = enable_if_t<IsConstructibleAnyway<T, Args...>>>
 		Reassignable(Args&&... args)
 		{
-			this->Construct(forward<Args>(args)...);
+			this->ConstructParensPreferred(forward<Args>(args)...);
+		}
+
+		template <class... Args>
+		Reassignable(ForcedBracesSelector, Args&&... args)
+		{
+			this->ConstructBraced(forward<Args>(args)...);
 		}
 
 		template <class Fact>
@@ -952,7 +958,11 @@ namespace TypeHelpers {
 		using Storage::PassValue;
 		using Storage::operator *;
 		using Storage::operator ->;
-		using Storage::operator T&;
+		using Storage::operator const T&;
+
+		// can't import all at once :/
+		operator T& ()	 & { return Value();	 }
+		operator T&& () && { return PassValue(); }
 
 
 		template <class S>
@@ -973,7 +983,14 @@ namespace TypeHelpers {
 		void Reconstruct(Args&&... args)
 		{
 			this->Destroy();
-			this->Construct(forward<Args>(args)...);
+			this->ConstructParensPreferred(forward<Args>(args)...);
+		}
+
+		template <class... Args>
+		void ReconstructAggregate(Args&&... args)
+		{
+			this->Destroy();
+			this->ConstructBraced(forward<Args>(args)...);
 		}
 
 
@@ -1001,6 +1018,14 @@ namespace TypeHelpers {
 	class Deferred final : private ReassignableStorageFor<T> {
 		bool initialized = false;
 
+		void EnsureDestroyed()
+		{
+			if (initialized) {
+				initialized = false;	// lifetime ends by dtor start!
+				this->Destroy();
+			}
+		}
+
 	public:
 		bool IsInitialized() const	{ return initialized; }
 
@@ -1027,14 +1052,18 @@ namespace TypeHelpers {
 		using ReassignableStorageFor<T>::PassValue;
 		using ReassignableStorageFor<T>::operator *;
 		using ReassignableStorageFor<T>::operator ->;
-		using ReassignableStorageFor<T>::operator T&;
+		using ReassignableStorageFor<T>::operator const T&;
+
+		// can't import all at once :/
+		operator T& ()	 & { return Value();	 }
+		operator T&& () && { return PassValue(); }
 
 
 		template <class S>
 		T& operator =(S&& src)
 		{
 			if (initialized)	this->Reassign(forward<S>(src));
-			else				this->Construct(forward<S>(src));
+			else				this->ConstructParens(forward<S>(src));
 
 			initialized = true;
 			return Value();
@@ -1046,8 +1075,7 @@ namespace TypeHelpers {
 		template <class Func>
 		void AcceptRvo(Func&& creator)
 		{
-			if (initialized)	this->Destroy();
-
+			EnsureDestroyed();
 			this->InvokeFactory(creator);
 			initialized = true;
 		}
@@ -1055,9 +1083,16 @@ namespace TypeHelpers {
 		template <class... Args>
 		void Reconstruct(Args&&... args)
 		{
-			if (initialized)	this->Destroy();
+			EnsureDestroyed();
+			this->ConstructParensPreferred(forward<Args>(args)...);
+			initialized = true;
+		}
 
-			this->Construct(forward<Args>(args)...);
+		template <class... Args>
+		void ReconstructAggregate(Args&&... args)
+		{
+			EnsureDestroyed();
+			this->ConstructBraced(forward<Args>(args)...);
 			initialized = true;
 		}
 
@@ -1082,7 +1117,7 @@ namespace TypeHelpers {
 
 
 
-	
+
 #pragma region Collection Parametrization
 
 	/// Detect a custom AllocatedValueT for a given parametrization if defined in a container-binding.
@@ -1106,7 +1141,7 @@ namespace TypeHelpers {
 	/// or void if plain element type should be used.
 	template <class Binding, class ComponentList, class SizeList, class... Options>
 	using CustomAllocatedT = typename CustomAllocatedValue<Binding, ComponentList, SizeList, void, Options...>::type;
-	
+
 	/// Required value-type for allocators for a given parametrization of Binding::Container.
 	/// [Defaults to last component (e.g. V of Dictionary<K, V>) if not customized in Binding.]
 	template <class Binding, class ComponentList, class SizeList, class... OptionArgs>
@@ -1130,7 +1165,7 @@ namespace TypeHelpers {
 	{
 		using ReqValue	= RequiredAllocatedT<Binding, ComponentList, SizeList, OptArgs...>;
 		using type		= typename std::allocator_traits<Alloc>::template rebind_alloc<ReqValue>;
-		
+
 		// check to enforce V* convention (arbitrary but reasonable)
 		using OpaqueComps = typename MapTypeList<ComponentList, RefholderToPtrT>::typeList;
 		using OpaqueValue = RequiredAllocatedT<Binding, OpaqueComps, SizeList, OptArgs...>;
@@ -1199,7 +1234,7 @@ namespace TypeHelpers {
 																	  ComponentList,
 																	  SizeList,
 																	  Options...>::type;
-	
+
 	/// If present, rebind the user-given allocator correctly (e.g. for RefHolder items).
 	/// @tparam Elem:		value type stored in container
 	/// @tparam Options:	further type arguments (e.g. hasher, Allocator)
