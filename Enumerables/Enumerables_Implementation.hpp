@@ -559,7 +559,7 @@ namespace Def {
 		while (etor.FetchNext())
 			sum = *sum + etor.Current();
 
-		return *move(sum);
+		return sum.PassValue();
 
 		// CONSIDER: has no RVO. Tail-recursion maybe? - Then also for anything else consistently?
 	}
@@ -614,7 +614,7 @@ namespace Def {
 			if (isLess(curr, min))
 				min.AssignHeadMoved(curr);
 		}
-		return forward<TElem>(*min);
+		return min.PassValue();
 	}
 
 

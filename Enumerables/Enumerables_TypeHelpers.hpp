@@ -960,10 +960,10 @@ namespace TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)					{ return this->Reassign(forward<S>(src));  }
+		T& operator =(S&& src)					{ return this->Reassign(forward<S>(src)); }
 
-		T& operator =(Reassignable&& src)		{ return this->operator=(src.PassValue()); }
-		T& operator =(const Reassignable& src)	{ return this->operator=(src.Value());	   }
+		T& operator =(Reassignable&& src)		{ return this->Reassign(src.PassValue()); }
+		T& operator =(const Reassignable& src)	{ return this->Reassign(src.Value());	  }
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
 		template <class TT = T>
@@ -978,37 +978,33 @@ namespace TypeHelpers {
 
 	/// Value with deferred, possibly repeated initialization.
 	template <class T>
-	class Deferred final : private GenericStorage<T> {
+	class Deferred final : private GenericStorage<T, true, true> {
 		using Storage = typename Deferred::GenericStorage;
 
-		bool initialized = false;
-
-		void EnsureDestroyed()
+		void EnsureDestroyed() noexcept(std::is_nothrow_destructible<T>::value)
 		{
-			if (initialized) {
-				initialized = false;	// lifetime ends by dtor start!
+			if (IsInitialized())
 				this->Destroy();
-			}
 		}
 
 	public:
-		bool IsInitialized() const	{ return initialized; }
-
 		Deferred() = default;
 
-		Deferred(const Deferred& src) : initialized { src.initialized }
+		Deferred(const Deferred& src)
 		{
-			if (initialized)	this->CopyFrom(src);
+			if (src.IsInitialized())
+				this->CopyFrom(src);
 		}
 
-		Deferred(Deferred&& src)	  : initialized { src.initialized }
+		Deferred(Deferred&& src)
 		{
-			if (initialized)	this->MoveFrom(src);
+			if (src.IsInitialized())
+				this->MoveFrom(src);
 		}
 
-		~Deferred()
+		~Deferred() noexcept(std::is_nothrow_destructible<T>::value)
 		{
-			if (initialized)	this->Destroy();
+			EnsureDestroyed();
 		}
 
 
@@ -1020,29 +1016,17 @@ namespace TypeHelpers {
 		using Storage::operator const T&;
 
 		// can't import all at once :/
-		operator T& ()	 & { return Value();	 }
-		operator T&& () && { return PassValue(); }
+		operator T& ()	 &	noexcept		 { return Value();	 }
+		operator T&& () &&	noexcept		 { return PassValue(); }
 
+		bool IsInitialized() const noexcept  { return Storage::IsConstructed(); }
 
-		template <class S>
-		T& operator =(S&& src)
-		{
-			if (initialized)	this->Reassign(forward<S>(src));
-			else				this->ConstructParens(forward<S>(src));
-
-			initialized = true;
-			return Value();
-		}
-
-		T& operator =(Deferred&& src)		{ return this->operator=(src.PassValue()); }
-		T& operator =(const Deferred& src)	{ return this->operator=(src.Value());	   }
 
 		template <class Func>
 		void AcceptRvo(Func&& creator)
 		{
 			EnsureDestroyed();
 			this->InvokeFactory(creator);
-			initialized = true;
 		}
 
 		template <class... Args>
@@ -1050,7 +1034,6 @@ namespace TypeHelpers {
 		{
 			EnsureDestroyed();
 			this->ConstructParensPreferred(forward<Args>(args)...);
-			initialized = true;
 		}
 
 		template <class... Args>
@@ -1058,8 +1041,20 @@ namespace TypeHelpers {
 		{
 			EnsureDestroyed();
 			this->ConstructBraced(forward<Args>(args)...);
-			initialized = true;
 		}
+
+
+		template <class S>
+		T& operator =(S&& src)
+		{
+			if (IsInitialized())	this->Reassign(forward<S>(src));
+			else					this->ConstructParens(forward<S>(src));
+
+			return Value();
+		}
+
+		T& operator =(Deferred&& src)		{ return operator=(src.PassValue()); }
+		T& operator =(const Deferred& src)	{ return operator=(src.Value());	 }
 
 
 		// allow generic code to move (without triggering dangling assignment checks inside)

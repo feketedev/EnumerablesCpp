@@ -202,24 +202,28 @@ namespace TypeHelpers {
 
 #pragma region GenericStorage
 
-	template <class> class BytesStorage;
-	template <class> class UnionStorage;
+	template <class>	class BytesStorage;
+	template <class>	class UntrackedUnionStorage;
+	template <class>	class TrackedUnionStorage;
 
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
 	/// Defines all supposable operations, but leaves their management - including lifetime handling - to the user/inheritor.
+	/// @tparam SupportReconstruct:  in-place reconstruction support (with possibly const members) is needed
+	/// @tparam TrackLiveness:		 even when storing a pointer is not required by standard, store a bool to track whether T is available
 	/// @remarks
 	///		The realizations changable based on SupportReconstruct are to avoid char[] casting + extra pointer when possible.
-	///		C++17 basically renders them obsolete with std::launder.
-	template <class T, bool SupportReconstruct = true>
+	///		Optional tracking is added to avoid needing an extra bool when the extra pointer can inform us about the same.
+	///		C++17 basically renders both of these obsolete with std::launder.
+	template <class T, bool SupportReconstruct = true, bool TrackLiveness = false>
 	class GenericStorage {
 
 		using Emp   = EmplacableT<T>;
 
 		// NOTE: for a P1971R0 compliant compiler, this ceremony and can be omitted. It is safe to just use UnionStorage, no bool param.
-		using Store = conditional_t< SupportReconstruct && !is_reference<T>::value && !is_scalar<T>::value,
-										BytesStorage<Emp>,
-										UnionStorage<Emp>												   >;
+		static constexpr bool ResortToBytes = SupportReconstruct && !is_reference<T>::value && !is_scalar<T>::value;
+		using Store = conditional_t<ResortToBytes, BytesStorage<Emp>,
+					  conditional_t<TrackLiveness, TrackedUnionStorage<Emp>, UntrackedUnionStorage<Emp>>>;
 
 		static_assert (alignof(Store) >= alignof(StorableT<T>), "Missed alignment?");
 
@@ -229,6 +233,8 @@ namespace TypeHelpers {
 		// NOTE: Old clang crashes on auto&/auto* return types, hence need to augment it.
 		using Ptr      = remove_reference_t<T>*;
 		using ConstPtr = const remove_reference_t<T>*;
+
+		static constexpr bool IsConstructTracked = ResortToBytes || TrackLiveness;
 
 
 		// ---- Access ----
@@ -250,13 +256,22 @@ namespace TypeHelpers {
 		operator	T&()				 &	{ return Value(); }
 		operator	T&&()				&&	{ return move(*this).Value(); }
 
+		template <bool tracked = IsConstructTracked>
+		enable_if_t<tracked, bool>  IsConstructed() const noexcept
+		{
+			return storage.IsConstructed();
+		}
+
 
 		// ---- Outsourced lifetime management (!) ----
 
 		GenericStorage()  = default;
 		~GenericStorage() = default;
 
-		void Destroy()  { storage.Get().~Emp(); }
+		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		{
+			storage.Destroy();
+		}
 
 
 		// copy/move manually if appropriate!
@@ -368,11 +383,12 @@ namespace TypeHelpers {
 		alignas(T) char  buffer[sizeof(T)];
 
 		// NOTE: It is actually UB to reinterpret buffer after placement, the resulting ptr must be stored!
-		T*  ptr;
+		T*  ptr = nullptr;
 
 	public:
-		const T&	Get() const		{ return *ptr; }
-		T&			Get()			{ return *ptr; }
+		bool		IsConstructed()	const noexcept  { return ptr != nullptr; }
+		const T&	Get()			const noexcept  { return *ptr; }
+		T&			Get()				  noexcept  { return *ptr; }
 
 		BytesStorage()					  = default;
 		BytesStorage(const BytesStorage&) = delete;
@@ -382,13 +398,21 @@ namespace TypeHelpers {
 		{
 			ptr = new (buffer) T { forward<Args>(args)... };
 		}
+
+		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		{
+			T& obj = Get();
+			ptr = nullptr;		// lifetime ends by dtor start
+			obj.~T();
+		}
 	};
 
 
 	// Better for debugger, no casts, no extra pointer - but should not reconstruct a T having const fields without std::launder!
 	// NOTE: P1971R0 alleviates restrictions retroactively, however that change dates to 2019.
+	// Tracked- / Untracked- versions added to avoid duplicated data (extra bool +padding) in Deferred...
 	template <class T>
-	class UnionStorage final {
+	class UnionStorage {
 
 		// avoid placing a "complete-const" type
 		using NonConst = std::remove_const_t<T>;
@@ -396,8 +420,8 @@ namespace TypeHelpers {
 		union { NonConst value; };
 
 	public:
-		const T&	Get() const		{ return value; }
-		T&			Get()			{ return value; }
+		const T&	Get() const	noexcept  { return value; }
+		T&			Get()		noexcept  { return value; }
 
 		~UnionStorage() {}			// user responsibility!
 		UnionStorage()  {}
@@ -406,6 +430,41 @@ namespace TypeHelpers {
 		void Construct(Args&&... ctorArgs)
 		{
 			new (&value) NonConst { forward<Args>(ctorArgs)... };
+		}
+
+		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		{
+			value.~NonConst();
+		}
+	};
+
+	
+
+	template <class T>
+	class UntrackedUnionStorage final : public UnionStorage<T> {
+	};
+
+
+
+	template <class T>
+	class TrackedUnionStorage final : public UnionStorage<T> {
+
+		bool isConstructed = false;
+
+	public:
+		bool IsConstructed() const noexcept  { return isConstructed; }
+
+		template <class... Args>
+		void Construct(Args&&... ctorArgs)
+		{
+			UnionStorage<T>::Construct(forward<Args>(ctorArgs)...);
+			isConstructed = true;
+		}
+
+		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		{
+			isConstructed = false;		// lifetime ends by dtor start
+			UnionStorage<T>::Destroy();
 		}
 	};
 

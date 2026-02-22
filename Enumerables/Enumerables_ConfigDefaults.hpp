@@ -152,7 +152,7 @@ namespace Enumerables {
 // - note that the wrapped factory in Enumerable<V> is unrelated to this value and can use heap,
 //   that depends on std::function's own inline optimization which is typically for 16..48 bytes
 #ifndef ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE
-#	define ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE	120
+#	define ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE	112
 #endif
 
 
