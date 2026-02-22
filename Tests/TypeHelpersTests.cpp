@@ -685,30 +685,34 @@ namespace EnumerableTests {
 				ASSERT_EQ (1.1, *s2->payload);
 				ASSERT_EQ (1.3, *a2->payload);
 
-				s1.Reconstruct(3, 3.3);
+				s1 = { 3, 3.3 };
 				ASSERT_EQ (3, s1->id);
 				ASSERT_EQ (3.3, *s1->payload);
 
-				a0.Reconstruct(4, std::make_unique<double>(4.4));	// works because of fallback to {}
-				a1.ReconstructAggregate(5);							// force use {}
+				a0 = { 4, std::make_unique<double>(4.4) };
+				a1 = { 5 };
 				ASSERT_EQ (4, a0->id);
 				ASSERT_EQ (4.4, *a0->payload);
 				ASSERT_EQ (5, a1->id);
-				ASSERT_EQ (nullptr, a1->payload);					// value-initialized
+				ASSERT_EQ (nullptr, a1->payload);		// value-initialized
 
 				ConstCtorStruct so = s2.PassValue();
-				ConstAggregate  ao = a2.PassValue();
+				ConstAggregate  ao = move(a2);
 				ASSERT_EQ (1,	so.id);
 				ASSERT_EQ (3,	ao.id);
 				ASSERT_EQ (1.1,	*so.payload);
 				ASSERT_EQ (1.3,	*ao.payload);
+				ASSERT_EQ (nullptr, s2->payload);		// moved
+				ASSERT_EQ (nullptr, a2->payload);		// moved
 
-				s2.AcceptRvo(getCtorStruct);
-				a2.AcceptRvo(getStruct);
-				ASSERT_EQ (4,	s2->id);
-				ASSERT_EQ (4,	a2->id);
-				ASSERT_EQ (4.4,	*s2->payload);
-				ASSERT_EQ (4.4,	*a2->payload);
+			 //	s2 = so;								//
+			 //	a2 = ao;								// CTE: non-copyable
+				s2 = move(so);
+				a2 = move(ao);
+				ASSERT_EQ (1,	s2->id);
+				ASSERT_EQ (3,	a2->id);
+				ASSERT_EQ (1.1,	*s2->payload);
+				ASSERT_EQ (1.3,	*a2->payload);
 			}
 
 			// prefer copy/move ctor call even when ambiguous for aggregates
@@ -762,8 +766,8 @@ namespace EnumerableTests {
 				ASSERT_EQ (4.4, *r1->payload);
 				ASSERT_EQ (3.3, *s1->payload);
 
-			  // r1.Reconstruct(5, 5.5);		// CTE
-				r1.Reconstruct(*s1);
+			 //	r1 = { 5, 5.5 };		// CTE
+				r1 = *s1;
 				ASSERT_EQ (3.3, *r1->payload);
 				ASSERT_EQ (4.4, *s4->payload);
 			}
@@ -822,7 +826,50 @@ namespace EnumerableTests {
 				ASSERT (s.IsInitialized());		// only moved!
 			}
 
-			// Braced vs. Parenthesized construction
+			// ctor object vs. aggregate
+			{
+				Deferred<ConstCtorStruct> s1;
+				Deferred<ConstAggregate>  a1;
+				Deferred<ConstAggregate>  a0;
+
+				s1.Reconstruct(1, 1.1);
+				a1.Reconstruct(3, std::make_unique<double>(1.3));	// works because of fallback to {}
+				a0.ReconstructAggregate(5);							// force use {}, value-init omitted field of aggregate
+				ASSERT_EQ (1, s1->id);
+				ASSERT_EQ (3, a1->id);
+				ASSERT_EQ (5, a0->id);
+				ASSERT_EQ (1.1, *s1->payload);
+				ASSERT_EQ (1.3, *a1->payload);
+				ASSERT_EQ (nullptr, a0->payload);					// value-initialized
+
+				s1.Reconstruct(3, 3.3);
+				a0.Reconstruct(4, std::make_unique<double>(4.4));
+				a1.ReconstructAggregate(5);
+				ASSERT_EQ (3, s1->id);
+				ASSERT_EQ (4, a0->id);
+				ASSERT_EQ (5, a1->id);
+				ASSERT_EQ (3.3, *s1->payload);
+				ASSERT_EQ (4.4, *a0->payload);
+				ASSERT_EQ (nullptr, a1->payload);					// value-initialized
+
+				ConstCtorStruct so = s1.PassValue();
+				ConstAggregate  ao = a0.PassValue();
+				ASSERT_EQ (3,	so.id);
+				ASSERT_EQ (4,	ao.id);
+				ASSERT_EQ (3.3,	*so.payload);
+				ASSERT_EQ (4.4,	*ao.payload);
+				ASSERT_EQ (nullptr, s1->payload);					// moved
+				ASSERT_EQ (nullptr, a0->payload);					// moved
+
+				s1.AcceptRvo(getCtorStruct);
+				a1.AcceptRvo(getStruct);
+				ASSERT_EQ (4,	s1->id);
+				ASSERT_EQ (4,	a1->id);
+				ASSERT_EQ (4.4,	*s1->payload);
+				ASSERT_EQ (4.4,	*a1->payload);
+			}
+
+			// Containers' braced vs. parenthesized construction
 			{
 				Deferred<std::vector<unsigned>> v1;
 				Deferred<std::vector<unsigned>> v2;
@@ -861,6 +908,13 @@ namespace EnumerableTests {
 				ASSERT_EQ (6.6, *ref->payload);
 				ASSERT_EQ (5,   val->id);
 				ASSERT_EQ (5.5, *val->payload);
+
+			  // ref.Reconstruct(5, 5.5);		// CTE
+				ref.Reconstruct(*val);
+				ASSERT_EQ (5,   ref->id);
+				ASSERT_EQ (5.5, *ref->payload);
+				ASSERT_EQ (6,   plain.id);
+				ASSERT_EQ (6.6, *plain.payload);
 			}
 
 			// Same checks for assignment as for Reassignable

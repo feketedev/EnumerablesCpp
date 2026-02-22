@@ -916,16 +916,10 @@ namespace TypeHelpers {
 
 #pragma region Generalized Storage
 
-	template <class T>
-	using ReassignableStorageFor = conditional_t< IsHeadAssignable<StorableT<T>, StorableT<T>>,
-													GenericStorage<T, UnionHolder>,
-													GenericStorage<T, BytesHolder>			   >;
-
-
 	/// Ensure assignment capability - even for an immutable class.
 	template <class T>
-	class Reassignable final : private ReassignableStorageFor<T> {
-		using Storage = ReassignableStorageFor<T>;
+	class Reassignable final : private GenericStorage<T, !IsHeadAssignable<T, T>> {
+		using Storage = typename Reassignable::GenericStorage;
 
 	public:
 		Reassignable() = delete;
@@ -971,43 +965,12 @@ namespace TypeHelpers {
 		T& operator =(Reassignable&& src)		{ return this->operator=(src.PassValue()); }
 		T& operator =(const Reassignable& src)	{ return this->operator=(src.Value());	   }
 
-
-		template <class Func>
-		void AcceptRvo(Func&& creator)
-		{
-			this->Destroy();
-			this->InvokeFactory(creator);
-		}
-
-		template <class... Args>
-		void Reconstruct(Args&&... args)
-		{
-			this->Destroy();
-			this->ConstructParensPreferred(forward<Args>(args)...);
-		}
-
-		template <class... Args>
-		void ReconstructAggregate(Args&&... args)
-		{
-			this->Destroy();
-			this->ConstructBraced(forward<Args>(args)...);
-		}
-
-
 		// allow generic code to move (without triggering dangling assignment checks inside)
 		template <class TT = T>
-		void AssignMoved(IfReference<TT> src)	{ Reconstruct(src); }
+		void AssignHeadMoved(IfReference<TT> src)	{ this->Reassign(src); }
 
 		template <class TT = T>
-		void AssignMoved(IfPRValue<TT>& src)	{ Reconstruct(move(src)); }
-
-
-		// shorthand specifically for enumerators (being an internal helper)
-		template <class Et>
-		void AssignCurrent(Et&& enumerator)
-		{
-			this->AcceptRvo([&enumerator]() -> decltype(enumerator.Current()) { return enumerator.Current(); });
-		}
+		void AssignHeadMoved(IfPRValue<TT>& src)	{ this->Reassign(move(src)); }
 	};
 
 
@@ -1015,7 +978,9 @@ namespace TypeHelpers {
 
 	/// Value with deferred, possibly repeated initialization.
 	template <class T>
-	class Deferred final : private ReassignableStorageFor<T> {
+	class Deferred final : private GenericStorage<T> {
+		using Storage = typename Deferred::GenericStorage;
+
 		bool initialized = false;
 
 		void EnsureDestroyed()
@@ -1048,11 +1013,11 @@ namespace TypeHelpers {
 
 
 		// no asserts, not a public type
-		using ReassignableStorageFor<T>::Value;
-		using ReassignableStorageFor<T>::PassValue;
-		using ReassignableStorageFor<T>::operator *;
-		using ReassignableStorageFor<T>::operator ->;
-		using ReassignableStorageFor<T>::operator const T&;
+		using Storage::Value;
+		using Storage::PassValue;
+		using Storage::operator *;
+		using Storage::operator ->;
+		using Storage::operator const T&;
 
 		// can't import all at once :/
 		operator T& ()	 & { return Value();	 }
@@ -1099,10 +1064,10 @@ namespace TypeHelpers {
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
 		template <class TT = T>
-		void AssignMoved(IfReference<TT> src)	{ Reconstruct(src); }
+		void AssignHeadMoved(IfReference<TT> src)	{ operator=(src); }
 
 		template <class TT = T>
-		void AssignMoved(IfPRValue<TT>& src)	{ Reconstruct(move(src)); }
+		void AssignHeadMoved(IfPRValue<TT>& src)	{ operator=(move(src)); }
 
 
 		// shorthand specifically for enumerators (Deferred being an internal helper)

@@ -290,6 +290,14 @@ namespace Def {
 		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<SureFitsInline<InvokeResultT<NestedFactory>>()>* = nullptr)
 			: ptr { (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr() }
 		{
+			// TODO: This placement construct - more precisely the lack of any ~RvoEmplacer call in the end - strictly speaking is UB!!
+			//		 I see low danger, since the IEnumerator destruction is properly done, so what remains is: the RvoEmplacer residing
+			//		 within fixBuffer, having its only member subobject destroyed, holding no resources.
+			//
+			//		 (In C++17 this construct allowed the omission of [virtual] move ctors, so it is useful.)
+			//
+			//		 If want to stay on the safe side, the above initialization can be replaced with a move construction:
+			//		 ptr { new (InlineTarget<NestedFactory>()) InvokeResultT<NestedFactory> { fact() } }
 		}
 
 		template <class NestedFactory>

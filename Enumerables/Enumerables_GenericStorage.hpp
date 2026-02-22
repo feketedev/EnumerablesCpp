@@ -93,16 +93,17 @@ namespace TypeHelpers {
 
 
 
-	/// Temporary storage for arbitrary T input in generic code - supports both (l-value) references and values.
+	/// Temporary storage for arbitrary T to be stored in a container/union by generic code - supports (l-value) references and values.
 	/// @remarks
 	///	  The input element, as a source Enumerator's return value can be:
 	///	 	* lvalue ref  -> its address is available, and we assume it is sustained during the entire enumeration (constness preserved)
 	///	 	* prvalue	  -> temporary / mapped result, must be stored if needed later (T left as is, no overhead)
-	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the enumeration
+	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the next Fetch
 	template <class T>
 	using StorableT = conditional_t< is_lvalue_reference<T>::value,
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
+
 
 	/// Elem type restorable from a temporary container - i.e. resolve StorableT.
 	/// [ignores ref, strips it from an unwrapped T&]
@@ -129,7 +130,12 @@ namespace TypeHelpers {
 
 
 
-#pragma region GenericStorage
+#pragma region Emplacer
+
+	// Constructor selectors
+	enum FactoryInvokeSelector { InvokeFactory };
+	enum ForcedBracesSelector  { ConstructBraced };
+
 
 	// Optimization to accept function results - potentially avoid requiring move ctor from C++17
 	template <class Factory>
@@ -149,21 +155,75 @@ namespace TypeHelpers {
 	};
 
 
-	// Constructor selectors
-	enum FactoryInvokeSelector { InvokeFactory };
-	enum ForcedBracesSelector  { ConstructBraced };
+
+	/// Helper to constract T in-place in the selected manner, including accepting function results
+	/// with possible RVO - potentially avoid requiring move ctor from C++17
+	template <class T>
+	struct Emplacer {
+		static_assert (!is_reference<T>::value, "Only for prvalues.");
+
+		T	obj;
+
+		template <class Factory>
+		Emplacer(FactoryInvokeSelector, Factory&& create) : obj { create() }
+		{
+			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
+		}
+
+		template <class... Args>
+		Emplacer(ForcedBracesSelector, Args&&... args) : obj { forward<Args>(args)... }
+		{
+		}
+
+		template <class... Args>
+		Emplacer(Args&&... args) : obj(forward<Args>(args)...)
+		{
+		}
+	};
+
+	template <class T>
+	using EmplacableT = conditional_t< is_lvalue_reference<T>::value,	RefHolder<remove_reference_t<T>>,
+																		Emplacer<remove_reference_t<T>>	 >;
+
+	// Provide access homologous to RefHolder:
+
+	template <class V>	const V&	Revive(const Emplacer<V>& stored)		noexcept  { return stored.obj; }
+	template <class V>	V&			Revive(Emplacer<V>& stored)				noexcept  { return stored.obj; }
+
+	template <class V>	const V&	ReviveConst(const Emplacer<V>& stored)	noexcept  { return stored.obj; }
+	template <class V>	const V&	ReviveConst(Emplacer<V>& stored)		noexcept  { return stored.obj; }
+
+	template <class V>	V&&			PassRevived(Emplacer<V>& stored)		noexcept  { return move(stored.obj); }
+
+#pragma endregion
+
+
+
+
+#pragma region GenericStorage
+
+	template <class> class BytesStorage;
+	template <class> class UnionStorage;
 
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
-	/// Defines all supposable operations, but leaves their management (even lifetime handling!) to the user/inheritor.
+	/// Defines all supposable operations, but leaves their management - including lifetime handling - to the user/inheritor.
 	/// @remarks
-	///		Strategies are just to avoid char[] casting when possible (e.g. for debugging without natvis; +avoid reinterpret anyway).
+	///		The realizations changable based on SupportReconstruct are to avoid char[] casting + extra pointer when possible.
 	///		C++17 basically renders them obsolete with std::launder.
-	///	    [A direct storage strategy could also have been existed to enforce initialization, but found no use-case.]
-	template <class T, template <class> class Storage>
+	template <class T, bool SupportReconstruct = true>
 	class GenericStorage {
-		using S	= StorableT<T>;
-		Storage<S> val;
+
+		using Emp   = EmplacableT<T>;
+
+		// NOTE: for a P1971R0 compliant compiler, this ceremony and can be omitted. It is safe to just use UnionStorage, no bool param.
+		using Store = conditional_t< SupportReconstruct && !is_reference<T>::value && !is_scalar<T>::value,
+										BytesStorage<Emp>,
+										UnionStorage<Emp>												   >;
+
+		static_assert (alignof(Store) >= alignof(StorableT<T>), "Missed alignment?");
+
+		Store  storage;
 
 	public:
 		// NOTE: Old clang crashes on auto&/auto* return types, hence need to augment it.
@@ -173,10 +233,10 @@ namespace TypeHelpers {
 
 		// ---- Access ----
 
-		const T&	Value()			const&	{ return Revive(val.Get()); }
-		T&			Value()				 &	{ return Revive(val.Get()); }
-		T&&			Value()				&&	{ return PassRevived(val.Get()); }
-		T&&			PassValue()				{ return PassRevived(val.Get()); }
+		const T&	Value()			const&	{ return Revive(storage.Get()); }
+		T&			Value()				 &	{ return Revive(storage.Get()); }
+		T&&			Value()				&&	{ return PassRevived(storage.Get()); }
+		T&&			PassValue()				{ return PassRevived(storage.Get()); }
 
 		const T&	operator *()	const&	{ return Value(); }
 		T&			operator *()		 &	{ return Value(); }
@@ -196,71 +256,70 @@ namespace TypeHelpers {
 		GenericStorage()  = default;
 		~GenericStorage() = default;
 
-		void Destroy()		{ val.Get().~S(); }
+		void Destroy()  { storage.Get().~Emp(); }
 
 
 		// copy/move manually if appropriate!
 		GenericStorage(const GenericStorage& src) = delete;
 
 		/// if only @p src is initialized!
-		void MoveFrom(GenericStorage& src)
-		{
-			new (val.GetBuffer()) S { src.PassValue() };
-		}
+		void MoveFrom(GenericStorage& src)			{ storage.Construct(src.PassValue()); }
 
 		/// if only @p src is initialized!
-		void CopyFrom(const GenericStorage& src)
-		{
-			new (val.GetBuffer()) S { src.Value() };
-		}
+		void CopyFrom(const GenericStorage& src)	{ storage.Construct(src.Value()); }
 
 
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		void ConstructBraced(Args&&... ctorArgs)
+		enable_if_t<!is_reference<AsDependentT<T, Args...>>::value>		// guard needed for RefHolder
+		ConstructBraced(Args&&... ctorArgs)
 		{
-			new (val.GetBuffer()) S { forward<Args>(ctorArgs)... };
+			storage.Construct(TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)...);
+		}
+
+		template <class... Args>
+		enable_if_t<is_reference<AsDependentT<T, Args...>>::value>		// RefHolder
+		ConstructBraced(Args&&... ctorArgs)
+		{
+			storage.Construct(forward<Args>(ctorArgs)...);
 		}
 
 
 		template <class... Args>
 		void ConstructParens(Args&&... ctorArgs)
 		{
-			new (val.GetBuffer()) S (forward<Args>(ctorArgs)...);
+			storage.Construct(forward<Args>(ctorArgs)...);
 		}
 
 
 		template <class... Args>
-		enable_if_t<is_constructible<S, Args...>::value>
+		enable_if_t<is_constructible<T, Args...>::value>
 		ConstructParensPreferred(Args&&... ctorArgs)
 		{
 			ConstructParens(forward<Args>(ctorArgs)...);
 		}
 
 		template <class... Args>
-		enable_if_t<IsBraceConstructible<S, Args...>::value && !is_constructible<S, Args...>::value>
+		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible<T, Args...>::value>
 		ConstructParensPreferred(Args&&... ctorArgs)
 		{
 			ConstructBraced(forward<Args>(ctorArgs)...);
 		}
 
 
-		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<is_same<S, Trg>::value>* = nullptr)
+		// Note: When expecting conversions, use Construct! That will need a temporary anyway.
+		template <class Factory>
+		auto InvokeFactory(Factory&& create) -> enable_if_t<is_same<Emp, Emplacer<decltype(create())>>::value>
 		{
-			// Note: to allow conversions, use Construct! That will need a temporary anyway.
-			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
-			static_assert (is_same<typename RvoEmplacer<Factory>::R, S>::value, "GenericStorage deduction error.");
-			new (val.GetBuffer()) RvoEmplacer<Factory> { create };
+			storage.Construct(TypeHelpers::InvokeFactory, create);
 		}
 
-		// shortcut for S = RefHolder<T>
+		// for RefHolder<T> or any mismatching prvalue that needs conversion
 		template <class Factory, class Trg = T>
-		void InvokeFactory(Factory&& create, enable_if_t<!is_same<S, Trg>::value>* = nullptr)
+		auto InvokeFactory(Factory&& create) -> enable_if_t<!is_same<Emp, Emplacer<decltype(create())>>::value>
 		{
-			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
-			new (val.GetBuffer()) S { create() };
+			storage.Construct(create());
 		}
 
 
@@ -275,6 +334,9 @@ namespace TypeHelpers {
 		template <class Src>
 		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src> && is_constructible<T, Src>::value>* = nullptr)
 		{
+			static_assert (SupportReconstruct || is_reference<T>::value || is_scalar<T>::value,
+						   "Stored type does not support this assignment, whilst Reconstruction support is not set!");
+
 			if (IsNotSelf(src)) {
 				Destroy();
 				ConstructParens(forward<Src>(src));
@@ -301,34 +363,50 @@ namespace TypeHelpers {
 
 	// The conventional way	- from c++17, having laundry, unions suffice.
 	template <class T>
-	class BytesHolder final {
+	class BytesStorage final {
 
-		alignas (T) char buffer[sizeof(T)];
+		alignas(T) char  buffer[sizeof(T)];
+
+		// NOTE: It is actually UB to reinterpret buffer after placement, the resulting ptr must be stored!
+		T*  ptr;
 
 	public:
-		T*			GetBuffer()			{ return reinterpret_cast<T*>	   (&buffer[0]); }
-		const T*	GetBuffer()	const	{ return reinterpret_cast<const T*>(&buffer[0]); }
-		const T&	Get()		const	{ return *GetBuffer(); }
-		T&			Get()				{ return *GetBuffer(); }
+		const T&	Get() const		{ return *ptr; }
+		T&			Get()			{ return *ptr; }
 
-		BytesHolder() = default;
+		BytesStorage()					  = default;
+		BytesStorage(const BytesStorage&) = delete;
+
+		template <class... Args>
+		void Construct(Args&&... args)
+		{
+			ptr = new (buffer) T { forward<Args>(args)... };
+		}
 	};
 
 
-	// Better for debugger, no casts - but should not reconstruct T without std::launder!
-	// NOTE: P1971R0 alleviates restrictions retroactively, however that happend in 2019.
+	// Better for debugger, no casts, no extra pointer - but should not reconstruct a T having const fields without std::launder!
+	// NOTE: P1971R0 alleviates restrictions retroactively, however that change dates to 2019.
 	template <class T>
-	class UnionHolder final {
+	class UnionStorage final {
 
-		union { T val; };
+		// avoid placing a "complete-const" type
+		using NonConst = std::remove_const_t<T>;
+
+		union { NonConst value; };
 
 	public:
-		const T&	Get() const		{ return val; }
-		T&			Get()			{ return val; }
-		T*			GetBuffer()		{ return &val;}
+		const T&	Get() const		{ return value; }
+		T&			Get()			{ return value; }
 
-		~UnionHolder() {}			// user responsibility!
-		UnionHolder()  {}
+		~UnionStorage() {}			// user responsibility!
+		UnionStorage()  {}
+
+		template <class... Args>
+		void Construct(Args&&... ctorArgs)
+		{
+			new (&value) NonConst { forward<Args>(ctorArgs)... };
+		}
 	};
 
 #pragma endregion

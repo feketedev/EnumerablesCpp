@@ -612,7 +612,7 @@ namespace Def {
 		while (et.FetchNext()) {
 			TElem curr = et.Current();
 			if (isLess(curr, min))
-				min.AssignMoved(curr);
+				min.AssignHeadMoved(curr);
 		}
 		return forward<TElem>(*min);
 	}

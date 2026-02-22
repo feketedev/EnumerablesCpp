@@ -117,7 +117,7 @@ namespace Enumerables {
 	class OptResult final {
 		const StopReason  error = StopReason::None;
 
-		TypeHelpers::GenericStorage<T, TypeHelpers::UnionHolder>  storage;
+		TypeHelpers::GenericStorage<T, /*SupportReconstruct:*/ false>  storage;
 
 
 		using TDecayed		= std::decay_t<T>;

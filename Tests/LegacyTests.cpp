@@ -957,7 +957,7 @@ namespace Legacy {
 			scannerTest();
 		}
 
-		if (ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 0)
+		if (!ENUMERABLES_USE_RESULTSVIEW || !ENUMERABLES_RESULTSVIEW_AUTO_EVAL)
 			CheckTranscript(GetDir(myPath), transcript);
 		else
 			std::cout << "    SKIPPED Reference comparison: ResultsView is enabled!" << std::endl;
