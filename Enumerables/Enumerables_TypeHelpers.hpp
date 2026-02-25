@@ -976,10 +976,25 @@ namespace TypeHelpers {
 
 
 
-	/// Value with deferred, possibly repeated initialization.
-	template <class T>
-	class Deferred final : private GenericStorage<T, true, true> {
-		using Storage = typename Deferred::GenericStorage;
+	/// Some common code for Deferred*.
+	template <class T, bool SupportReconstruct>
+	class DeferredBase : protected GenericStorage<T, SupportReconstruct, true> {
+	protected:
+		using Storage = typename DeferredBase::GenericStorage;
+
+		DeferredBase() = default;
+
+		DeferredBase(const DeferredBase& src)
+		{
+			if (src.IsInitialized())
+				this->CopyFrom(src);
+		}
+
+		DeferredBase(DeferredBase&& src)
+		{
+			if (src.IsInitialized())
+				this->MoveFrom(src);
+		}
 
 		void EnsureDestroyed() noexcept(std::is_nothrow_destructible<T>::value)
 		{
@@ -987,74 +1002,65 @@ namespace TypeHelpers {
 				this->Destroy();
 		}
 
-	public:
-		Deferred() = default;
-
-		Deferred(const Deferred& src)
-		{
-			if (src.IsInitialized())
-				this->CopyFrom(src);
-		}
-
-		Deferred(Deferred&& src)
-		{
-			if (src.IsInitialized())
-				this->MoveFrom(src);
-		}
-
-		~Deferred() noexcept(std::is_nothrow_destructible<T>::value)
+		~DeferredBase() noexcept(std::is_nothrow_destructible<T>::value)
 		{
 			EnsureDestroyed();
 		}
 
-
+	public:
 		// no asserts, not a public type
 		using Storage::Value;
 		using Storage::PassValue;
 		using Storage::operator *;
 		using Storage::operator ->;
-		using Storage::operator const T&;
-
-		// can't import all at once :/
-		operator T& ()	 &	noexcept		 { return Value();	 }
-		operator T&& () &&	noexcept		 { return PassValue(); }
 
 		bool IsInitialized() const noexcept  { return Storage::IsConstructed(); }
+	};
 
+
+
+	/// Value with single deferred initialization.
+	template <class T>
+	class Deferred final : public DeferredBase<T, false> {
+	public:
+		using Deferred::DeferredBase::DeferredBase;
 
 		template <class Func>
 		void AcceptRvo(Func&& creator)
 		{
-			EnsureDestroyed();
+			ENUMERABLES_INTERNAL_ASSERT (!this->IsInitialized());
 			this->InvokeFactory(creator);
 		}
 
 		template <class... Args>
-		void Reconstruct(Args&&... args)
+		void Construct(Args&&... args)
 		{
-			EnsureDestroyed();
+			ENUMERABLES_INTERNAL_ASSERT (!this->IsInitialized());
 			this->ConstructParensPreferred(forward<Args>(args)...);
 		}
 
 		template <class... Args>
-		void ReconstructAggregate(Args&&... args)
+		void ConstructAggregate(Args&&... args)
 		{
-			EnsureDestroyed();
+			ENUMERABLES_INTERNAL_ASSERT (!this->IsInitialized());
 			this->ConstructBraced(forward<Args>(args)...);
+		}
+
+		// shorthand specifically for enumerators (Deferred being an internal helper)
+		template <class Et>
+		void AcceptCurrent(Et&& enumerator)
+		{
+			AcceptRvo([&enumerator]() -> decltype(auto) { return enumerator.Current(); });
 		}
 
 
 		template <class S>
 		T& operator =(S&& src)
 		{
-			if (IsInitialized())	this->Reassign(forward<S>(src));
-			else					this->ConstructParens(forward<S>(src));
-
-			return Value();
+			ENUMERABLES_INTERNAL_ASSERT (!this->IsInitialized());
+			this->ConstructParens(forward<S>(src));
+			return this->Value();
 		}
-
-		T& operator =(Deferred&& src)		{ return operator=(src.PassValue()); }
-		T& operator =(const Deferred& src)	{ return operator=(src.Value());	 }
 
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
@@ -1063,14 +1069,63 @@ namespace TypeHelpers {
 
 		template <class TT = T>
 		void AssignHeadMoved(IfPRValue<TT>& src)	{ operator=(move(src)); }
+	};
 
+
+
+	/// Value with deferred, possibly repeated initialization.
+	template <class T>
+	class DeferredReplaceable final : public DeferredBase<T, true> {
+	public:
+		using DeferredReplaceable::DeferredBase::DeferredBase;
+
+		template <class Func>
+		void AcceptRvo(Func&& creator)
+		{
+			this->EnsureDestroyed();
+			this->InvokeFactory(creator);
+		}
+
+		template <class... Args>
+		void Reconstruct(Args&&... args)
+		{
+			this->EnsureDestroyed();
+			this->ConstructParensPreferred(forward<Args>(args)...);
+		}
+
+		template <class... Args>
+		void ReconstructAggregate(Args&&... args)
+		{
+			this->EnsureDestroyed();
+			this->ConstructBraced(forward<Args>(args)...);
+		}
 
 		// shorthand specifically for enumerators (Deferred being an internal helper)
 		template <class Et>
-		void AssignCurrent(Et&& enumerator)
+		void AcceptCurrent(Et&& enumerator)
 		{
-			this->AcceptRvo([&enumerator]() -> decltype(enumerator.Current()) { return enumerator.Current(); });
+			AcceptRvo([&enumerator]() -> decltype(auto) { return enumerator.Current(); });
 		}
+
+
+		template <class S>
+		T& operator =(S&& src)
+		{
+			static_assert (is_constructible<T, S>::value, "Can't construct from this parameter!");
+
+			if (this->IsInitialized())	this->Reassign(forward<S>(src));
+			else						this->ConstructParens(forward<S>(src));
+
+			return this->Value();
+		}
+		
+
+		// allow generic code to move (without triggering dangling assignment checks inside)
+		template <class TT = T>
+		void AssignHeadMoved(IfReference<TT> src)		{ operator=(src); }
+
+		template <class TT = T>
+		void AssignHeadMoved(IfPRValue<TT>& src)		{ operator=(move(src)); }
 	};
 
 #pragma endregion

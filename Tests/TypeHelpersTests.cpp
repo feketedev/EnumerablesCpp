@@ -805,8 +805,10 @@ namespace EnumerableTests {
 		{
 			// Basics
 			{
-				Deferred<ConstCtorStruct> s;
+				DeferredReplaceable<ConstCtorStruct>	s;
+				Deferred<ConstCtorStruct>				s2;
 				ASSERT (!s.IsInitialized());
+				ASSERT (!s2.IsInitialized());
 
 				static_assert (is_same<ConstCtorStruct&,  decltype(*s)>(),			  "type check");
 				static_assert (is_same<ConstCtorStruct&&, decltype(*std::move(s))>(), "type check");
@@ -820,17 +822,24 @@ namespace EnumerableTests {
 				ASSERT_EQ (4,	s->id);
 				ASSERT_EQ (4.4,	*s->payload);
 
-				ConstCtorStruct so = s.PassValue();
+				s2 = *std::move(s);
+				ASSERT (s2.IsInitialized());
+				ASSERT_EQ (4,	s2->id);
+				ASSERT_EQ (4.4,	*s2->payload);
+
+				ConstCtorStruct so = s2.PassValue();
 				ASSERT_EQ (4,	so.id);
 				ASSERT_EQ (4.4,	*so.payload);
-				ASSERT (s.IsInitialized());		// only moved!
+
+				ASSERT (s.IsInitialized());			// only moved!
+				ASSERT (s2.IsInitialized());		//
 			}
 
 			// ctor object vs. aggregate
 			{
-				Deferred<ConstCtorStruct> s1;
-				Deferred<ConstAggregate>  a1;
-				Deferred<ConstAggregate>  a0;
+				DeferredReplaceable<ConstCtorStruct> s1;
+				DeferredReplaceable<ConstAggregate>  a1;
+				DeferredReplaceable<ConstAggregate>  a0;
 
 				s1.Reconstruct(1, 1.1);
 				a1.Reconstruct(3, std::make_unique<double>(1.3));	// works because of fallback to {}
@@ -874,8 +883,8 @@ namespace EnumerableTests {
 				Deferred<std::vector<unsigned>> v1;
 				Deferred<std::vector<unsigned>> v2;
 
-				v1.Reconstruct(5u, 42u);
-				v2.ReconstructAggregate(5u, 42u);
+				v1.Construct(5u, 42u);
+				v2.ConstructAggregate(5u, 42u);
 
 				ASSERT (v1.IsInitialized() && v2.IsInitialized());
 				ASSERT_EQ (5, v1->size());
@@ -886,13 +895,13 @@ namespace EnumerableTests {
 
 			// RVO placement; references
 			{
-				Deferred<ConstCtorStruct> val;
+				DeferredReplaceable<ConstCtorStruct> val;
 				val.AcceptRvo(getCtorStruct);
 				ASSERT_EQ (4,   val->id);
 				ASSERT_EQ (4.4, *val->payload);
 
-				Deferred<ConstCtorStruct&> ref;
-				ref = val;						// implicit conversion
+				DeferredReplaceable<ConstCtorStruct&> ref;
+				ref = *val;
 				ASSERT_EQ (4,   ref->id);
 				ASSERT_EQ (4.4, *ref->payload);
 
@@ -923,26 +932,26 @@ namespace EnumerableTests {
 				std::vector<int> nums2 { 1, 2, 3, 4 };
 				std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
 
-				Deferred<std::vector<int>> v1;
+				DeferredReplaceable<std::vector<int>> v1;
 				v1 = nums1;
 
 				NO_MORE_HEAP;
 
-				Deferred<std::vector<int>> v2;
+				DeferredReplaceable<std::vector<int>> v2;
 				v2 = std::move(nums1);
 
 				ASSERT_EQ (5, v2->size());
 				ASSERT_EQ (5, v1->size());
 
 				v2 = nums2;
-				v1 = v2;
+				v1 = *v2;
 				ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
 				ASSERT_EQ (4, v1->size());
 
 				v2 = std::move(nums3);		// size increased, but move -> no realloc
 				ASSERT_EQ (6, v2->size());
 
-				v1 = std::move(v2);
+				v1 = *std::move(v2);
 				ASSERT_EQ (6, v1->size());
 			}
 		}

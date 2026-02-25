@@ -437,8 +437,8 @@ namespace Def {
 		{
 			if (fetchState.IsInitialized() && fetchState->HasMore())
 				++fetchState->current;
-			else
-				fetchState.Reconstruct(*this);
+			else if (!fetchState.IsInitialized())
+				fetchState.Construct(*this);
 
 			return fetchState->HasMore();
 		}
@@ -1176,34 +1176,34 @@ namespace Def {
 	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {
 		using V = EnumeratedT<Source>;
 
-		Source				source;
-		const Combiner&		binop;
-		Deferred<V>			prev;
-		bool				nextFetched = false;
+		Source					source;
+		const Combiner&			binop;
+		DeferredReplaceable<V>	prev;
+		bool					hasCurrent = false;
 
 	public:
 		using typename CombinerEnumerator::IEnumerator::TElem;
 
 		bool	FetchNext()		override
 		{
-			if (nextFetched) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+			if (hasCurrent) {
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
 			if (!prev.IsInitialized() && source.FetchNext()) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
-			ENUMERABLES_INTERNAL_ASSERT (!nextFetched);
+			ENUMERABLES_INTERNAL_ASSERT (!hasCurrent);
 			return false;
 		}
 
 
 		TElem	Current()		override
 		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (nextFetched, NotFetchedError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (hasCurrent, NotFetchedError);
 
 			return binop(*prev, source.Current());
 		}
@@ -1287,9 +1287,9 @@ namespace Def {
 		using Deducer  = UniformEnumerationDeducer<NestedEb>;
 		using NestedEt = typename Deducer::TEnumerator;
 
-		Source				ebSource;
-		Deferred<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
-		Deferred<NestedEt>	nestedEnumerator;
+		Source							ebSource;
+		DeferredReplaceable<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
+		DeferredReplaceable<NestedEt>	nestedEnumerator;
 
 	public:
 		using typename FlattenerEnumerator::IEnumerator::TElem;
@@ -1298,13 +1298,12 @@ namespace Def {
 		{
 			// try to advance outer enumerator as needed
 			while (!nestedEnumerator.IsInitialized() || !nestedEnumerator->FetchNext()) {
-				if (!ebSource.FetchNext())
-					return false;
-
-				nested.AssignCurrent(ebSource);
-
-				// possibly useful in 17: avoid move requirement (along with MoveTo(m))
-				nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				if (ebSource.FetchNext()) {
+					nested.AcceptCurrent(ebSource);
+					// possibly useful in 17: avoid move requirement (along with MoveTo(m))
+					nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				}
+				else return false;
 			}
 
 			return true;
@@ -1472,9 +1471,9 @@ namespace Def {
 		class Combiner,
 		class InitAccMapper /*= None*/,		// NOTE: a bit clunky with Chain<...>
 		class TAcc >
-	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, Deferred> {
+	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, DeferredReplaceable> {
 
-		using Base   = ScannerBase<Source, Combiner, TAcc, Deferred>;
+		using Base   = typename FetchFirstScannerEnumerator::ScannerBase;
 		using InElem = typename Source::TElem;
 
 		const InitAccMapper&	initAccumulator;
@@ -1483,7 +1482,7 @@ namespace Def {
 		template <class IM = InitAccMapper>
 		void InitFromCurrent(enable_if_t<IsNone<IM> && is_same<InElem, TAcc>::value>* = nullptr)
 		{
-			this->accumulator.AssignCurrent(this->source);
+			this->accumulator.AcceptCurrent(this->source);
 		}
 
 		template <class IM = InitAccMapper>
