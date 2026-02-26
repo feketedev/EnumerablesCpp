@@ -41,6 +41,11 @@ namespace TypeHelpers {
 	using std::is_same;
 	using std::is_scalar;
 	using std::is_class;
+	using std::is_nothrow_constructible;
+	using std::is_nothrow_destructible;
+	using std::is_nothrow_move_constructible;
+	using std::is_nothrow_copy_constructible;
+	using std::is_nothrow_assignable;
 
 
 

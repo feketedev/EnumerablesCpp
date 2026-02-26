@@ -145,9 +145,9 @@ namespace TypeHelpers {
 		static_assert (!is_reference<R>::value, "Expecting a prvalue from factory.");
 
 		R	obj;
-		R*	GetPtr()	{ return &obj; }
+		R*	GetPtr() noexcept	{ return &obj; }
 
-		RvoEmplacer(Factory& fact) : obj { fact() }
+		RvoEmplacer(Factory& fact) noexcept(noexcept(fact())) : obj { fact() }
 		{
 			static_assert (sizeof(RvoEmplacer) == sizeof(R),   "Size mismatch??");
 			static_assert (alignof(RvoEmplacer) == alignof(R), "Alignment mismatch??");
@@ -165,18 +165,21 @@ namespace TypeHelpers {
 		T	obj;
 
 		template <class Factory>
-		Emplacer(FactoryInvokeSelector, Factory&& create) : obj { create() }
+		Emplacer(FactoryInvokeSelector, Factory&& create) noexcept(noexcept(create()))
+			: obj { create() }
 		{
 			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
 		}
 
 		template <class... Args>
-		Emplacer(ForcedBracesSelector, Args&&... args) : obj { forward<Args>(args)... }
+		Emplacer(ForcedBracesSelector, Args&&... args) noexcept(noexcept(T { forward<Args>(args)... }))
+			: obj { forward<Args>(args)... }
 		{
 		}
 
 		template <class... Args>
-		Emplacer(Args&&... args) : obj(forward<Args>(args)...)
+		Emplacer(Args&&... args) noexcept(noexcept(T (forward<Args>(args)...)))
+			: obj(forward<Args>(args)...)
 		{
 		}
 	};
@@ -239,22 +242,22 @@ namespace TypeHelpers {
 
 		// ---- Access ----
 
-		const T&	Value()			const&	{ return Revive(storage.Get()); }
-		T&			Value()				 &	{ return Revive(storage.Get()); }
-		T&&			Value()				&&	{ return PassRevived(storage.Get()); }
-		T&&			PassValue()				{ return PassRevived(storage.Get()); }
+		const T&	Value()			const&	noexcept  { return Revive(storage.Get()); }
+		T&			Value()				 &	noexcept  { return Revive(storage.Get()); }
+		T&&			Value()				&&	noexcept  { return PassRevived(storage.Get()); }
+		T&&			PassValue()				noexcept  { return PassRevived(storage.Get()); }
 
-		const T&	operator *()	const&	{ return Value(); }
-		T&			operator *()		 &	{ return Value(); }
-		T&&			operator *()		&&	{ return move(*this).Value(); }
+		const T&	operator *()	const&	noexcept  { return Value(); }
+		T&			operator *()		 &	noexcept  { return Value(); }
+		T&&			operator *()		&&	noexcept  { return move(*this).Value(); }
 
 		// Note: &-collapsing suffice for Value(), but * needs auto	 -> or explicit help
-		Ptr			operator ->()			{ return &Value(); }
-		ConstPtr	operator ->()	const	{ return &Value(); }
+		Ptr			operator ->()			noexcept  { return &Value(); }
+		ConstPtr	operator ->()	const	noexcept  { return &Value(); }
 
-		operator	const T&()		const&	{ return Value(); }
-		operator	T&()				 &	{ return Value(); }
-		operator	T&&()				&&	{ return move(*this).Value(); }
+		operator	const T&()		const&	noexcept  { return Value(); }
+		operator	T&()				 &	noexcept  { return Value(); }
+		operator	T&&()				&&	noexcept  { return move(*this).Value(); }
 
 		template <bool tracked = IsConstructTracked>
 		enable_if_t<tracked, bool>  IsConstructed() const noexcept
@@ -268,7 +271,7 @@ namespace TypeHelpers {
 		GenericStorage()  = default;
 		~GenericStorage() = default;
 
-		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		void Destroy()  noexcept(std::is_nothrow_destructible<T>::value)
 		{
 			storage.Destroy();
 		}
@@ -278,31 +281,37 @@ namespace TypeHelpers {
 		GenericStorage(const GenericStorage& src) = delete;
 
 		/// if only @p src is initialized!
-		void MoveFrom(GenericStorage& src)			{ storage.Construct(src.PassValue()); }
+		void MoveFrom(GenericStorage& src)		  noexcept(is_nothrow_move_constructible<T>::value)
+		{
+			storage.Construct(src.PassValue());
+		}
 
 		/// if only @p src is initialized!
-		void CopyFrom(const GenericStorage& src)	{ storage.Construct(src.Value()); }
+		void CopyFrom(const GenericStorage& src)  noexcept(is_nothrow_copy_constructible<T>::value)
+		{
+			storage.Construct(src.Value());
+		}
 
 
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
 		enable_if_t<!is_reference<AsDependentT<T, Args...>>::value>		// guard needed for RefHolder
-		ConstructBraced(Args&&... ctorArgs)
+		ConstructBraced(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
 		{
 			storage.Construct(TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)...);
 		}
 
-		template <class... Args>
-		enable_if_t<is_reference<AsDependentT<T, Args...>>::value>		// RefHolder
-		ConstructBraced(Args&&... ctorArgs)
+		template <class Trg>
+		enable_if_t<is_reference<AsDependentT<T, Trg>>::value>			// RefHolder
+		ConstructBraced(Trg&& referred)  noexcept
 		{
-			storage.Construct(forward<Args>(ctorArgs)...);
+			storage.Construct(forward<Trg>(referred)...);
 		}
 
 
 		template <class... Args>
-		void ConstructParens(Args&&... ctorArgs)
+		void ConstructParens(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
 		{
 			storage.Construct(forward<Args>(ctorArgs)...);
 		}
@@ -310,14 +319,14 @@ namespace TypeHelpers {
 
 		template <class... Args>
 		enable_if_t<is_constructible<T, Args...>::value>
-		ConstructParensPreferred(Args&&... ctorArgs)
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
 		{
 			ConstructParens(forward<Args>(ctorArgs)...);
 		}
 
 		template <class... Args>
 		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible<T, Args...>::value>
-		ConstructParensPreferred(Args&&... ctorArgs)
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
 		{
 			ConstructBraced(forward<Args>(ctorArgs)...);
 		}
@@ -325,14 +334,16 @@ namespace TypeHelpers {
 
 		// Note: When expecting conversions, use Construct! That will need a temporary anyway.
 		template <class Factory>
-		auto InvokeFactory(Factory&& create) -> enable_if_t<is_same<Emp, Emplacer<decltype(create())>>::value>
+		auto InvokeFactory(Factory&& create)  noexcept(noexcept(create()))
+			-> enable_if_t<is_same<Emp, Emplacer<decltype(create())>>::value>
 		{
 			storage.Construct(TypeHelpers::InvokeFactory, create);
 		}
 
 		// for RefHolder<T> or any mismatching prvalue that needs conversion
 		template <class Factory, class Trg = T>
-		auto InvokeFactory(Factory&& create) -> enable_if_t<!is_same<Emp, Emplacer<decltype(create())>>::value>
+		auto InvokeFactory(Factory&& create)  noexcept(noexcept(create()))
+			-> enable_if_t<!is_same<Emp, Emplacer<decltype(create())>>::value>
 		{
 			storage.Construct(create());
 		}
@@ -340,14 +351,15 @@ namespace TypeHelpers {
 
 		// Check with optimization: constexpr for unmatching types
 		template <class Src>
-		constexpr bool IsNotSelf(const Src&)   const	{ return true; }
-		bool		   IsNotSelf(const T& src) const	{ return &src != &Value(); }
+		constexpr bool IsNotSelf(const Src&)   const noexcept	{ return true; }
+		bool		   IsNotSelf(const T& src) const noexcept	{ return &src != &Value(); }
 
 
 		/// Assign or Reconstruct depending on type capability.
 		/// Only if already initialized!
 		template <class Src>
 		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src> && is_constructible<T, Src>::value>* = nullptr)
+		noexcept(is_nothrow_constructible<T, Src>::value)
 		{
 			static_assert (SupportReconstruct || is_reference<T>::value || is_scalar<T>::value,
 						   "Stored type does not support this assignment, whilst Reconstruction support is not set!");
@@ -361,6 +373,7 @@ namespace TypeHelpers {
 
 		template <class Src>
 		T& Reassign(Src&& src, enable_if_t<IsHeadAssignable<T, Src>>* = nullptr)
+		noexcept(is_nothrow_assignable<T&, Src>::value)
 		{
 			static_assert (!is_reference<T>::value, "GenericStorage Internal error.");
 			T& v = Value();
@@ -394,7 +407,7 @@ namespace TypeHelpers {
 		BytesStorage(const BytesStorage&) = delete;
 
 		template <class... Args>
-		void Construct(Args&&... args)
+		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
 			ptr = new (buffer) T { forward<Args>(args)... };
 		}
@@ -424,12 +437,12 @@ namespace TypeHelpers {
 		T&			Get()		noexcept  { return value; }
 
 		~UnionStorage() {}			// user responsibility!
-		UnionStorage()  {}
+		UnionStorage()  noexcept {}
 
 		template <class... Args>
-		void Construct(Args&&... ctorArgs)
+		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
-			new (&value) NonConst { forward<Args>(ctorArgs)... };
+			new (&value) NonConst { forward<Args>(args)... };
 		}
 
 		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
@@ -438,7 +451,7 @@ namespace TypeHelpers {
 		}
 	};
 
-	
+
 
 	template <class T>
 	class UntrackedUnionStorage final : public UnionStorage<T> {
@@ -455,9 +468,9 @@ namespace TypeHelpers {
 		bool IsConstructed() const noexcept  { return isConstructed; }
 
 		template <class... Args>
-		void Construct(Args&&... ctorArgs)
+		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
-			UnionStorage<T>::Construct(forward<Args>(ctorArgs)...);
+			UnionStorage<T>::Construct(forward<Args>(args)...);
 			isConstructed = true;
 		}
 
