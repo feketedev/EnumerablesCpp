@@ -925,37 +925,37 @@ namespace TypeHelpers {
 		Reassignable() = delete;
 
 		template <class... Args, class = enable_if_t<IsConstructibleAnyway<T, Args...>>>
-		Reassignable(Args&&... args)  noexcept(noexcept(this->ConstructParensPreferred(forward<Args>(args)...)))
+		Reassignable(Args&&... args)  noexcept(noexcept(Storage::ConstructParensPreferred(forward<Args>(args)...)))
 		{
-			this->ConstructParensPreferred(forward<Args>(args)...);
+			Storage::ConstructParensPreferred(forward<Args>(args)...);
 		}
 
 		template <class... Args>
 		Reassignable(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
-			this->ConstructBraced(forward<Args>(args)...);
+			Storage::ConstructBraced(forward<Args>(args)...);
 		}
 
 		template <class Fact>
 		Reassignable(FactoryInvokeSelector, Fact& create)   noexcept(noexcept(create()))
 		{
-			this->InvokeFactory(create);
+			Storage::InvokeFactory(create);
 		}
 
 
 		Reassignable(const Reassignable& src)	noexcept(is_nothrow_copy_constructible<T>::value)
 		{
-			this->CopyFrom(src);
+			Storage::CopyFrom(src);
 		}
 
 		Reassignable(Reassignable&& src)		noexcept(is_nothrow_move_constructible<T>::value)
 		{
-			this->MoveFrom(src);
+			Storage::MoveFrom(src);
 		}
 
 		~Reassignable()							noexcept(is_nothrow_destructible<T>::value)
 		{
-			this->Destroy();
+			Storage::Destroy();
 		}
 
 
@@ -973,25 +973,25 @@ namespace TypeHelpers {
 		template <class S>
 		T& operator =(S&& src)
 		{
-			return this->Reassign(forward<S>(src));
+			return Storage::Reassign(forward<S>(src));
 		}
 
-		T& operator =(Reassignable&& src)		noexcept(noexcept(this->Reassign(src.PassValue())))
+		T& operator =(Reassignable&& src)		noexcept(noexcept(Storage::Reassign(src.PassValue())))
 		{
-			return this->Reassign(src.PassValue());
+			return Storage::Reassign(src.PassValue());
 		}
 
-		T& operator =(const Reassignable& src)	noexcept(noexcept(this->Reassign(src.Value())))
+		T& operator =(const Reassignable& src)	noexcept(noexcept(Storage::Reassign(src.Value())))
 		{
-			return this->Reassign(src.Value());
+			return Storage::Reassign(src.Value());
 		}
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
 		template <class TT = T>
-		void AssignHeadMoved(IfReference<TT> src) noexcept	{ this->Reassign(src); }
+		void AssignHeadMoved(IfReference<TT> src) noexcept	{ Storage::Reassign(src); }
 
 		template <class TT = T>
-		void AssignHeadMoved(IfPRValue<TT>& src)			{ this->Reassign(move(src)); }
+		void AssignHeadMoved(IfPRValue<TT>& src)			{ Storage::Reassign(move(src)); }
 	};
 
 
@@ -1008,19 +1008,19 @@ namespace TypeHelpers {
 		DeferredBase(const DeferredBase& src)	noexcept(is_nothrow_copy_constructible<T>::value)
 		{
 			if (src.IsInitialized())
-				this->CopyFrom(src);
+				Storage::CopyFrom(src);
 		}
 
 		DeferredBase(DeferredBase&& src)		noexcept(is_nothrow_move_constructible<T>::value)
 		{
 			if (src.IsInitialized())
-				this->MoveFrom(src);
+				Storage::MoveFrom(src);
 		}
 
 		void EnsureDestroyed()	noexcept(std::is_nothrow_destructible<T>::value)
 		{
 			if (IsInitialized())
-				this->Destroy();
+				Storage::Destroy();
 		}
 
 		~DeferredBase()			noexcept(std::is_nothrow_destructible<T>::value)
