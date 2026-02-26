@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?> 
+<?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
   <Type Name="Enumerables::Def::AutoEnumerable&lt;*&gt;">
     <DisplayString Optional="true">{ResultsView}</DisplayString>
@@ -23,8 +23,8 @@
   <Type Name="Enumerables::Def::ResultBuffer&lt;*&gt;">
     <DisplayString IncludeView="elemType">{"$T1",sb}</DisplayString>
     <DisplayString Condition="Status[0] == 'N'" ExcludeView="elemType">{Status,sb}</DisplayString>
-	<DisplayString Condition="Status[0] == 'E'" ExcludeView="elemType">{Elements}</DisplayString>
-	<DisplayString Condition="Status[0] == 'S'" ExcludeView="elemType">&lt;partial&gt; {Elements}</DisplayString>
+    <DisplayString Condition="Status[0] == 'E'" ExcludeView="elemType">{Elements}</DisplayString>
+    <DisplayString Condition="Status[0] == 'S'" ExcludeView="elemType">&lt;partial&gt; {Elements}</DisplayString>
     <DisplayString ExcludeView="elemType">&lt;uninitialized / unreadable&gt;</DisplayString>
     <Expand>
       <!--<Item Name="TElement">"$T1",sb</Item>-->
@@ -39,4 +39,18 @@
       <Item Name="Ref">ptr</Item>
     </Expand>
   </Type>
-  </AutoVisualizer>
+  <Type Name="Enumerables::TypeHelpers::BytesStorage&lt;*&gt;">
+      <DisplayString Condition="ptr">{*ptr}</DisplayString>
+      <DisplayString Condition="!ptr">Empty</DisplayString>
+  </Type>
+  <Type Name="Enumerables::TypeHelpers::UntrackedUnionStorage&lt;*&gt;">
+      <DisplayString>{value}</DisplayString>
+  </Type>
+  <Type Name="Enumerables::TypeHelpers::TrackedUnionStorage&lt;*&gt;">
+      <DisplayString Condition="isConstructed">{value}</DisplayString>
+      <DisplayString Condition="!isConstructed">Empty</DisplayString>
+  </Type>
+  <Type Name="Enumerables::TypeHelpers::GenericStorage&lt;*&gt;">
+      <DisplayString>{storage}</DisplayString>
+  </Type>
+</AutoVisualizer>
