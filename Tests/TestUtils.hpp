@@ -92,11 +92,11 @@ namespace EnumerableTests {
 
 		size_t Count() const		{ return globalCount - myStart; }
 		void   Reset()				{ myStart = globalCount;		}
-		
+
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
 							  long			line   = 0			  );
-		
+
 		void AssertMaxFreshCount(size_t		 maxExpected,
 							     const char* file   = "unspecified",
 							     long		 line   = 0			   );
@@ -146,7 +146,7 @@ namespace EnumerableTests {
 		{
 		}
 	};
-	
+
 
 	template <class T>
 	struct CountedCopy final {
@@ -267,7 +267,7 @@ namespace EnumerableTests {
 
 
 namespace std {
-	
+
 	template <class F, class S>
 	struct hash<pair<F, S>> {
 		size_t operator ()(const pair<F, S>& p) const

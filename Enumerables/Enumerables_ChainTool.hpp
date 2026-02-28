@@ -95,7 +95,7 @@ namespace Def {
 		// NOTE: Idea is that lambdas on their own should be stateless - thus, storing them always by value into the factory
 		//		 seems the most relyable solution. Enumerators can simply reference them, while the user is being able to
 		//		 precisely regulate what to reference vs. copy into the factory explicitly by the standard capture block.
-		//		 -- This is just a benign check though, can be eased on need. 
+		//		 -- This is just a benign check though, can be eased on need.
 		//		 -> The first example needing to hack it around is Scan - see StoreAllowingRef.
 		static_assert (IsGroundTuple<decltype(tuple)>, "Chained Factories need to store own copies!");
 	};
@@ -302,7 +302,7 @@ namespace Def {
 
 #pragma region Interface Helpers
 
-	/// Use this wrapper to separates fix-typed ctor arguments from those received by templated parameters - enabling 
+	/// Use this wrapper to separates fix-typed ctor arguments from those received by templated parameters - enabling
 	/// AutoEnumerable::Chain / ChainFactory to determine the exact type arguments for the Enumerator to instantiate.
 	/// Must be Chain's 1st argument if present.
 	template <class... T>

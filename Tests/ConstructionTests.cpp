@@ -321,7 +321,7 @@ namespace EnumerableTests {
 			ints = Enumerate<int>({ 'a', 'b' });	// widening
 			ASSERT_EQ ('a', ints.First());
 			ASSERT_EQ ('b', ints.Last());
-			
+
 			auto shorts = Enumerate<short>   ({ 0, 1, 2 });
 			auto uints  = Enumerate<unsigned>({ 0, 1, 2 });
 			ASSERT_EQ (0, shorts.First());
@@ -332,10 +332,10 @@ namespace EnumerableTests {
 			// -- Importance:
 			// Letting the initializer_list deduce freely, then converting its elements to the Forced type
 			// would lack this static safety (but trigger narrowing warning in benign cases as well):
-			// 
+			//
 			//	auto shorts2 = Enumerate<short>({ 1, 200000 });		// CTE: constexpr does not fit
-			//	auto uints   = Enumerate<unsigned>({ 1, 2, -3 });	// 
-		
+			//	auto uints   = Enumerate<unsigned>({ 1, 2, -3 });	//
+
 			// Pointers are scalars as well...
 			DerivedA derived1 { 1, 5.0 };
 			DerivedA derived2 { 2, 5.1 };
@@ -355,16 +355,16 @@ namespace EnumerableTests {
 			// Their runtime conversion would be safe (when possible), but as of now nothing necessitates it internally,
 			// using init-lists to yield pointers (and not references) requires explicit type in each top-level function.
 			// [In contrast the reference-producing overloads do need such ability to facilitate implicit Concat(bases, deriveds).]
-			// 
+			//
 			//	std::initializer_list<DerivedA*> derivedPtrs { &derived1, &derived2 };
-			// 
+			//
 			//	auto basePtrs2 = Enumerate<Base*>(std::move(derivedPtrs));		// simulate forwarded param
 			//	ASSERT_ELEM_TYPE (Base*, basePtrs2);
 			//	ASSERT_EQ (&derived1, basePtrs2.First());
 			//	ASSERT_EQ (&derived2, basePtrs2.Last());
 		}
 
-		
+
 		// For non-scalars (~class types), however, storing from freely
 		// deduced initializer_list is allowed to avoid unnecessary copies:
 		{
@@ -394,7 +394,7 @@ namespace EnumerableTests {
 			std::string s3 = "constructed";
 			auto extraCopy = Enumerate<CountedCopy<std::string>>({ "apple", "pie", s3 });
 			ASSERT_EQ (2, simExtraCopy.First().copyCount);
-			
+
 			// NOTE: On it's own storing exactly the "Forced" type would be clearer, but that
 			//		 would render the MoveOnly example impossible / add 1 copy in workable cases,
 			//		 while the current mechanism seems to be in line with other overloads' logic!
@@ -473,7 +473,7 @@ namespace EnumerableTests {
 	}
 
 
-	
+
 	// Exact copy of r-value BracedInit tests, just with custom allocator parameter.
 	static void BracedInitWithAllocator()
 	{
@@ -488,7 +488,7 @@ namespace EnumerableTests {
 		TestAllocator<int*, 3>	fixedPtrAlloc  { buffer };
 		TestAllocator<int, 3>	fixedIntAlloc  { fixedPtrAlloc };
 		TestAllocator<Base*, 3>	fixedBaseAlloc { fixedPtrAlloc };
-		
+
 		{
 			Enumerable<int> ints = Empty<int>();
 			{
@@ -562,7 +562,7 @@ namespace EnumerableTests {
 		{
 			// Forced type disambiguites the initializer
 			auto ints = Enumerate<int, std::allocator<int>>({ 1, 2u, 3, '4' });
-			
+
 			ASSERT_EQ (4,	ints.Count());
 			ASSERT_EQ (1,	ints.First());
 			ASSERT_EQ ('4', ints.Last());
@@ -813,7 +813,7 @@ namespace EnumerableTests {
 				ASSERT_EQ (4,   chars.Count());
 				ASSERT_EQ (&b,  &charRefs.Last());
 				ASSERT_EQ (4,   charRefs.Count());
-				
+
 			 	const char k = 'a', l = 'b';
 			 //	auto constRefs = Concat({ &k, &l }, { &k });			// const char*, CTE
 			 //	auto strings   = Concat({ "apple" }, { "pie" });		//
@@ -853,7 +853,7 @@ namespace EnumerableTests {
 				const char*   ptrs[] = { letters + 0, letters + 1 };
 				const char letter = 'X';
 
-				auto c1 = Concat(letters, { &letter });		
+				auto c1 = Concat(letters, { &letter });
 				auto p1 = Concat(Enumerate(ptrs).Decay(), { &letter });
 				ASSERT_ELEM_TYPE (const char&, c1);
 				ASSERT_ELEM_TYPE (const char*, p1);
@@ -871,7 +871,7 @@ namespace EnumerableTests {
 				ASSERT (AreEqual({ 'a', 'b', 'Y' }, c2));
 				ASSERT (AreEqual(c2, p2.Dereference()));
 
-				// Still no auto-decay 
+				// Still no auto-decay
 				// auto b1 = Concat(cstrings, { "baked" });		// CTE (friendly error)
 
 				// However, constness should be propagated without any issue:
@@ -929,7 +929,7 @@ namespace EnumerableTests {
 
 			NO_MORE_HEAP;
 
-			// continuation is already an Enumerable 
+			// continuation is already an Enumerable
 			auto catFiltered = Enumerate(nums1).Concat(Filter(nums2, FUN(x, x < 5)));
 			ASSERT_EQ (1, catFiltered.First());
 			ASSERT_EQ (4, catFiltered.Last());

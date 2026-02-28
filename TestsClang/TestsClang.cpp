@@ -7,7 +7,7 @@
 int main(int argc, const char* argv[])
 {
 	std::cout << "Running tests compiled by Clang." << std::endl;
-	
+
 	// simplification, implement when needed
 	const char* execPath = argv[0];
 

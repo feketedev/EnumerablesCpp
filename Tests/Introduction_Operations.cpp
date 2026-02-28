@@ -31,7 +31,7 @@ namespace EnumerableTests {
 			int		   f  = range.First();		// throws for empty sequence
 			const int& m  = once.First();
 			const int& m2 = once.Single();		// throws for 0 or multiple elements
-			
+
 			int		   l  = range.Last();		// like .First, but iterates all over to end
 
 			ASSERT_EQ (1, f);
@@ -43,7 +43,7 @@ namespace EnumerableTests {
 		// Enumerables::Optional is an alias configurable via ENUMERABLES_OPTIONAL_BINDING
 		// - see Enumerables_ConfigDefaults.hpp. Default is the included OptResult type -
 		// which is:
-		//   * immutable 
+		//   * immutable
 		//   * offers chainable transformations and
 		//   * seamless work with & types
 		//   * checked access, throwing Enumerables::LogicException for NoValues
@@ -55,7 +55,7 @@ namespace EnumerableTests {
 		{
 			Optional<int&>		 n1 = empty.FirstIfAny();		// no throw
 			Optional<const int&> m  = once.FirstIfAny();
-			
+
 			Optional<const int&> m2 = once.SingleIfAny();		// empty allowed; still throws for multiple!
 			Optional<const int&> n2 = empty.SingleIfAny();
 
@@ -86,7 +86,7 @@ namespace EnumerableTests {
 			// can be lazy evaluated
 			// [return type must be convertible to original]
 			const int& m3 = empty.AsConst().FirstIfAny().OrDefault([&]() -> const int& { return magic; });
-			
+
 			int		   p2 = range.SingleOrNone().OrDefault([&]() { return magic + 2; });
 
 			ASSERT_EQ (&magic, &m3);
@@ -103,14 +103,14 @@ namespace EnumerableTests {
 			int& p22 = empty.FirstIfAny()
 							.OrFallback(a1)
 							.OrDefault(p2);
-			
+
 			ASSERT_EQ (&p2, &p22);
 
 			int m4 = range.SingleOrNone()
 						  .OrFallback([&]() -> Optional<int> { return empty.FirstIfAny(); })
 						  .OrFallback([&]() -> Optional<int> { return once.FirstIfAny(); })
 						  .OrDefault(p2);
-			
+
 			ASSERT_EQ (magic, m4);
 
 			// NOTE: Some common_type mechanism should be considered for lambdas - currently no such implemented.
@@ -129,7 +129,7 @@ namespace EnumerableTests {
 
 			ASSERT_EQ (3, third);
 			ASSERT	  (!tenth.HasValue());
-			
+
 			Optional<double> noAvg = empty.Avg<double>();
 			ASSERT	  (!noAvg.HasValue());
 		}
@@ -172,7 +172,7 @@ namespace EnumerableTests {
 			// The 1st overload requires just a mapper to designate the keys.
 			// Just like .ToList, it decays elements to store them as values:
 			std::unordered_map<unsigned, Person>	  dict1 = persons.ToDictionary(FUN(p, p.id));
-			
+
 			// The 2nd takes a value-mapper too.
 			std::unordered_map<unsigned, std::string> dict2 = persons.ToDictionary(FUN(p, p.id),
 																				   FUN(p, p.name));
@@ -285,7 +285,7 @@ namespace EnumerableTests {
 				auto valSuffix = Concat<int>(arrX, { 5 });		// decaying must be explicit
 				auto refSuffix = Concat(arrX, { &x });			// "capture-syntax", see Enumerate({...})
 																// Braced-init is implemented for first 3 params!
-				
+
 				auto doubles = Concat<double>({ 2.0, 3.5 }, { 1 });		// Value-conversion
 
 				ASSERT_ELEM_TYPE (int&,			all);
@@ -300,7 +300,7 @@ namespace EnumerableTests {
 
 				// For references, sequence of ancestors gets selected implicitly
 				struct Base {
-					int data; 
+					int data;
 					Base(int d) : data { d } {}
 				};
 				struct Derived : Base {
@@ -406,7 +406,7 @@ namespace EnumerableTests {
 			//		-> being the last step, its cached results stay stored in its Enumerator, waiting for the iteration
 			//		   to move forward or be over.
 			//	-> .First issues only 1 .FetchNext call - after which the Enumerator gets destroyed, releasing the cache.
-			
+
 			// Examining if there's a second item basically executes the whole algorithm again!
 			Optional<Measurement&> secondMaxed = maxesAsc.Skip(1).FirstIfAny();
 			ASSERT_EQ (2, secondMaxed->sensorId);
@@ -463,13 +463,13 @@ namespace EnumerableTests {
 		// To opt-out, define ENUMERABLES_EMPLOY_DYNAMICCAST = false in config.
 		{
 			auto maxes = Enumerate(measurements).Addresses().MaximumsBy(&Measurement::value);
-			
+
 			AllocationCounter allocations;
 
 			std::vector<Measurement*> maxList = maxes.ToList();
 
 			const size_t maxListAllocs = allocations.Count();
-			
+
 			// have multiple max-places for this test
 			ASSERT (maxListAllocs > 1);
 			allocations.Reset();
@@ -484,7 +484,7 @@ namespace EnumerableTests {
 			// The sorted list can be obtained even through type-erasure (no copy occurs)!
 			allocations.AssertFreshCount(maxListAllocs);
 		}
-		
+
 
 		// There's no .ThenBy to introduce secondary ordering critera in the Linq way.
 		// The simplest way probably is using std::tie!
@@ -525,7 +525,7 @@ namespace EnumerableTests {
 							.MapTo<double>(&sqrt);		// 1 -> 1 transform
 
 			std::vector<double> rootVec = roots.ToList();
-			
+
 			// In simple cases like this, .ToList should be able to see and preallocate as necessary!
 			allocations.AssertFreshCount(1);
 			ASSERT_EQ (rootVec.size(), rootVec.capacity());

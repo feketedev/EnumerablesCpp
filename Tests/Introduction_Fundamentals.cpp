@@ -24,13 +24,13 @@ namespace EnumerableTests {
 		// for anything that is consumable by a range-based for loop - i.e. can be iterated over via begin()/end().
 		// This is both for resource-management and to be able to extend existing container types.
 		// [Type-erasure is optional, but used throughout this chapter.]
-		// 
+		//
 		// So, as a starter, any container can be wrapped into an Enumerable of its exact iterated type:
 
 		std::vector<int> vec { 1, 2, 3, 3 };
-		
+
 		Enumerable<int&> numbers = vec;
-		
+
 
 		// Notice the &, as vector::iterator::operator* supplies references!
 		// The simplest way to test access to elements is by .First() - which throws only for empty sequences.
@@ -40,7 +40,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (vec[0],	n0);
 			ASSERT_EQ (&vec[0],	&n0);
 		}
-		
+
 
 		// By default, Enumerable is not a snapshot. As the assertion suggests, L-VALUE containers (or iterables)
 		// are stored BY REFERENCE when wrapped, therefore items in the backing collection can be manipulated via
@@ -71,13 +71,13 @@ namespace EnumerableTests {
 		}
 
 
-		// Simple but frequent algorithms that evaluate (or reduce) an Enumerable's contents are provided 
+		// Simple but frequent algorithms that evaluate (or reduce) an Enumerable's contents are provided
 		// as "Terminal operations" (in contrast with chainables). Some of the most straightforward include:
 		{
 			vec[0] = 1;
 
 			ASSERT_EQ (true,  numbers.Any());
-			ASSERT_EQ (3,	  numbers.Last());			// iterates all over	=> inefficient! 
+			ASSERT_EQ (3,	  numbers.Last());			// iterates all over	=> inefficient!
 			ASSERT_EQ (4,	  numbers.Count());			// count all elements	-> queries size directly in exact cases,
 														//  					   but iterates otherwise!
 			ASSERT_EQ (2,	  numbers.Count(3));		// count equal elements
@@ -94,7 +94,7 @@ namespace EnumerableTests {
 			int n = 5;
 
 			Enumerable<int&> noInts  = Enumerables::Empty<int&>();
-			Enumerable<int&> repeat3 = Enumerables::Repeat(n, 3);		// these also capture 
+			Enumerable<int&> repeat3 = Enumerables::Repeat(n, 3);		// these also capture
 			Enumerable<int&> repeat1 = Enumerables::Once(n);			// l-value "n" BY REFERENCE!
 
 			ASSERT    (!noInts.Any());
@@ -119,7 +119,7 @@ namespace EnumerableTests {
 				// Plain "Range" yields size_t (indices) - but can be influenced:
 				Enumerable<size_t> r = Enumerables::Range(3);
 				Enumerable<short> rs = Enumerables::Range<short>(3);
-			
+
 				ASSERT (AreEqual({ 0, 1, 2 },	r));
 				ASSERT (AreEqual({ 0, 1, 2 },	rs));
 
@@ -136,10 +136,10 @@ namespace EnumerableTests {
 			// In these cases the real source is the container "vec2", which is l-value => stored BY REFERENCE
 			Enumerable<size_t> indices = Enumerables::IndexRange(vec2);
 			Enumerable<size_t> revIdcs = Enumerables::IndexRangeReversed(vec2);
-			
+
 			ASSERT (AreEqual({ 0, 1, 2 }, indices));
 			ASSERT (AreEqual({ 2, 1, 0 }, revIdcs));
-			
+
 			vec2.resize(2);
 			ASSERT (AreEqual({ 0, 1 }, indices));
 			ASSERT (AreEqual({ 1, 0 }, revIdcs));
@@ -154,7 +154,7 @@ namespace EnumerableTests {
 		{
 			Enumerable<const int&> cnums = numbers;
 			Enumerable<int>		   vnums = numbers;			// still refers to "vec" underneeth!
-		
+
 			ASSERT_EQ (&vec[0],	&cnums.First());
 
 			numbers.First() = 8;
@@ -168,13 +168,13 @@ namespace EnumerableTests {
 
 		// Just like in Linq, transformations can be layered on top of sequences via builder-style methods.
 		// These often take lambda functions, but some take simple numbers or other sequences (any iterable).
-		// 
+		//
 		// Lambda arguments are always stored BY VALUE - their own capture-block provides fine-grained control anyway -,
 		// and so are simple number parameters - for which this feels natural, to avoid a myriad of unexpected mistakes.
 		{
 			Enumerable<int&> odds	 = numbers.Where([](int x) { return x % 2 > 0; });
 			Enumerable<int>  oddSqrs = odds   .Map  ([](int x) { return x * x; });
-		
+
 			vec[0] = 5;
 			ASSERT_EQ (&vec[0], &odds.First());
 
@@ -183,7 +183,7 @@ namespace EnumerableTests {
 
 			// Again, "oddSqrs" have no direct dependency to "odds", but to anything captured during it's built:
 			// "vec" and references captured by Where's lambda (nothing in this example).
-			
+
 			// Of course direct chaining is more common - and also more efficient,
 			// moving stored resources under the next layer, instead of copying them:
 
@@ -214,14 +214,14 @@ namespace EnumerableTests {
 		// The results of a query can be saved to a container (of preconfigured type) just like in .Net:
 		{
 			Enumerable<int&> approved = numbers.Where(FUN(x,  x > 2));
-			
+
 			std::vector<int>		list = approved.ToList();			// Decays element automatically
 			std::unordered_set<int> set  = approved.ToSet();			//
-			
+
 			ASSERT	  (Enumerables::AreEqual({ 5, 3, 3 },	list));
 			ASSERT_EQ ((std::unordered_set<int>{ 5, 3 }),	set);
 
-			// The container bindings (Enumerables::ListType, Enumerables::SetType) can be set 
+			// The container bindings (Enumerables::ListType, Enumerables::SetType) can be set
 			// in your Enumerables.hpp, before the inclusion of library implementation.
 
 			// Custom construction arguments (hasher, allocator etc.) can be passed through .To*** methods.
@@ -234,7 +234,7 @@ namespace EnumerableTests {
 
 		// Managing lifetimes is an unavoidable addition in C++. Enumerables leaves this burden
 		// at the programmer, but attempts to provide good defaults and concise syntax to help.
-		// 
+		//
 		// The fundamental example is when the result element of a transformation is tied to the input.
 		{
 			// Let's have 2 point-sources: an l-value and an r-value!
@@ -284,7 +284,7 @@ namespace EnumerableTests {
 			// An example for FUN being in control:
 			// Subobjects live on, but a pr-value expression can never get & obviously.
 			auto oneRight  = pointsL.Select(FUN(v, v.x + 1.0));
-			
+
 			ASSERT_TYPE (double,	oneRight.First());
 		}
 	}
@@ -343,7 +343,7 @@ namespace EnumerableTests {
 
 			// Note that a common pattern in this library is that the 1st, optional template argument
 			// [defaulting to void = "deduce elem type implicitly"] is available to force an explicit
-			// element type - on points where it can change. 
+			// element type - on points where it can change.
 			// (In some methods it can also denote the type of a property selected for comparison.)
 		}
 
@@ -352,9 +352,9 @@ namespace EnumerableTests {
 		{
 			auto constNums2 = nums.As<const int&>();
 			auto constNums3 = nums.AsConst();			// for short
-			
+
 			auto doubles	= nums.As<double>();
-			
+
 			ASSERT (AreEqual(nums, constNums2));
 			ASSERT (AreEqual(nums, constNums3));
 
@@ -413,15 +413,15 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (int&,		nums2);
 			ASSERT_ELEM_TYPE (int,		copies1);
 			ASSERT_ELEM_TYPE (int,		copies2);
-			
+
 			ASSERT (AreEqual(nums, nums2));
 
 			auto constPtrs = pointers.AsConst();		// injects under & or * (if wasn't &)
-			
+
 			ASSERT_ELEM_TYPE (const int*,	constPtrs);
 		}
 
-		
+
 		// Everything so far were fully templated (and no complex algorithms were involved).
 		// No allocation was required.
 		allocations.AssertFreshCount(0);
@@ -546,7 +546,7 @@ namespace EnumerableTests {
 			}
 
 			// InterfacedEnumerator can posess an inline buffer to avoid using the heap for holding
-			// the implementor. Its size can be set through ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE 
+			// the implementor. Its size can be set through ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE
 			// (refer to Enumerables.hpp and Enumerables_ConfigDefaults.hpp).
 			// This contains the full paused algorithm state during iteration.
 
@@ -568,18 +568,18 @@ namespace EnumerableTests {
 			Enumerable<int&> evensIfaced = evens;
 
 			allocations.AssertFreshCount(0);		// depending on std::function's inline optimization
-													// needs: array ptr + lambda = 16 bytes 
+													// needs: array ptr + lambda = 16 bytes
 													// passes with MS STL
 
 			// Creation of InterfacedEnumerators use heap depending on concrete size:
 			using ConcreteEnumerator = decltype(evens)::TEnumerator;
-			
+
 			// IteratorEnumerator: vptr + 2 iter + padded bool
 			// FilterEnumerator:   vptr + lambda
 			constexpr size_t size = 6 * sizeof(void*);
 			static_assert (sizeof(ConcreteEnumerator) == size, "Enumerator unexpectedly large.");
 			static_assert (ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE >= size, "Wrong test setup.");
-			
+
 			// Simple transformations shouldn't need heap:
 			ASSERT_EQ (1, evensIfaced.Count());
 			allocations.AssertFreshCount(0);
@@ -594,7 +594,7 @@ namespace EnumerableTests {
 	}
 
 
-	// 1.4		Learn the various overloads of Enumerate - the primary way to start a query 
+	// 1.4		Learn the various overloads of Enumerate - the primary way to start a query
 	static void EnumerateAlternatives()
 	{
 		// i) Single, templated parameter
@@ -609,7 +609,7 @@ namespace EnumerableTests {
 
 			// A value-wrapping Enumerable is:
 			//	* safe to return from method scope
-			
+
 			//	* restricted to const& or pr-value access, due to an Enumerable must be const
 			{
 				ASSERT_ELEM_TYPE (int&,			numsRef);
@@ -654,14 +654,14 @@ namespace EnumerableTests {
 			// Intended as a quick way to form a sequence of few simple elements - VALUE capture
 			{
 				auto uints = Enumerate({ 3u, 5u, 4u });
-					
+
 				ASSERT_ELEM_TYPE (unsigned, uints);				// yields pr-values
 				ASSERT (AreEqual({ 3, 5, 4 }, uints));
 
 				// BY VALUE storage
 				auto getNums = []()
-				{ 
-					return Enumerate({ 3, 5, 4 }); 
+				{
+					return Enumerate({ 3, 5, 4 });
 				};
 
 				Enumerable<int> returned = getNums();
@@ -681,7 +681,7 @@ namespace EnumerableTests {
 				ASSERT (AreEqual({ 3.0, 5.0, 4.0 }, reals));
 
 			}
-				
+
 			// Often sequencing a few l-value objects is needed.
 			// Sequence of their references can be formed via "capture-syntax" - i.e. pointers :)
 			{
@@ -690,7 +690,7 @@ namespace EnumerableTests {
 
 				auto points = Enumerate({ &v2, &v1 });
 				auto point1 = Enumerate({ &v1 });
-					
+
 				// It's a special rule only for initializer_lists, to convert pointers to references.
 				// Of course the underlying ListType of pointers is stored BY VALUE.
 				ASSERT_ELEM_TYPE (Vector2D<double>&, points);
@@ -703,7 +703,7 @@ namespace EnumerableTests {
 			// It's possible also with "capture-syntax" to guide the initializer
 			{
 				struct Base {
-					int data; 
+					int data;
 					Base(int d) : data { d } {}
 				};
 				struct Derived : Base {
@@ -739,7 +739,7 @@ namespace EnumerableTests {
 				std::initializer_list<int> list { 1, 2, 3 };
 
 				auto nums = Enumerate(list);
-					
+
 				ASSERT_ELEM_TYPE (const int&, nums);		// wrapped BY REFERENCE, not self-contained
 			}
 		}
@@ -760,7 +760,7 @@ namespace EnumerableTests {
 
 			// conversions are still supported
 			auto copiesRev = Enumerate<int>(vec.rbegin(), vec.rend());
-				
+
 			ASSERT_ELEM_TYPE (int, copiesRev);
 
 			// The caveat can be that iterators invalidate if the container is mutated.
@@ -784,12 +784,12 @@ namespace EnumerableTests {
 		unsigned		Area() const	{ return w * h; }
 		bool		IsSquare() const	{ return w == h; }
 	};
-	
+
 
 	static bool		IsSquare(Rectangle&)					{ return ASSERT(false); /* non-const: shouldn't get called*/ }
 	static bool		IsSquare(const Rectangle& r)			{ return r.Width() == r.Height(); }
 	static unsigned CalcCircumference(const Rectangle& r)	{ return 2 * (r.Width() + r.Height()); }
-	 
+
 
 	// Unfolding 1.5:
 	static void LambdaUsage()
@@ -865,7 +865,7 @@ namespace EnumerableTests {
 			// The library is prepared to resolve the usual overload-sets (const/mutable, &/&&/const&)
 			// at the cost of storing 1 extra pointer. [Same applies to overloaded free-functions!]
 
-			// Alternative is to resolve the pointer beforehand -  
+			// Alternative is to resolve the pointer beforehand - 
 			// probably being worst then lambdas readability-wise:
 
 			unsigned& (Rectangle::* accessHeight)() = &Rectangle::Height;
@@ -898,7 +898,7 @@ namespace EnumerableTests {
 		{
 			auto roots1  = Enumerables::Range<double>(5).MapTo<double>(&std::sqrt);
 		 //	auto roots1b = Enumerables::Range<double>(5).MapTo<float>(&std::sqrt);			// CTE: no such overload
-			
+
 			auto roots2   = Enumerables::Range<float>(5).Map(&std::sqrtf);
 			auto roots2b  = Enumerables::Range<float>(5).MapTo<double>(&std::sqrtf);		// just a conversion
 
@@ -913,7 +913,7 @@ namespace EnumerableTests {
 
 			// Also note that only certain transformation methods offer using
 			// the OverloadResolver - for which it's a reasonably common need.
-			
+
 			// Predicates expect const member-functions to be exact,
 			// and support a limited (but free) resolution for free-functions.
 			// -> see IsSquare(Rectangle&)
@@ -947,17 +947,17 @@ namespace EnumerableTests {
 
 		// MapNeighbors, Scan - let's get the direction of edges of a simple rectangle:
 		{
-			Vector2D<double> corners[] = { { 0.0, 0.0 }, 
+			Vector2D<double> corners[] = { { 0.0, 0.0 },
 										   { 2.0, 0.0 },
 										   { 2.0, 3.5 },
 										   { 0.0, 3.5 } };
-			
+
 			auto edgeDirs = Enumerate(corners).CloseWithFirst()
 											  .MapNeighbors(&Vector2D<double>::DirectionTo);
 
 			// the results of '+' will start from corners[1]
 			auto cornersRotated = edgeDirs.Scan(corners[0], &Vector2D<double>::operator+);
-		
+
 			auto cornersFrom1 = Enumerate(corners).CloseWithFirst().Skip(1);
 
 			ASSERT (AreEqual(cornersFrom1, cornersRotated));

@@ -16,7 +16,7 @@ namespace EnumerableTests {
 			unsigned	count			   = 0;
 			void*		pointers[MaxCount] = { nullptr };
 
-		
+
 			BufferControl(size_t space) : free { space }	// for old MSVC's placement-new
 			{
 			}
@@ -144,7 +144,7 @@ namespace EnumerableTests {
 			}
 		}
 
-		
+
 		TestAllocator& operator =(const TestAllocator&) = delete;
 
 
@@ -160,7 +160,7 @@ namespace EnumerableTests {
 		using propagate_on_container_move_assignment = std::true_type;
 		using is_always_equal						 = std::false_type;
 
-		
+
 		template <class, unsigned> friend class TestAllocator;
 
 		template <class U>
@@ -202,7 +202,7 @@ namespace EnumerableTests {
 
 			size_t req = n * sizeof(T);
 			void*  trg = NextFreeByte();
-			
+
 			control.AlignAndBook(trg, alignof(T), req);
 			return static_cast<pointer>(trg);
 		}
@@ -216,7 +216,7 @@ namespace EnumerableTests {
 				return;
 
 			control.Unbook(p);
-			
+
 			// only supported way of reuse: if everything can be reclaimed
 			if (control.count == 0)
 				control.free = objSpace;

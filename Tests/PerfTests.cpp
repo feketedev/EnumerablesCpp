@@ -73,7 +73,7 @@ namespace EnumerableTests {
 	};
 
 
-	
+
 	template <bool PosFiltered = false>
 	struct PairMinimumsTestBase : PairTestBase {
 
@@ -980,7 +980,7 @@ namespace EnumerableTests {
 		PerfResult(Microseconds	runtime = Microseconds::zero(), size_t allocations = 0)
 			: runtime { runtime }, allocations { allocations }
 		{
-				
+
 		}
 
 		bool HasRun() const
@@ -1350,7 +1350,7 @@ namespace EnumerableTests {
 		SectionBreak("  Short sequences...", 90);
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
-		
+
 		SectionBreak("  Long sequences summary:", printTimes || printOvrhd ? 104 : 90, '=');
 		SummarizeOnScreen(printTimes, printOvrhd, results1);
 		std::cout << std::endl;
