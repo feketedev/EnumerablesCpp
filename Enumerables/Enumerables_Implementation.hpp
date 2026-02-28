@@ -63,9 +63,9 @@ namespace Enumerables {
 
 	inline SizeInfo		SizeInfo::Limit(size_t max) const
 	{
-		return HasValue() ? SizeInfo { kind, std::min(value, max) }
+		return   HasValue() ? SizeInfo { kind, std::min(value, max) }
 			: IsUnbounded() ? SizeInfo { Boundedness::Exact, max }
-		: SizeInfo { Boundedness::KnownBound, max };
+			: SizeInfo { Boundedness::KnownBound, max };
 	}
 
 
@@ -134,7 +134,7 @@ namespace Enumerables::TypeHelpers::InitListSupport {
 	/// Given any iterable type, deduces the possible TElem of the result of Enumerate(...).
 	/// For init-lists that carry ambiguous meaning, result is marked as MaybeToDereference.
 	/// @remarks
-	///		This workaround is for Concat(...) and similar, where the intention of some init-list of pointers 
+	///		This workaround is for Concat(...) and similar, where the intention of some init-list of pointers
 	///		can be clarified by some other relevant sequence (based on it containing & or * elements).
 	template <class Cont, class TForced = void>
 	using WeakElemT = typename WeakEnumerableElem<Cont, TForced>::type;
@@ -193,7 +193,7 @@ namespace Enumerables::Def {
 	///		Using Enumerate directly in such situation can cause compilation error
 	///		if ENUMERABLES_ADD_STRINGLIST_OVERLOADS is enabled and the specified
 	///		target elem doesn't correspont to the init-list item (including qualifiers).
-	/// 
+	///
 	///		Init-list deduction occurs directly on top-level anyway, thus it
 	///		is reasonable to bypass such Enumerate overloads when forwarding.
 	template <class TForced = void, class C>
@@ -230,7 +230,7 @@ namespace Enumerables::Def {
 	auto ConcatInternal(C1&& cont1, C2&& cont2, CMore&&... tailConts)
 	{
 		using E1 = InitListSupport::WeakElemT<C1, TForced>;
-		
+
 		using THead	   = OverrideT<TCommon0, E1>;
 		using TCommon1 = typename ConcatTypeDeducer<THead, E1>::TCommon;
 
@@ -294,7 +294,7 @@ namespace Enumerables::Def {
 
 #endif
 
-	
+
 
 	template <class T, class... Os>
 	SetType<RefHolder<T>> InitRefholderSet(const initializer_list<T*>& elems, const Os&... opts)
@@ -548,7 +548,7 @@ namespace Enumerables::Def {
 				sum = *sum + etor.Current();
 
 			// CONSIDER: has no RVO. Tail-recursion maybe? - Then also for anything else consistently?
-			return *move(sum);	
+			return sum.PassValue();
 		}
 	}
 
@@ -600,9 +600,9 @@ namespace Enumerables::Def {
 		while (et.FetchNext()) {
 			TElem curr = et.Current();
 			if (isLess(curr, min))
-				min.AssignMoved(curr);
+				min.AssignHeadMoved(curr);
 		}
-		return forward<TElem>(*min);
+		return min.PassValue();
 	}
 
 
@@ -728,7 +728,7 @@ namespace Enumerables::Def {
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, Options {}...);
 	}
-	
+
 	template<class TFactory>
 	template<class K, class... Options>
 	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint, const Options&... opts) const
@@ -962,8 +962,8 @@ namespace Enumerables::Def {
 	template<class TFactory>
 	void AutoEnumerable<TFactory>::ViewTrigger() const
 	{
-#	if ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 1
-		ResultsView.Fill(factory, isPure, true);
+#	if ENUMERABLES_USE_RESULTSVIEW && (ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1)
+			ResultsView.Fill(factory, isPure, true);
 #	endif
 	}
 
@@ -978,32 +978,43 @@ namespace Enumerables::Def {
 	void FillEligibleResultBuffer(Factory& getEnumerator, bool isPure, bool autoCall,
 								  ResList& elements,      const char*& status)
 	{
+#	if !(ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 4)
 		if (autoCall && (GetSize(elements) > 0 || status[0] == 'E'))
 			return;
+#	endif
 
-		if (isPure) {
-			auto	 et	 = getEnumerator();
-			SizeInfo si  = et.Measure();
-			size_t	 cap = si.IsExact() ? si.value : 0u;
-
-			elements = SmallListOperations::template Init<ResList>(cap);
-
-			size_t count = 0;
-			while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
-				SmallListOperations::Add(elements, et.Current());
-				++count;
-			}
-			status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
-				? "Evaluation successful."
-				: "Showing first" ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) "elements.";
-		}
-		else {
+		if (!isPure) {
 			status = "Not available - enumeration is marked as having side-effects.";
 			if (!autoCall)
 				ENUMERABLES_CLIENT_BREAK ("Disabled for having side-effects - cannot build debug buffer.");
+			return;
 		}
-	}
 
+		auto     et = getEnumerator();
+		SizeInfo si = et.Measure();
+		if (autoCall && si.IsUnbounded()) {
+			status = "Not evaluated by default - the sequence is Unbounded. "
+					 "Such enumerations often rely on chained steps to terminate."
+#				if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+					 "  Attempt Test() or Print() from Immediate window if safe to examine."
+#				endif
+					 ;
+			return;
+		}
+
+		SizeInfo display = si.Limit(ENUMERABLES_RESULTSVIEW_MAX_ELEMS);
+		size_t   cap     = display.IsExact() ? display.value : 0u;
+		elements = SmallListOperations::template Init<ResList>(cap);
+
+		size_t count = 0;
+		while (et.FetchNext() && count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS) {
+			SmallListOperations::Add(elements, et.Current());
+			++count;
+		}
+		status = count < ENUMERABLES_RESULTSVIEW_MAX_ELEMS
+			? "Evaluation successful."
+			: "Showing first " ENUMERABLES_STRINGIFY(ENUMERABLES_RESULTSVIEW_MAX_ELEMS) " elements.";
+	}
 
 	template <class T>
 	template <class Factory>
@@ -1021,6 +1032,7 @@ namespace Enumerables::Def {
 	}
 
 
+#	if ENUMERABLES_RESULTSVIEW_MANU_EVAL
 
 	/// Fill the debug buffer with yielded values if possible. For immediate window.
 	template<class TFactory>
@@ -1039,6 +1051,8 @@ namespace Enumerables::Def {
 		Test();
 		return ResultsView.Elements;
 	}
+
+#	endif
 
 #endif	// ENUMERABLES_USE_RESULTSVIEW
 

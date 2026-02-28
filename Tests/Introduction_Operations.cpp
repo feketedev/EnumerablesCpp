@@ -482,7 +482,7 @@ namespace EnumerableTests {
 			static_assert (sizeof(decltype(maxes)::TEnumerator) <= ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE, "Wrong test setup.");
 
 			// The sorted list can be obtained even through type-erasure (no copy occurs)!
-			ASSERT_EQ (maxListAllocs, allocations.Count());
+			allocations.AssertFreshCount(maxListAllocs);
 		}
 		
 

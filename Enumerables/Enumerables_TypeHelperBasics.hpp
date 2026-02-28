@@ -57,6 +57,11 @@ namespace Enumerables::TypeHelpers {
 	using std::is_scalar_v;
 	using std::is_class;
 	using std::is_class_v;
+	using std::is_nothrow_constructible_v;
+	using std::is_nothrow_destructible_v;
+	using std::is_nothrow_move_constructible_v;
+	using std::is_nothrow_copy_constructible_v;
+	using std::is_nothrow_assignable_v;
 
 
 
@@ -262,11 +267,11 @@ namespace Enumerables::TypeHelpers {
 	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
 	template <class T>
 	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &&; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T[]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> []; };
-	template <class T, size_t N>		
+	template <class T, size_t N>
 	struct DeepConst<T[N]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> [N]; };
 
 	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
@@ -308,7 +313,7 @@ namespace Enumerables::TypeHelpers {
 	constexpr bool HaveRefcompatibleRoots = HasRefcompatibleRoot<T, U>
 										 || HasRefcompatibleRoot<U, T>;
 
-	
+
 	template <class T>
 	constexpr bool IsUnknownBoundArray = std::is_array_v<T> && std::extent_v<T> == 0;
 
@@ -321,7 +326,7 @@ namespace Enumerables::TypeHelpers {
 	template <class T, class U>
 	struct CommonOrVoid<T, U, void_t< std::common_type_t<T, U>,
 									  enable_if_t<!is_void_v<T> && !is_void_v<U>>,	// guard UB
-									  enable_if_t< !IsUnknownBoundArray<T> 
+									  enable_if_t< !IsUnknownBoundArray<T>
 												&& !IsUnknownBoundArray<U>>		 >> {
 		using Type = std::common_type_t<T, U>;
 	};
@@ -418,7 +423,7 @@ namespace Enumerables::TypeHelpers {
 		using Tail     = typename MapTypeList<TypeList<Ts...>, Mapping>::typeList;
 		using typeList = typename PrependType<Mapping<H>, Tail>::typeList;
 	};
-	
+
 
 	/// Implementation of BindChangingNthT / ChangedNthArgT.
 	template <template <class...> class Trg, template <class> class Change, unsigned n, class ProcessedList, class... OrigArgs>
@@ -570,6 +575,9 @@ namespace Enumerables::TypeHelpers {
 
 
 	// ===== Enable_if shorthands =====================================================================================
+
+	template <class T, class S = T>
+	using IfNonvoid = enable_if_t<!is_void_v<T>, S>;
 
 	template <class T, class S = T>
 	using IfNonvoidValue = enable_if_t<std::is_object_v<T>, S>;

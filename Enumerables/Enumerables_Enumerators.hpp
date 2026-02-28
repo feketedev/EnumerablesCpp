@@ -257,6 +257,13 @@ namespace Enumerables::Def {
 		template <class NestedFactory>
 		InterfacedEnumerator(NestedFactory&& fact)
 		{
+			// TODO: This placement construct - more precisely the lack of any ~RvoEmplacer call in the end - strictly speaking is UB!!
+			//		 I see low danger, since the IEnumerator destruction is properly done, so what remains is: the RvoEmplacer residing
+			//		 within fixBuffer, having its only member subobject destroyed, holding no resources.
+			//
+			//		 This construct allowed the omission of [virtual] move ctors, so it is useful.
+			//		 If want to stay on the safe side, disable inline buffer in config or bring back move ctors from master.
+
 			if constexpr (SureFitsInline<InvokeResultT<NestedFactory>>())
 				ptr = (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr();
 			else
@@ -295,7 +302,7 @@ namespace Enumerables::Def {
 		void			operator ++()	{ hasCurrent = enumerator.FetchNext(); }
 
 		bool operator !=(EnumeratorAdapterEnd) const
-		{ 
+		{
 			return hasCurrent;
 		}
 
@@ -326,7 +333,7 @@ namespace Enumerables::Def {
 	///		  CachingEnumerator<ListOperations::Container<T>>
 	///		have different RTTI.
 	template <class Cache>
-	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {	
+	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {
 
 		struct State {
 			Cache					results;
@@ -366,7 +373,7 @@ namespace Enumerables::Def {
 		{
 			if (fetchState.IsInitialized() && fetchState->HasMore())
 				++fetchState->current;
-			else
+			else if (!fetchState.IsInitialized())
 				fetchState.Reconstruct(*this);
 
 			return fetchState->HasMore();
@@ -551,7 +558,7 @@ namespace Enumerables::Def {
 
 		SizeInfo  Measure()	const override	{ return Boundedness::Unbounded; }
 
-		SequenceEnumerator(const V& start, const Stepper& step) : curr { ForwardParams, start }, step { step }  {}
+		SequenceEnumerator(const V& start, const Stepper& step) : curr { start }, step { step }  {}
 	};
 
 	#pragma endregion
@@ -770,7 +777,7 @@ namespace Enumerables::Def {
 
 		SizeInfo	Measure() const override
 		{
-			return source.Measure().Filtered(mode != FilterMode::SkipUntil); 
+			return source.Measure().Filtered(mode != FilterMode::SkipUntil);
 		}
 
 
@@ -780,13 +787,13 @@ namespace Enumerables::Def {
 	};
 
 
-	
+
 	// for cases when the operand can't be readily captured as a SetType<T>
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
-	
+
 	private:
 		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
 		using Op = DecayIfScalarT<EnumeratedT<OpSource>>;
@@ -934,8 +941,8 @@ namespace Enumerables::Def {
 
 	public:
 		static_assert (is_pointer<typename Source::TElem>() || is_reference<typename Source::TElem>(),
-					   "Only pointer or reference elements can hide a different dynamic type!");
-		
+					   "Only pointer or reference elements can hide a different dynamic type!"		 );
+
 		static_assert (is_pointer<TWanted>() || is_reference<TWanted>(),
 					   "Please specify the desired pointer or reference type exactly for readability.");
 
@@ -956,7 +963,7 @@ namespace Enumerables::Def {
 		}
 
 		SizeInfo Measure()	const override
-		{ 
+		{
 			return source.Measure().Filtered();
 		}
 
@@ -1038,7 +1045,7 @@ namespace Enumerables::Def {
 		MapperEnumerator(Factory&& getSource, const Mapper& map) : source { getSource() }, map { map }  {}
 	};
 
-	
+
 
 	template <class Source>
 	class IndexerEnumerator final : public IEnumerator<Indexed<EnumeratedT<Source>>> {
@@ -1066,37 +1073,37 @@ namespace Enumerables::Def {
 	// NOTE: Could be replaced with ScannerEnumerator  -  Acc = (curr, prev * curr),
 	//		 But:  for Current() TElem would need to be copyable.
 	template <class Source, class Combiner>
-	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {		
+	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {
 		using V = EnumeratedT<Source>;
 
-		Source				source;
-		const Combiner&		binop;
-		Deferred<V>			prev;
-		bool				nextFetched = false;
+		Source					source;
+		const Combiner&			binop;
+		DeferredReplaceable<V>	prev;
+		bool					hasCurrent = false;
 
 	public:
 		using typename CombinerEnumerator::IEnumerator::TElem;
 
 		bool	FetchNext()	override
 		{
-			if (nextFetched) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+			if (hasCurrent) {
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
 			if (!prev.IsInitialized() && source.FetchNext()) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
-			ENUMERABLES_INTERNAL_ASSERT (!nextFetched);
+			ENUMERABLES_INTERNAL_ASSERT (!hasCurrent);
 			return false;
 		}
 
 
 		TElem	Current()	override
 		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (nextFetched, NotFetchedError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (hasCurrent, NotFetchedError);
 
 			return binop(*prev, source.Current());
 		}
@@ -1142,7 +1149,7 @@ namespace Enumerables::Def {
 
 
 	#pragma region Concatenations
-	
+
 	template <class Source, class ContinuationSource>
 	class ConcatEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 		static_assert (is_convertible<EnumeratedT<ContinuationSource>, EnumeratedT<Source>>(), "Concat: Incompatible continuation.");
@@ -1176,9 +1183,9 @@ namespace Enumerables::Def {
 		using Deducer  = UniformEnumerationDeducer<NestedEb>;
 		using NestedEt = typename Deducer::TEnumerator;
 
-		Source				ebSource;
-		Deferred<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
-		Deferred<NestedEt>	nestedEnumerator;
+		Source							ebSource;
+		DeferredReplaceable<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
+		DeferredReplaceable<NestedEt>	nestedEnumerator;
 
 	public:
 		using typename FlattenerEnumerator::IEnumerator::TElem;
@@ -1187,12 +1194,12 @@ namespace Enumerables::Def {
 		{
 			// try to advance outer enumerator as needed
 			while (!nestedEnumerator.IsInitialized() || !nestedEnumerator->FetchNext()) {
-				if (!ebSource.FetchNext())
-					return false;
-
-				// avoid move requirements on returns
-				nested.AssignCurrent(ebSource);
-				nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				if (ebSource.FetchNext()) {
+					// avoid move requirements on returns
+					nested.AcceptCurrent(ebSource);
+					nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				}
+				else return false;
 			}
 
 			return true;
@@ -1291,7 +1298,7 @@ namespace Enumerables::Def {
 					   || is_assignable_v<TAcc, CombinedT<TAcc, InElem, Combiner>>,
 					   "Accumulator type is neither constructible nor assignable from "
 					   "the result of the Aggregator function."						   );
-	
+
 	protected:
 		Source				source;
 		Storage<TAcc>		accumulator;
@@ -1307,7 +1314,7 @@ namespace Enumerables::Def {
 
 	public:
 		// CONSIDER: ETORUSAGE_ASSERTs? Would require extra bytes here - prob. not worth it this case.
-		TAcc		Current()		  override final	{ return accumulator; }
+		TAcc		Current()		  override final	{ return *accumulator; }
 		SizeInfo	Measure()	const override final	{ return this->source.Measure(); }
 
 		template <class Factory>
@@ -1321,7 +1328,7 @@ namespace Enumerables::Def {
 		ScannerBase(Factory&& getSource, const Combiner& combiner, const StorableT<TAcc>& init) :
 			source		{ getSource() },
 			combine		{ combiner },
-			accumulator	{ ForwardParams, Revive(init) }
+			accumulator	{ Revive(init) }
 		{
 		}
 	};
@@ -1345,9 +1352,9 @@ namespace Enumerables::Def {
 		class Combiner,
 		class InitAccMapper /*= None*/,		// NOTE: a bit clunky with Chain<...>
 		class TAcc >
-	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, Deferred> {
+	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, DeferredReplaceable> {
 
-		using Base   = ScannerBase<Source, Combiner, TAcc, Deferred>;
+		using Base   = typename FetchFirstScannerEnumerator::ScannerBase;
 		using InElem = typename Source::TElem;
 
 		const InitAccMapper&	initAccumulator;
@@ -1357,7 +1364,7 @@ namespace Enumerables::Def {
 		{
 			if constexpr (IsNone<InitAccMapper>) {
 				if constexpr (is_same_v<InElem, TAcc>) {
-					this->accumulator.AssignCurrent(this->source);
+					this->accumulator.AcceptCurrent(this->source);
 				}
 				else {
 					static_assert (IsBraceConstructible<TAcc, InElem>::value,
@@ -1502,7 +1509,7 @@ namespace Enumerables::Def {
 	{
 		using Beg = IteratorT<C&>;
 		using End = EndIteratorT<C&>;
-		constexpr bool containerSizeOnly = HasQueryableSize<C>::value && 
+		constexpr bool containerSizeOnly = HasQueryableSize<C>::value &&
 										  !HasQueryableDistance<Beg, End>::value;
 		if constexpr (containerSizeOnly)
 			return ContainerEnumerator<C, ForcedResult> { container };
@@ -1520,7 +1527,7 @@ namespace Enumerables::Def {
 	///		This class makes a light enable_if decision only, further checks should commence after the choice is made.
 	template <class TElem, class ValOrMapper, class ForcedAcc = void>
 	class IsAccuInit {
-		
+
 		static constexpr bool IsMapper()
 		{
 			if constexpr (is_void_v<ForcedAcc> || !IsConstructibleAnyway<ForcedAcc, ValOrMapper>)

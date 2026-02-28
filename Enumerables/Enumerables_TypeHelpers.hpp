@@ -132,7 +132,7 @@ namespace Enumerables::TypeHelpers {
 					   "Const & output for a materialized enumerable is possible only with compatible types!");
 	};
 
-	
+
 
 	/// Ref-access guard for a temporarily held "Current" value stored in an Enumerator.
 	/// @remarks
@@ -166,7 +166,7 @@ namespace Enumerables::TypeHelpers {
 										  || is_same_v<I, const char16_t*>
 										  || is_same_v<I, const char32_t*>;
 
-        // NOTE: on old MSVC tparam "ForcedType" can clash with the "ForcedElem" of callers, hence the need for different names!
+		// NOTE: on old MSVC tparam "ForcedType" can clash with the "ForcedElem" of callers, hence the need for different names!
 
 		template <class ForcedType, class I>
 		constexpr bool CanDeduceRefs   = is_pointer_v<I> &&
@@ -209,27 +209,27 @@ namespace Enumerables::TypeHelpers {
 		};
 
 
-		
+
 		/// Meta type-wrapper for init-lists of pointers, where their resolution (TElem = T* or T&)
 		/// is deferred to see if some other relevant sequence can help disambiguate (e.g. in Concat).
 		template <class T>	struct MaybeToDereference;
 		template <class V>	struct MaybeToDereference<V*> {};
 
-		template <class T> 
+		template <class T>
 		struct ResolveWithoutContext {
 			using type = T;
 		};
-		template <class V> 
+		template <class V>
 		struct ResolveWithoutContext<MaybeToDereference<V*>> {
 			using type = V&;
-		
+
 			static_assert (!ENUMERABLES_ADD_STRINGLIST_OVERLOADS || !IsStringLiteralType<V*>,
 						   "This function does not support disambiguation of string literals "
 						   "from const char pointers. Please specify element type explicitly!");
 		};
 
 		/// Decide a possibly ambiguous element type (i.e. MaybeToDereference<T>) by default rules if possible.
-		template <class T> 
+		template <class T>
 		using ResolveContextEndedT = typename ResolveWithoutContext<T>::type;
 	}
 
@@ -918,155 +918,211 @@ namespace Enumerables::TypeHelpers {
 	/// Ensure assignment capability - even for an immutable class.
 	template <class T>
 	class Reassignable final : private GenericStorage<T> {
-	public:
-		using GenericStorage<T>::GenericStorage;
+		using Storage = GenericStorage<T>;
 
+	public:
 		Reassignable() = delete;
 
-		template <class TT = T, class = enable_if_t<IsBraceConstructible<T, TT>::value>>
-		Reassignable(TT&& val) : GenericStorage<T> { ForwardParams, forward<TT>(val) }
+		template <class... Args, class = enable_if_t<IsConstructibleAnyway<T, Args...>>>
+		Reassignable(Args&&... args)  noexcept(noexcept(Storage::ConstructParensPreferred(forward<Args>(args)...)))
 		{
-		}
-		Reassignable(const Reassignable& src)	{ this->CopyFrom(src); }
-		Reassignable(Reassignable&& src)		{ this->MoveFrom(src); }
-
-		~Reassignable()							{ this->Destroy(); }
-
-		using GenericStorage<T>::Value;
-		using GenericStorage<T>::PassValue;
-		using GenericStorage<T>::operator *;
-		using GenericStorage<T>::operator ->;
-		using GenericStorage<T>::operator T&;
-
-
-		template <class S>
-		T& operator =(S&& src)					{ return this->Reassign(forward<S>(src));  }
-
-		T& operator =(Reassignable&& src)		{ return this->operator=(src.PassValue()); }
-		T& operator =(const Reassignable& src)	{ return this->operator=(src.Value());	   }
-
-
-		template <class Func>
-		void AcceptRvo(Func&& creator)
-		{
-			this->Destroy();
-			this->InvokeFactory(creator);
+			Storage::ConstructParensPreferred(forward<Args>(args)...);
 		}
 
 		template <class... Args>
-		void Reconstruct(Args&&... args)
+		Reassignable(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
-			this->Destroy();
-			this->Construct(forward<Args>(args)...);
+			Storage::ConstructBraced(forward<Args>(args)...);
+		}
+
+		template <class Fact>
+		Reassignable(FactoryInvokeSelector, Fact& create)   noexcept(noexcept(create()))
+		{
+			Storage::InvokeFactory(create);
 		}
 
 
-		// allow generic code to move (without triggering dangling assignment checks inside)
-		template <class TT = T>
-		void AssignMoved(IfReference<TT> src)	{ Reconstruct(src); }
-
-		template <class TT = T>
-		void AssignMoved(IfPRValue<TT>& src)	{ Reconstruct(move(src)); }
-
-
-		// shorthand specifically for enumerators (being an internal helper)
-		template <class Et>
-		void AssignCurrent(Et&& enumerator)
+		Reassignable(const Reassignable& src)	noexcept(is_nothrow_copy_constructible_v<T>)
 		{
-			this->AcceptRvo([&enumerator]() -> decltype(enumerator.Current()) { return enumerator.Current(); });
-		}
-	};
-
-
-
-
-	/// Value with deferred, possibly repeated initialization.
-	template <class T>
-	class Deferred final : private GenericStorage<T> {
-		bool initialized = false;
-
-	public:
-		bool IsInitialized() const	{ return initialized; }
-
-		Deferred() = default;
-
-		Deferred(const Deferred& src) : initialized { src.initialized }
-		{
-			if (initialized)	this->CopyFrom(src);
+			Storage::CopyFrom(src);
 		}
 
-		Deferred(Deferred&& src)	  : initialized { src.initialized }
+		Reassignable(Reassignable&& src)		noexcept(is_nothrow_move_constructible_v<T>)
 		{
-			if (initialized)	this->MoveFrom(src);
+			Storage::MoveFrom(src);
 		}
 
-		~Deferred()
+		~Reassignable()							noexcept(is_nothrow_destructible_v<T>)
 		{
-			if (initialized)	this->Destroy();
+			Storage::Destroy();
 		}
 
 
-		// no asserts, not a public type
-		using GenericStorage<T>::Value;
-		using GenericStorage<T>::PassValue;
-		using GenericStorage<T>::operator *;
-		using GenericStorage<T>::operator ->;
-		using GenericStorage<T>::operator T&;
+		using Storage::Value;
+		using Storage::PassValue;
+		using Storage::operator *;
+		using Storage::operator ->;
+		using Storage::operator const T&;
+
+		// can't import all at once :/
+		operator T& ()	 & noexcept  { return Value();     }
+		operator T&& () && noexcept  { return PassValue(); }
 
 
 		template <class S>
 		T& operator =(S&& src)
 		{
-			if (initialized)	this->Reassign(forward<S>(src));
-			else				this->Construct(forward<S>(src));
-
-			initialized = true;
-			return Value();
+			return Storage::Reassign(forward<S>(src));
 		}
 
-		T& operator =(Deferred&& src)		{ return this->operator=(src.PassValue()); }
-		T& operator =(const Deferred& src)	{ return this->operator=(src.Value());	   }
+		T& operator =(Reassignable&& src)		noexcept(noexcept(Storage::Reassign(src.PassValue())))
+		{
+			return Storage::Reassign(src.PassValue());
+		}
+
+		T& operator =(const Reassignable& src)	noexcept(noexcept(Storage::Reassign(src.Value())))
+		{
+			return Storage::Reassign(src.Value());
+		}
+
+		// allow generic code to move (without triggering dangling assignment checks inside)
+		template <class TT = T>
+		void AssignHeadMoved(IfReference<TT> src) noexcept	{ Storage::Reassign(src); }
+
+		template <class TT = T>
+		void AssignHeadMoved(IfPRValue<TT>& src)			{ Storage::Reassign(move(src)); }
+	};
+
+
+
+
+	/// Value with deferred initialization.
+	/// @tparam Replaceable:  Allows in-place reconstruction.
+	///						  Remnant of C++14 type-split, maybe adds clarity to way of usage (?)
+	template <class T, bool Replaceable = false>
+	class Deferred final : private GenericStorage<T> {
+
+		using Storage = GenericStorage<T>;
+
+		bool  initialized = false;
+
+
+		void EnsureDestroyed()	noexcept(std::is_nothrow_destructible_v<T> || !Replaceable)
+		{
+			if constexpr (Replaceable) {
+				if (initialized) {
+					initialized = false;	// lifetime ends by dtor start!
+					Storage::Destroy();
+				}
+			}
+			else {
+				ENUMERABLES_INTERNAL_ASSERT (!initialized);
+			}
+		}
+
+	public:
+		// no asserts, not a public type
+		using Storage::Value;
+		using Storage::PassValue;
+		using Storage::operator *;
+		using Storage::operator ->;
+
+		bool IsInitialized() const noexcept  { return initialized; }
+
+
+		Deferred() = default;
+
+		Deferred(const Deferred& src)	noexcept(is_nothrow_copy_constructible_v<T>)
+		{
+			if (src.IsInitialized()) {
+				Storage::CopyFrom(src);
+				initialized = true;
+			}
+		}
+
+		Deferred(Deferred&& src)		noexcept(is_nothrow_move_constructible_v<T>)
+		{
+			if (src.IsInitialized()) {
+				Storage::MoveFrom(src);
+				initialized = true;
+			}
+		}
+
+
+		~Deferred()						noexcept(std::is_nothrow_destructible_v<T>)
+		{
+			if (initialized)
+				Storage::Destroy();
+		}
+
 
 		template <class Func>
 		void AcceptRvo(Func&& creator)
 		{
-			if (initialized)	this->Destroy();
-
-			this->InvokeFactory(creator);
+			EnsureDestroyed();
+			Storage::InvokeFactory(creator);
 			initialized = true;
 		}
 
 		template <class... Args>
 		void Reconstruct(Args&&... args)
 		{
-			if (initialized)	this->Destroy();
-
-			this->Construct(forward<Args>(args)...);
+			EnsureDestroyed();
+			Storage::ConstructParensPreferred(forward<Args>(args)...);
 			initialized = true;
 		}
 
-
-		// allow generic code to move (without triggering dangling assignment checks inside)
-		template <class TT = T>
-		void AssignMoved(IfReference<TT> src)	{ Reconstruct(src); }
-
-		template <class TT = T>
-		void AssignMoved(IfPRValue<TT>& src)	{ Reconstruct(move(src)); }
-
+		template <class... Args>
+		void ReconstructAggregate(Args&&... args)
+		{
+			EnsureDestroyed();
+			Storage::ConstructBraced(forward<Args>(args)...);
+			initialized = true;
+		}
 
 		// shorthand specifically for enumerators (Deferred being an internal helper)
 		template <class Et>
-		void AssignCurrent(Et&& enumerator)
+		void AcceptCurrent(Et&& enumerator)
 		{
-			this->AcceptRvo([&enumerator]() -> decltype(enumerator.Current()) { return enumerator.Current(); });
+			AcceptRvo([&enumerator]() -> decltype(auto) { return enumerator.Current(); });
 		}
+
+
+		template <class S>
+		T& operator =(S&& src)
+		{
+			static_assert (is_constructible<T, S>::value, "Can't construct from this parameter!");
+
+			if constexpr (Replaceable) {
+				if (initialized)	Storage::Reassign(forward<S>(src));
+				else				Storage::ConstructParens(forward<S>(src));
+			}
+			else {
+				this->ConstructParens(forward<S>(src));
+			}
+			initialized = true;
+			return Value();
+		}
+
+		// allow generic code to move (without triggering dangling assignment checks inside)
+		template <class TT = T>
+		void AssignHeadMoved(IfReference<TT> src) noexcept	{ operator=(src); }
+
+		template <class TT = T>
+		void AssignHeadMoved(IfPRValue<TT>& src)			{ operator=(move(src)); }
 	};
+
+
+
+	/// Value with deferred, possibly repeated initialization.
+	template <class T>
+	using DeferredReplaceable = Deferred<T, true>;
 
 #pragma endregion
 
 
 
-	
+
 #pragma region Collection Parametrization
 
 	/// Detect a custom AllocatedValueT for a given parametrization if defined in a container-binding.
@@ -1090,7 +1146,7 @@ namespace Enumerables::TypeHelpers {
 	/// or void if plain element type should be used.
 	template <class Binding, class ComponentList, class SizeList, class... Options>
 	using CustomAllocatedT = typename CustomAllocatedValue<Binding, ComponentList, SizeList, void, Options...>::type;
-	
+
 	/// Required value-type for allocators for a given parametrization of Binding::Container.
 	/// [Defaults to last component (e.g. V of Dictionary<K, V>) if not customized in Binding.]
 	template <class Binding, class ComponentList, class SizeList, class... OptionArgs>
@@ -1114,7 +1170,7 @@ namespace Enumerables::TypeHelpers {
 	{
 		using ReqValue	= RequiredAllocatedT<Binding, ComponentList, SizeList, OptArgs...>;
 		using type		= typename std::allocator_traits<Alloc>::template rebind_alloc<ReqValue>;
-		
+
 		// check to enforce V* convention (arbitrary but reasonable)
 		using OpaqueComps = typename MapTypeList<ComponentList, RefholderToPtrT>::typeList;
 		using OpaqueValue = RequiredAllocatedT<Binding, OpaqueComps, SizeList, OptArgs...>;
@@ -1183,7 +1239,7 @@ namespace Enumerables::TypeHelpers {
 																	  ComponentList,
 																	  SizeList,
 																	  Options...>::type;
-	
+
 	/// If present, rebind the user-given allocator correctly (e.g. for RefHolder items).
 	/// @tparam Elem:		value type stored in container
 	/// @tparam Options:	further type arguments (e.g. hasher, Allocator)
