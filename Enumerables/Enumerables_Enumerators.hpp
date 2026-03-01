@@ -1431,8 +1431,8 @@ namespace Def {
 
 	public:
 		// CONSIDER: ETORUSAGE_ASSERTs? Would require extra bytes here - prob. not worth it this case.
-		TAcc		Current()		  override final	{ return *accumulator; }
-		SizeInfo	Measure()	const override final	{ return this->source.Measure(); }
+		TAcc		Current()		  override			{ return *accumulator; }
+		SizeInfo	Measure()	const override final	{ return source.Measure(); }
 
 		template <class Factory>
 		ScannerBase(Factory&& getSource, const Combiner& combiner) :
@@ -1527,6 +1527,13 @@ namespace Def {
 				InitFromCurrent();
 
 			return any;
+		}
+
+
+		TAcc Current() override
+		{
+			ENUMERABLES_ETOR_USAGE_ASSERT (this->accumulator.IsInitialized(), MissedFetchError);
+			return this->accumulator.Value();
 		}
 
 
