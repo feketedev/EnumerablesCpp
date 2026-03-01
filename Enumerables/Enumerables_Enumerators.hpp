@@ -155,13 +155,13 @@ namespace Def {
 	using AdjustedList = AdjustedContainerT<ListOperations, V, Args...>;
 
 
-	template <class V, class Alloc = None, class = std::enable_if_t<IsNone<Alloc>>>
+	template <class V, class Alloc = None, enable_if_t<IsNone<Alloc>, int> = 0>
 	BracedInitOperations::Container<V>			BracedInitWithOptionalAlloc(std::initializer_list<V> init, const Alloc& = {})
 	{
 		return BracedInitOperations::Init(init);
 	}
 
-	template <class V, class Alloc, class = std::enable_if_t<!IsNone<Alloc>>>
+	template <class V, class Alloc, enable_if_t<!IsNone<Alloc>, int> = 0>
 	BracedInitOperations::Container<V, Alloc>	BracedInitWithOptionalAlloc(std::initializer_list<V> init, const Alloc& alloc)
 	{
 		return BracedInitOperations::Init(init, alloc);
@@ -290,13 +290,16 @@ namespace Def {
 		InterfacedEnumerator(NestedFactory&& fact, enable_if_t<SureFitsInline<InvokeResultT<NestedFactory>>()>* = nullptr)
 			: ptr { (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr() }
 		{
-			// TODO: This placement construct - more precisely the lack of any ~RvoEmplacer call in the end - strictly speaking is UB!!
-			//		 I see low danger, since the IEnumerator destruction is properly done, so what remains is: the RvoEmplacer residing
-			//		 within fixBuffer, having its only member subobject destroyed, holding no resources.
+			// TODO: This placement construct - more precisely the later call to ~IEnumerator instead of ~RvoEmplacer - is probably UB!!
+			//		 I see low danger, since the ~IEnumerator virtual call releases all resources of the Enumerator, what remains is the
+			//		 RvoEmplacer skeleton, having its only subobject destroyed, residing within fixBuffer.
+			//		 -> The placement itself:		OK, ptr is valid.
+			//		 -> Omitted ~RvoEmplacer call:	more or less allowed by the standard, provided that nothing relies on its side-effects.
+			//		 -> Possible problem:			it's not a "complete object" that gets destroyed manually, but a subobject of it.
 			//
-			//		 (In C++17 this construct allowed the omission of [virtual] move ctors, so it is useful.)
+			//		 In C++17 this construct allows the omission of [virtual] move ctors, so it is useful.
 			//
-			//		 If want to stay on the safe side, the above initialization can be replaced with a move construction:
+			//		 Here, to stay on the safe side, the above initialization can be replaced with a plain move construction:
 			//		 ptr { new (InlineTarget<NestedFactory>()) InvokeResultT<NestedFactory> { fact() } }
 		}
 

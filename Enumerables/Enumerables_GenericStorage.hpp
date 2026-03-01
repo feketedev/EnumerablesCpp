@@ -14,6 +14,7 @@
 
 
 #include "Enumerables_TypeHelperBasics.hpp"
+#include <new>
 
 
 
@@ -165,20 +166,20 @@ namespace TypeHelpers {
 		T	obj;
 
 		template <class Factory>
-		Emplacer(FactoryInvokeSelector, Factory&& create) noexcept(noexcept(create()))
+		Emplacer(FactoryInvokeSelector, Factory&& create)  noexcept(noexcept(create()))
 			: obj { create() }
 		{
 			static_assert (is_same<decltype(create()), T>::value, "Factory returns mismatching type.");
 		}
 
 		template <class... Args>
-		Emplacer(ForcedBracesSelector, Args&&... args) noexcept(noexcept(T { forward<Args>(args)... }))
+		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 			: obj { forward<Args>(args)... }
 		{
 		}
 
 		template <class... Args>
-		Emplacer(Args&&... args) noexcept(noexcept(T (forward<Args>(args)...)))
+		Emplacer(Args&&... args)  noexcept(noexcept(T (forward<Args>(args)...)))
 			: obj(forward<Args>(args)...)
 		{
 		}
@@ -251,7 +252,7 @@ namespace TypeHelpers {
 		T&			operator *()		 &	noexcept  { return Value(); }
 		T&&			operator *()		&&	noexcept  { return move(*this).Value(); }
 
-		// Note: &-collapsing suffice for Value(), but * needs auto	 -> or explicit help
+		// &-collapsing suffice for Value(), but * needs auto	 -> or explicit help
 		Ptr			operator ->()			noexcept  { return &Value(); }
 		ConstPtr	operator ->()	const	noexcept  { return &Value(); }
 
@@ -340,11 +341,13 @@ namespace TypeHelpers {
 			storage.Construct(TypeHelpers::InvokeFactory, create);
 		}
 
-		// for RefHolder<T> or any mismatching prvalue that needs conversion
+		// for T& -> RefHolder<T>
 		template <class Factory, class Trg = T>
 		auto InvokeFactory(Factory&& create)  noexcept(noexcept(create()))
 			-> enable_if_t<!is_same<Emp, Emplacer<decltype(create())>>::value>
 		{
+			static_assert (is_same<T, decltype(create())>::value,
+						   "To allow conversions, use Construct*() directly");
 			storage.Construct(create());
 		}
 
@@ -359,7 +362,7 @@ namespace TypeHelpers {
 		/// Only if already initialized!
 		template <class Src>
 		T& Reassign(Src&& src, enable_if_t<!IsHeadAssignable<T, Src> && is_constructible<T, Src>::value>* = nullptr)
-		noexcept(is_nothrow_constructible<T, Src>::value)
+		noexcept(IsNothrowReconstructible<T, Src>)
 		{
 			static_assert (SupportReconstruct || is_reference<T>::value || is_scalar<T>::value,
 						   "Stored type does not support this assignment, whilst Reconstruction support is not set!");
@@ -427,10 +430,10 @@ namespace TypeHelpers {
 	template <class T>
 	class UnionStorage {
 
-		// avoid placing a "complete-const" type
-		using NonConst = std::remove_const_t<T>;
+		// The payload is always Emplacer or RefHolder, not T directly.
+		static_assert (!is_const<T>::value, "Recunstructing a const complete object is UB.");
 
-		union { NonConst value; };
+		union { T value; };
 
 	public:
 		const T&	Get() const	noexcept  { return value; }
@@ -442,12 +445,12 @@ namespace TypeHelpers {
 		template <class... Args>
 		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
 		{
-			new (&value) NonConst { forward<Args>(args)... };
+			new (&value) T { forward<Args>(args)... };
 		}
 
 		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
 		{
-			value.~NonConst();
+			value.~T();
 		}
 	};
 

@@ -9,6 +9,7 @@
 
 
 #include <type_traits>
+#include <iterator>
 
 
 
@@ -23,7 +24,6 @@ namespace TypeHelpers {
 	using std::conditional_t;
 	using std::remove_pointer_t;
 	using std::remove_reference_t;
-	using std::void_t;
 	using std::is_abstract;
 	using std::is_assignable;
 	using std::is_const;
@@ -140,6 +140,14 @@ namespace TypeHelpers {
 	struct IfMultipleTypes<H, S, T...> {
 		using type = H;
 	};
+
+
+	/// Implementation for void_t, pre-c++17.
+	template <class...>
+	struct void_trait { using type = void; };
+
+	template <typename... T>
+	using void_t = typename void_trait<T...>::type;
 
 
 
@@ -269,8 +277,8 @@ namespace TypeHelpers {
 	struct AreConvertiblePointers : std::false_type {};
 	template <class T, class U>
 	struct AreConvertiblePointers<T*, U*> : std::bool_constant<is_convertible<T*, U*>::value
-															|| is_convertible<U*, T*>::value
-	> {};
+															|| is_convertible<U*, T*>::value> {
+	};
 
 
 	// [void -> false]
@@ -536,6 +544,17 @@ namespace TypeHelpers {
 	constexpr bool IsConstructibleAnyway = IsBraceConstructible<T, Args...>::value
 										|| is_constructible<T, Args...>::value;
 
+
+	/// Destruction + in-place (parenthesized) recreation from Args... is noexcept.
+	template <class T, class... Args>
+	constexpr bool IsNothrowReconstructible =  is_nothrow_destructible<T>::value
+											&& is_nothrow_constructible<T, Args...>::value;
+
+	/// Assignment to l-value of T, or as fallback the recreation as T(S) is noexcept.
+	template <class T, class S>
+	constexpr bool IsNothrowReassignable = IsHeadAssignable<T, S>
+											? is_nothrow_assignable<T&, S>::value
+											: IsNothrowReconstructible<T, S>;
 
 
 	/// Checks wether T has operator +=

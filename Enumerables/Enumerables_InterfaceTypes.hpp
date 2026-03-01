@@ -172,13 +172,15 @@ namespace Enumerables {
 		}
 
 
-		OptResult(OptResult&& src)		: error { src.error }
+		OptResult(OptResult&& src)		noexcept(std::is_nothrow_move_constructible<T>::value)
+			: error { src.error }
 		{
 			if (src.HasValue())
 				storage.MoveFrom(src.storage);
 		}
 
-		OptResult(const OptResult& src)	: error { src.error }
+		OptResult(const OptResult& src)	noexcept(std::is_nothrow_copy_constructible<T>::value)
+			: error { src.error }
 		{
 			if (src.HasValue())
 				storage.CopyFrom(src.storage);
@@ -205,7 +207,7 @@ namespace Enumerables {
 		}
 
 
-		~OptResult()
+		~OptResult()  noexcept(std::is_nothrow_destructible<T>::value)
 		{
 			if (HasValue())
 				storage.Destroy();

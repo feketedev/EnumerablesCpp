@@ -159,8 +159,8 @@ namespace TypeHelpers {
 	using InitElemFor = conditional_t<is_reference<TElem>::value, remove_reference_t<TElem>*, TElem>;
 
 
-	namespace InitListSupport
-	{
+	namespace InitListSupport {
+
 		template <class I>
 		constexpr bool IsStringLiteralType = is_same<I, const char*>::value
 										  || is_same<I, const wchar_t*>::value
@@ -232,7 +232,8 @@ namespace TypeHelpers {
 		/// Decide a possibly ambiguous element type (i.e. MaybeToDereference<T>) by default rules if possible.
 		template <class T>
 		using ResolveContextEndedT = typename ResolveWithoutContext<T>::type;
-	}
+
+	}	// namespace InitListSupport
 
 
 
@@ -240,10 +241,9 @@ namespace TypeHelpers {
 	/// @remarks
 	///		These restrictions don't take part in SFINAE overload selection, but give friendly errors.
 	///		Their presence is still important!
-	namespace ContainerWrapChecks
-	{
-		namespace Internals
-		{
+	namespace ContainerWrapChecks {
+		namespace Internals {
+
 			template <class Iterated, class TElem>		void CoreChecks()
 			{
 				static_assert (is_reference<Iterated>::value || !is_reference<TElem>::value,
@@ -304,7 +304,7 @@ namespace TypeHelpers {
 			ByValue <Iterated, TElem>();
 			Internals::ImplicitReinforcedChecks<Iterated, TElem>();
 		}
-	}
+	}	// namespace ContainerWrapChecks
 
 
 
@@ -372,8 +372,8 @@ namespace TypeHelpers {
 	///			-> preserving rvalueness of owner object
 	///		* pointer to Member Function of no parameters (for typical getter calls)
 	///			-> returning the exact type (!) defined by that function
-	namespace MemberPointerHelpers
-	{
+	namespace MemberPointerHelpers {
+
 		template <class Ptr>
 		using IfMemberObject = enable_if_t<is_member_object_pointer<remove_reference_t<Ptr>>::value>;
 
@@ -634,8 +634,8 @@ namespace TypeHelpers {
 
 
 
-	namespace LambdaCreators
-	{
+	namespace LambdaCreators {
+
 		// ==== Parameter type helpers ========================================================
 
 		// For Predicates: const access only - even to pointees
@@ -843,7 +843,7 @@ namespace TypeHelpers {
 				[p](ConstParamT<T> elem) { return (*p)(elem); }
 			);
 		}
-	}
+	}	// namespace LambdaCreators
 
 #pragma endregion
 
@@ -852,8 +852,8 @@ namespace TypeHelpers {
 
 #pragma region Unified Binary Ops
 
-	namespace MemberPointerHelpers
-	{
+	namespace MemberPointerHelpers {
+
 		template <class T, class BinOp, class R>
 		decltype(auto) ApplyBinop(T*  obj, BinOp op, R&& r, IfMemberFunction<BinOp>* = nullptr)	{ return (obj->*op)(forward<R>(r)); }
 
@@ -867,8 +867,8 @@ namespace TypeHelpers {
 
 
 
-	namespace LambdaCreators
-	{
+	namespace LambdaCreators {
+
 		// ==== Map via binary function ======================================================
 
 		template <class T1, class T2, class R = void, class L>
@@ -971,17 +971,17 @@ namespace TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)
+		T& operator =(S&& src)					noexcept(IsNothrowReassignable<T, S>)
 		{
 			return Storage::Reassign(forward<S>(src));
 		}
 
-		T& operator =(Reassignable&& src)		noexcept(noexcept(Storage::Reassign(src.PassValue())))
+		T& operator =(Reassignable&& src)		noexcept(IsNothrowReassignable<T, T&&>)
 		{
 			return Storage::Reassign(src.PassValue());
 		}
 
-		T& operator =(const Reassignable& src)	noexcept(noexcept(Storage::Reassign(src.Value())))
+		T& operator =(const Reassignable& src)	noexcept(IsNothrowReassignable<T, const T&>)
 		{
 			return Storage::Reassign(src.Value());
 		}
@@ -1076,7 +1076,7 @@ namespace TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)
+		T& operator =(S&& src)  noexcept(is_nothrow_constructible<T, S>::value)
 		{
 			ENUMERABLES_INTERNAL_ASSERT (!this->IsInitialized());
 			this->ConstructParens(forward<S>(src));
@@ -1130,7 +1130,7 @@ namespace TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)
+		T& operator =(S&& src)  noexcept(IsNothrowReassignable<T, S>)
 		{
 			static_assert (is_constructible<T, S>::value, "Can't construct from this parameter!");
 

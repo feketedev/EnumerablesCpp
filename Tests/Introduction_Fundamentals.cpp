@@ -865,7 +865,7 @@ namespace EnumerableTests {
 			// The library is prepared to resolve the usual overload-sets (const/mutable, &/&&/const&)
 			// at the cost of storing 1 extra pointer. [Same applies to overloaded free-functions!]
 
-			// Alternative is to resolve the pointer beforehand - 
+			// Alternative is to resolve the pointer beforehand -
 			// probably being worst then lambdas readability-wise:
 
 			unsigned& (Rectangle::* accessHeight)() = &Rectangle::Height;
