@@ -611,7 +611,7 @@ namespace Def {
 
 		while (et.FetchNext()) {
 			TElem curr = et.Current();
-			if (isLess(curr, min))
+			if (isLess(curr, *min))
 				min.AssignHeadMoved(curr);
 		}
 		return min.PassValue();

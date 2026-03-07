@@ -953,7 +953,8 @@ namespace TypeHelpers {
 			Storage::MoveFrom(src);
 		}
 
-		~Reassignable()							noexcept(is_nothrow_destructible<T>::value)
+		// noexcept regardless of ~T():  internal only, used by IEnumerator descendants
+		~Reassignable()
 		{
 			Storage::Destroy();
 		}
@@ -963,11 +964,6 @@ namespace TypeHelpers {
 		using Storage::PassValue;
 		using Storage::operator *;
 		using Storage::operator ->;
-		using Storage::operator const T&;
-
-		// can't import all at once :/
-		operator T& ()	 & noexcept  { return Value();     }
-		operator T&& () && noexcept  { return PassValue(); }
 
 
 		template <class S>
@@ -976,6 +972,8 @@ namespace TypeHelpers {
 			return Storage::Reassign(forward<S>(src));
 		}
 
+
+		// required as special function
 		T& operator =(Reassignable&& src)		noexcept(IsNothrowReassignable<T, T&&>)
 		{
 			return Storage::Reassign(src.PassValue());
@@ -985,6 +983,27 @@ namespace TypeHelpers {
 		{
 			return Storage::Reassign(src.Value());
 		}
+
+
+		// additional wrapped conversion
+		template <class S>
+		T& operator =(Reassignable<S>&& src)		noexcept(IsNothrowReassignable<T, S&&>)
+		{
+			return Storage::Reassign(src.PassValue());
+		}
+
+		template <class S>
+		T& operator =(const Reassignable<S>& src)	noexcept(IsNothrowReassignable<T, const S&>)
+		{
+			return Storage::Reassign(src.Value());
+		}
+
+		template <class S>
+		T& operator =(Reassignable<S>& src)			noexcept(IsNothrowReassignable<T, S&>)
+		{
+			return Storage::Reassign(src.Value());
+		}
+
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
 		template <class TT = T>
@@ -1023,7 +1042,8 @@ namespace TypeHelpers {
 				Storage::Destroy();
 		}
 
-		~DeferredBase()			noexcept(std::is_nothrow_destructible<T>::value)
+		// noexcept regardless of ~T():  internal only, used by IEnumerator descendants
+		~DeferredBase()
 		{
 			EnsureDestroyed();
 		}

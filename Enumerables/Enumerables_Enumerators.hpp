@@ -620,7 +620,7 @@ namespace Def {
 		TElem	Current()	override
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (firstFetched, MissedFetchError);
-			return curr;
+			return *curr;
 		}
 
 		bool	FetchNext()	override

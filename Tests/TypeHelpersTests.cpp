@@ -697,7 +697,7 @@ namespace EnumerableTests {
 				ASSERT_EQ (nullptr, a1->payload);		// value-initialized
 
 				ConstCtorStruct so = s2.PassValue();
-				ConstAggregate  ao = move(a2);
+				ConstAggregate  ao = *move(a2);
 				ASSERT_EQ (1,	so.id);
 				ASSERT_EQ (3,	ao.id);
 				ASSERT_EQ (1.1,	*so.payload);
@@ -762,7 +762,7 @@ namespace EnumerableTests {
 
 				Reassignable<ConstCtorStruct&> r1 { *s1 };
 				ASSERT_EQ (3.3, *r1->payload);
-				r1 = s4;						// implicit conversion
+				r1 = s4;						// converting op=
 				ASSERT_EQ (4.4, *r1->payload);
 				ASSERT_EQ (3.3, *s1->payload);
 
