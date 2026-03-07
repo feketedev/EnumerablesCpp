@@ -296,16 +296,16 @@ namespace TypeHelpers {
 
 		// ---- Construction/assignment ops ----
 
-		template <class... Args>
-		enable_if_t<!is_reference<AsDependentT<T, Args...>>::value>		// guard needed for RefHolder
-		ConstructBraced(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
+		// guard needed against RefHolder
+		template <class... Args, class = enable_if_t<!is_reference<AsDependentT<T, Args...>>::value>>
+		void ConstructBraced(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
 		{
 			storage.Construct(TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)...);
 		}
 
-		template <class Trg>
-		enable_if_t<is_reference<AsDependentT<T, Trg>>::value>			// RefHolder
-		ConstructBraced(Trg&& referred)  noexcept
+		// if RefHolder
+		template <class Trg, class = enable_if_t<is_reference<AsDependentT<T, Trg>>::value>>
+		void ConstructBraced(Trg&& referred)	  noexcept
 		{
 			storage.Construct(forward<Trg>(referred)...);
 		}

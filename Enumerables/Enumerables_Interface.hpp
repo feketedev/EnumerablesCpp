@@ -776,7 +776,7 @@ namespace Def {
 		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
 		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
 
-		template <class Pred = PF, enable_if_t<!is_convertible<Pred, TElemConstParam>::value, int> = 0>
+		template <class Pred = PF, class = enable_if_t<!is_convertible<Pred, TElemConstParam>::value>>
 		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
 
 
