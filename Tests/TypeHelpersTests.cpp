@@ -46,6 +46,9 @@ namespace EnumerableTests {
 			// mutable & can be missing from ref-qualified triple - and even makes sense
 			char	GetCopy32()		const&	{ return cLeftConst; }
 			char	GetCopy32()		&&		{ return cRight; }
+
+
+			int SubtractConstOf(const GetterTester& rhs) const  { return c - rhs.cConst; }
 		};
 
 
@@ -64,6 +67,12 @@ namespace EnumerableTests {
 
 		static char			MapFunction2(const GetterTester&)		{ return GlobChar; }
 		static char			MapFunction2(GetterTester&& obj)		{ return std::move(obj.cRight); }
+
+
+		static bool	FreePredicate(const GetterTester&   obj)	{ return obj.c == 'a'; }
+		static bool	FreePredicateNonConst(GetterTester& obj)	{ return obj.c == 'a'; }
+
+		static int	FreeBinop(const GetterTester& l, const GetterTester& r)  { return l.c - r.cConst; }
 
 	}	// namespace
 
@@ -378,6 +387,160 @@ namespace EnumerableTests {
 				ASSERT(2.0 == d4(4.0));
 				ASSERT(2.0 == d4(std::move(d)));
 			}
+		}
+	}
+
+
+
+	static void TestLambdaWrappers()
+	{
+		using namespace LambdaCreators;
+
+		GetterTester		obj {};
+		const GetterTester&	constObj = obj;
+
+		const char& (*fp)(const GetterTester&) = &FreeExtractor;
+		const char& (&fr)(const GetterTester&) = FreeExtractor;
+
+		// Custom Map
+		{
+			auto m1 = CustomMapper<const GetterTester&>(fp);
+			auto m2 = CustomMapper<const GetterTester&>(fr);
+			auto m3 = CustomMapper<const GetterTester&>(FreeExtractorValParam);			// exact,
+			auto m4 = CustomMapper<const GetterTester&>(&GetterTester::c);				// no
+			auto m5 = CustomMapper<const GetterTester&>(&GetterTester::GetCharConst);	// overaloads
+
+			static_assert (is_same<decltype(fp), decltype(m1)>::value, "Should not wrap.");
+			static_assert (is_same<decltype(fp), decltype(m2)>::value, "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(m3)>::value, "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(m4)>::value,    "Should wrap to unify calling!");
+			static_assert (!is_member_pointer<decltype(m5)>::value,    "Should wrap to unify calling!");
+
+			ASSERT_EQ ('c', m1(constObj));
+			ASSERT_EQ ('c', m2(constObj));
+			ASSERT_EQ ('u', m3(constObj));
+			ASSERT_EQ ('u', m4(constObj));
+			ASSERT_EQ ('c', m5(constObj));
+
+			static_assert (is_same<const char&, decltype(m1(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(m2(constObj))>::value, "Changed return.");
+			static_assert (is_same<      char , decltype(m3(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(m4(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(m5(constObj))>::value, "Changed return.");
+
+			// Note: the parameter types actually don't get restricted. Member-pointers are wrapped
+			//		 in a templated manner, only to unify call syntax. If calling with the supposed
+			//		 arguments produce a safe result, the lambda object is returned as-is.
+			//		 However, the enumerators always input an exact TElem object, anyways.
+			static_assert (is_same<char&, decltype(m4(obj))>::value, "Changed return.");
+
+
+			// forcing a convertible return value:
+			auto mc1 = CustomMapper<const GetterTester&, int>(fp);
+			auto mc2 = CustomMapper<const GetterTester&, int>(fr);
+			auto mc3 = CustomMapper<const GetterTester&, int>(&GetterTester::c);
+			static_assert (!is_pointer<decltype(mc1)>::value, "Should wrap!");
+			static_assert (!is_pointer<decltype(mc2)>::value, "Should wrap!");
+			static_assert (!is_pointer<decltype(mc3)>::value, "Should wrap!");
+
+			ASSERT_EQ ('c', mc1(constObj));
+			ASSERT_EQ ('c', mc2(constObj));
+			ASSERT_EQ ('u', mc3(constObj));
+			static_assert (is_same<int, decltype(mc1(constObj))>::value, "Not the requested type.");
+			static_assert (is_same<int, decltype(mc2(constObj))>::value, "Not the requested type.");
+			static_assert (is_same<int, decltype(mc3(constObj))>::value, "Not the requested type.");
+		}
+
+		// Subobject select - simple
+		{
+			auto s1 = Selector<const GetterTester&>(fp);
+			auto s2 = Selector<const GetterTester&>(fr);
+			auto s3 = Selector<const GetterTester&>(FreeExtractorValParam);			// exact,
+			auto s4 = Selector<const GetterTester&>(&GetterTester::cConst);			// no
+			auto s5 = Selector<const GetterTester&>(&GetterTester::GetCharConst);	// overaloads
+
+			static_assert (is_same<decltype(fp), decltype(s1)>::value, "Should not wrap.");
+			static_assert (is_same<decltype(fp), decltype(s2)>::value, "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(s3)>::value, "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(s4)>::value,    "Should wrap to unify calling!");
+			static_assert (!is_member_pointer<decltype(s5)>::value,    "Should wrap to unify calling!");
+
+			ASSERT_EQ ('c', s1(constObj));
+			ASSERT_EQ ('c', s2(constObj));
+			ASSERT_EQ ('u', s3(constObj));
+			ASSERT_EQ ('c', s4(constObj));
+			ASSERT_EQ ('c', s5(constObj));
+
+			static_assert (is_same<const char&, decltype(s1(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(s2(constObj))>::value, "Changed return.");
+			static_assert (is_same<      char , decltype(s3(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(s4(constObj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(s5(constObj))>::value, "Changed return.");
+		}
+
+		// Subobject select - materialize
+		{
+			auto s1 = Selector<GetterTester>(fp);
+			auto s2 = Selector<GetterTester>(fr);
+			auto s3 = Selector<GetterTester>(FreeExtractorValParam);			// exact,
+			auto s4 = Selector<GetterTester>(&GetterTester::cConst);			// no
+			auto s5 = Selector<GetterTester>(&GetterTester::GetCharConst);		// overaloads
+
+			static_assert (!is_same<decltype(fp), decltype(s1)>::value, "Should wrap!");
+			static_assert (!is_same<decltype(fp), decltype(s2)>::value, "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(s3)>::value, "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(s4)>::value,     "Should wrap anyway!");
+			static_assert (!is_member_pointer<decltype(s5)>::value,     "Should wrap anyway!");
+
+			ASSERT_EQ ('c', s1(constObj));
+			ASSERT_EQ ('c', s2(constObj));
+			ASSERT_EQ ('u', s3(constObj));
+			ASSERT_EQ ('c', s4(constObj));
+			ASSERT_EQ ('c', s5(constObj));
+
+			static_assert (is_same<char, decltype(s1(constObj))>::value, "Should materialize!");
+			static_assert (is_same<char, decltype(s2(constObj))>::value, "Should materialize!");
+			static_assert (is_same<char, decltype(s3(constObj))>::value, "Changed return.");
+			static_assert (is_same<char, decltype(s4(constObj))>::value, "Should materialize!");
+			static_assert (is_same<char, decltype(s5(constObj))>::value, "Should materialize!");
+		}
+
+		// Predicate
+		{
+			auto p1 = Predicate<GetterTester&>(&FreePredicate);
+			auto p2 = Predicate<GetterTester&>(&FreePredicateNonConst);
+			auto p3 = Predicate<GetterTester&>(&GetterTester::c);				// in fact, char is
+			auto p4 = Predicate<GetterTester&>(&GetterTester::GetCharConst);	// convertible to bool...
+
+			static_assert (is_pointer<decltype(p1)>::value,			"Should not wrap.");
+			static_assert (is_pointer<decltype(p2)>::value,			"Should not wrap.");
+			static_assert (!is_member_pointer<decltype(p3)>::value,	"Should wrap!");
+			static_assert (!is_member_pointer<decltype(p4)>::value,	"Should wrap!");
+
+			ASSERT (!p1(constObj));
+			ASSERT (!p2(obj));		// the only one with actual non-const parameter
+			ASSERT (p3(constObj));
+			ASSERT (p4(constObj));
+
+			// conversion to bool is enforced
+			static_assert (is_same<bool, decltype(p1(obj))>::value, "Changed return.");
+			static_assert (is_same<bool, decltype(p2(obj))>::value, "Changed return.");
+			static_assert (is_same<bool, decltype(p3(obj))>::value, "Changed return.");
+			static_assert (is_same<bool, decltype(p4(obj))>::value, "Changed return.");
+		}
+
+		// Binary mappers
+		{
+			auto op1 = BinaryMapper<const GetterTester&, const GetterTester&>(&FreeBinop);
+			auto op2 = BinaryMapper<const GetterTester&, const GetterTester&>(&GetterTester::SubtractConstOf);
+
+			static_assert (is_pointer<decltype(op1)>::value,	 "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(op2)>::value, "Should wrap!");
+
+			ASSERT_EQ (18, op1(constObj, constObj));
+			ASSERT_EQ (18, op2(constObj, constObj));
+			ASSERT_EQ (18, op1(obj, obj));
+			ASSERT_EQ (18, op2(obj, obj));
 		}
 	}
 
@@ -1541,6 +1704,7 @@ namespace EnumerableTests {
 		Greet("Typehelpers");
 
 		TestOverloadResolver();
+		TestLambdaWrappers();
 		TestGenStorage();
 	}
 
