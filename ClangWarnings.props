@@ -3,7 +3,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <ClangTidyChecks>-clang-diagnostic-c++98-compat,-clang-diagnostic-c++98-compat-local-type-template-arg,-clang-diagnostic-pre-c++14-compat,-clang-diagnostic-unqualified-std-cast-call,-clang-diagnostic-logical-op-parentheses,-clang-diagnostic-documentation</ClangTidyChecks>
+    <ClangTidyChecks>-clang-diagnostic-c++98-compat,-clang-diagnostic-c++98-compat-local-type-template-args,-clang-diagnostic-pre-c++14-compat,-clang-diagnostic-unqualified-std-cast-call,-clang-diagnostic-logical-op-parentheses,-clang-diagnostic-documentation</ClangTidyChecks>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>

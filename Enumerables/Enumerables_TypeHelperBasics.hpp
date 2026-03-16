@@ -309,6 +309,19 @@ namespace TypeHelpers {
 	constexpr bool IsUnknownBoundArray = std::is_array<T>::value && std::extent<T>::value == 0;
 
 
+	/// Simplified, unchecked version of std::align.
+	template <class T>
+	void* AlignFor(void* trg)
+	{
+		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
+		size_t offs = miss ? alignof(T) - miss : 0u;
+		return static_cast<char*>(trg) + offs;
+	}
+
+
+	
+	// ===== Conversion tools =========================================================================================
+
 	/// Graceful variant of std::commontype: falling back to void instead of substitution failure.
 	template <class T, class U, class = void>
 	struct CommonOrVoid {
@@ -356,17 +369,6 @@ namespace TypeHelpers {
 											  || is_convertible<O, BaseT<T>>::value && !HaveRefcompatibleRoots<T, O>,
 												 BaseT<T>,
 								  void >>>;
-
-
-
-	/// Simplified, unchecked version of std::align.
-	template <class T>
-	void* AlignFor(void* trg)
-	{
-		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
-		size_t offs = miss ? alignof(T) - miss : 0u;
-		return static_cast<char*>(trg) + offs;
-	}
 
 
 
@@ -494,22 +496,44 @@ namespace TypeHelpers {
 
 
 
-	template <class T, class Mptr, class... Args>
+	/// Check for a callable member-function or addressable subobject.
+	/// @tparam Obj:	The owner type.
+	/// @tparam Mptr:	A pointer-to-member type. 
+	/// @tparam Args:	Argumentent types [in case of a member-function].
+	template <class Obj, class Mptr, class... Args>
 	struct IsCallableMember {
 
-		template <class Obj = T, enable_if_t<!is_pointer<remove_reference_t<Obj>>::value, int> = 0>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<Mptr>()) (declval<Args>()...))>*)
+		// Possible function calls:
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
-		template <class Obj = T, enable_if_t<is_pointer<remove_reference_t<Obj>>::value, int> = 0>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<Mptr>()) (declval<Args>()...))>*)
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
 
+		// Possible member-access:
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()))>*)
+		{
+			return sizeof...(Args) == 0;
+		}
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()))>*)
+		{
+			return sizeof...(Args) == 0;
+		}
+
+
+		// Fail:
 		static constexpr bool Check(...)
 		{
 			return false;

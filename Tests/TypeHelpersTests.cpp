@@ -1478,30 +1478,43 @@ namespace EnumerableTests {
 
 		using V2   = Vector2D<double>;
 		using Plus = decltype(&V2::operator+);
+		using FldX = decltype(&V2::x);
 
-		static_assert (IsCallableMember<V2,		   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2,			Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2*&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2*&,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2>::value,	"Error");
 
-		static_assert (IsCallableMember<V2,		   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2,			Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2&>::value, "Error");
 
-		static_assert (IsCallableMember<V2,		   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2,			Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2&&>::value, "Error");
+
+		static_assert (IsCallableMember<V2,			FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2*,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2*&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2&&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2*,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2*&,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2&,	FldX>::value,	"Error");
 
 		// ----
 
@@ -1520,6 +1533,36 @@ namespace EnumerableTests {
 		static_assert (!IsCallableMember<const V2,	Plus, int>::value,	"Error");
 		static_assert (!IsCallableMember<const V2*,	Plus, int>::value,	"Error");
 		static_assert (!IsCallableMember<const V2&,	Plus, int>::value,	"Error");
+
+		static_assert (!IsCallableMember<V2,		Plus>::value,		"Error");
+		static_assert (!IsCallableMember<V2&,		Plus>::value,		"Error");
+		static_assert (!IsCallableMember<const V2&,	Plus>::value,		"Error");
+
+		static_assert (!IsCallableMember<V2,		FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<V2,		FldX, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		FldX, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	FldX, V2*>::value,	"Error");
+		
+		// --------
+
+		struct LeftCallable  { bool operator()(int&) &;				};
+		struct ConstCallable { bool operator()(const int&) const;	};
+
+		static_assert (is_same<bool, InvokeResultT<LeftCallable&, int& >>(), "Error");
+	//	static_assert (is_same<bool, InvokeResultT<LeftCallable,  int& >>(),		"Error");		//
+	//	static_assert (is_same<bool, InvokeResultT<const LeftCallable&, int& >>(),	"Error");		// should be Error
+	//	static_assert (is_same<bool, InvokeResultT<LeftCallable&, const int >>(),	"Error");		//
+		static_assert (is_same<bool, InvokeResultT<ConstCallable,		 int		>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<ConstCallable&,		 int&		>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<const ConstCallable,	 const int&	>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<const ConstCallable&, int		>>(), "Error");
+
+		static_assert (is_same<V2, InvokeResultT<Plus, V2,		  V2		>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, V2&&,	  V2&&		>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, const V2,  const V2	>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, const V2&, const V2&	>>(), "Error");
 
 	}
 
