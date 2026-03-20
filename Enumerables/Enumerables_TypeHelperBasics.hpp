@@ -495,6 +495,11 @@ namespace TypeHelpers {
 	};
 
 
+	/// A const l-value of Func is callable with the given Args.
+	template <class Func, class... Args>
+	using IsConstCallable = IsCallable<ConstValueT<Func>&, Args...>;
+
+
 
 	/// Check for a callable member-function or addressable subobject.
 	/// @tparam Obj:	The owner type.
@@ -541,6 +546,74 @@ namespace TypeHelpers {
 
 		static constexpr bool value = Check(nullptr);
 	};
+
+
+
+	/// Implementation for DeclaredResult<F>.
+	template <class F, class = void>
+	struct ResolveDeclaredResult {
+		static constexpr bool isFound = false;
+	};
+
+	// Function object (lambda) -> check its operator(), if exact
+	template <class Obj>
+	struct ResolveDeclaredResult<Obj, std::void_t<decltype(&Obj::operator())>> {
+		using type = typename ResolveDeclaredResult<decltype(&Obj::operator())>::type;
+		static constexpr bool isFound = true;
+	};
+
+	// Member object types
+	template <class Data, class Obj>
+	struct ResolveDeclaredResult<Data Obj::*, void> {
+		using type = Data;
+		static constexpr bool isFound = true;
+	};
+
+	// Member function types (of common qualifier combinations)
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) const, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) const &, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) &, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) &&, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+
+	// Free function types (& omitted, used with BaseT!)
+	template <class R, class... Params>
+	struct ResolveDeclaredResult<R (Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class... Params>
+	struct ResolveDeclaredResult<R (*)(Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+
+
+	/// Try to match the declared result type of an exact callable.
+	/// If ::isFound, result is provided as ::type.
+	/// @tparam F: [member-] function pointer or object with an exact operator() having a usual qualifier set
+	template <class F>
+	using DeclaredResult = ResolveDeclaredResult<BaseT<F>>;
 
 
 

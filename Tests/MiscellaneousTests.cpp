@@ -428,6 +428,21 @@ namespace EnumerableTests {
 
 
 
+	// Debug evaluation should be limited for long (or unbounded) sequences.
+	// [For checks with RESULTSVIEW_AUTO_EVAL or manual .Print()]
+	static void LongSeqs()
+	{
+		// ResultsView evaluation should stop at set limit
+		auto lng = Enumerables::Range(2, 40);
+		ASSERT_EQ (40, lng.Count());
+		ASSERT_EQ (2,  lng.First());
+
+		// Unbounded sequence
+		auto inf = Enumerables::Sequence(5, FUN(x, x + 1));
+		ASSERT_EQ (45, inf.Skip(40).First());
+	}
+
+
 	void TestMisc()
 	{
 		Greet("Misc");
@@ -439,6 +454,7 @@ namespace EnumerableTests {
 		CastConvertElements();
 		CastRelatedElements();
 		SideEffects();
+		LongSeqs();
 	}
 
 }	// namespace EnumerableTests

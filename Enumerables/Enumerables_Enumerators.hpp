@@ -606,11 +606,28 @@ namespace Def {
 
 
 	/// Generates infinite (unchecked) sequence. Requires termination from outside.
-	template <class V, class Stepper, class Result = void>
-	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, V>> {
-		Reassignable<V>  curr;
-		const Stepper&	 step;
-		bool			 firstFetched = false;
+	template <class Acc, class Stepper, class Result = void>
+	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, Acc>> {
+		
+		static_assert (IsConstCallable<Stepper, Acc&>::value,
+					   "Supplied step function is not callable on the Accumulator type.");
+
+		static constexpr bool StepByMutate = is_void<MappedT<Acc&, const Stepper&>>::value;
+		
+		using AccStore = conditional_t<StepByMutate, Acc, Reassignable<Acc>>;
+
+		AccStore		curr;
+		const Stepper&	step;
+		bool			firstFetched = false;
+
+
+		// Chose operation depending on StepByMutate
+		// CONSIDER: Still a move-conversion (requires movable). To avoid it, some alternating storage would be necessary.
+		template <class PAcc>
+		void ApplyStep(Reassignable<PAcc>& acc)	{ acc = step(*acc); }
+
+		template <class PAcc>
+		void ApplyStep(PAcc& acc)				{ step(acc); }
 
 	public:
 		using typename SequenceEnumerator::IEnumerator::TElem;
@@ -618,23 +635,25 @@ namespace Def {
 		TElem	Current()	override
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (firstFetched, MissedFetchError);
-			return *curr;
+			const Acc& val = curr;		// unwrap if Reassignable
+			return val;
 		}
 
 		bool	FetchNext()	override
 		{
-			if (firstFetched)
-				curr = step(*curr);
-			else
-				firstFetched = true;
-
-			return true;
+			if (firstFetched) {
+				ApplyStep(curr);
+				return true;
+			}
+			return firstFetched = true;
 		}
 
 		SizeInfo			Measure()   const override	{ return Boundedness::Unbounded; }
 		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return MoveToAligned(mem, this); }
 
-		SequenceEnumerator(const V& start, const Stepper& step) : curr { start }, step { step }  {}
+
+		template <class Seed>
+		SequenceEnumerator(/*const*/ Seed&& start, const Stepper& step) : curr(start), step { step } {}
 		SequenceEnumerator(SequenceEnumerator&&) = default;
 	};
 
@@ -1719,7 +1738,7 @@ namespace Def {
 	/// Determines accumulator type for Scan/Aggregate and provides friendly errors.
 	/// Member-Select semantics are the default, use explicit ForcedAcc to force &.
 	template <class TElem>
-	class AccuDeducer {
+	class ScanAccuDeducer {
 
 		template <class A, class E, class C>
 		static auto TryCombine() -> enable_if_t<IsCallable<C, A, E>::value, CombinedT<A, E, C>>;
@@ -1743,9 +1762,9 @@ namespace Def {
 		struct CombineCheck {
 			// NOTE: repeated wrapping mechanism of AutoEnumerable::CombinerL for concise call...
 			//		 Also TryCombine got augmented for memberpointers.
-			using Wrapped = decay_t<decltype(LambdaCreators::BinaryMapper<Acc, TElem>(declval<Combiner>()))>;
+			using Wrapped = LambdaCreators::BinaryMapperT<Acc, TElem, Combiner>;
 
-			static_assert (IsCallable<Wrapped, Acc&&, TElem>::value,
+			static_assert (IsCallable<Wrapped&, Acc&&, TElem>::value,
 						   "The Combiner object is not callable with (Acc, TElem).");
 
 			using Next = CombinedT<Acc&&, TElem, Wrapped>;
@@ -1831,6 +1850,65 @@ namespace Def {
 
 		template <class InitMapper, class Combiner, class ForcedAcc = void>
 		using ForMappingInit = typename MappingInitCheck<InitMapper, Combiner, ForcedAcc>::TAcc;
+	};
+
+	#pragma endregion
+
+
+
+	#pragma region Sequence deductions
+
+	/// Helper for SeqAccuDeducer
+	template <class Res, class SeedStorage, class StepFunction>
+	struct CheckedAccuFromDeducedResult {
+		
+		// void => assume mutator over (decayed) Seed type
+		using TAccumulator = OverrideT<Res, BaseT<SeedStorage>>;
+
+		static constexpr bool callable = IsConstCallable<StepFunction, TAccumulator&>::value
+									  || IsCallableMember<TAccumulator&, StepFunction>::value;
+
+		static_assert (callable || is_void<Res>::value,
+					   "The supplied mapper (function/member) is not const-callable on its result stored as accumulator!");
+		static_assert (callable || !is_void<Res>::value,
+					   "The supplied step function/member is not callable on the seed type. Specify accumulator type explicitly!");
+	};
+
+
+
+	/// Helper for Enumerables::Sequence.
+	template <class ForcedAcc, class SeedStorage, class StepFunction, class = void>
+	struct SeqAccuDeducer {
+		
+		// default case: ForcedAcc is specified
+		using TAccumulator = ForcedAcc;
+
+		static_assert (IsConstCallable<StepFunction, ForcedAcc&>::value
+					|| IsCallableMember<ForcedAcc&, StepFunction>::value,
+					   "The supplied step function/member is not const-callable on the specified accumulator type!");
+	};
+
+	template <class SeedStorage, class StepFunction>
+	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<typename DeclaredResult<StepFunction>::type>> {
+		
+		// Use declaration if exact (instead of probing with fictive argument)
+		// void => assume mutator over [decayed] Seed type
+		using TResult      = typename DeclaredResult<StepFunction>::type;
+		using TAccumulator = typename CheckedAccuFromDeducedResult<LambdaCreators::NonExpiringT<TResult>, SeedStorage, StepFunction>::TAccumulator;
+	};
+
+	template <class SeedStorage, class StepFunction>
+	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<enable_if_t<!DeclaredResult<StepFunction>::isFound>>> {
+		
+		// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
+		using ProbingArg = SeedStorage&;
+
+		static_assert (IsConstCallable<StepFunction, ProbingArg>::value
+					|| IsCallableMember<ProbingArg, StepFunction>::value,
+					   "Unable to deduce accumulator type. Specify it as explicit type argument!");
+
+		using DeducedResult = InvokeResultT<LambdaCreators::CustomMapperT<ProbingArg, StepFunction>, ProbingArg>;
+		using TAccumulator  = typename CheckedAccuFromDeducedResult<DeducedResult, SeedStorage, StepFunction>::TAccumulator;
 	};
 
 	#pragma endregion

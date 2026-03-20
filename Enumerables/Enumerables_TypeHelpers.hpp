@@ -148,6 +148,9 @@ namespace TypeHelpers {
 
 		static_assert (is_reference<Elem>::value || !is_reference<Output>::value,
 					   "Ref output requested, but that requires ref yielded elements!");
+
+		static_assert (!is_reference<Output>::value || IsRefCompatible<Output, Elem>,
+					   "Output of an incompatible reference requested - could form a reference to a temporary!");
 	};
 
 	template <class Override, class Elem>
@@ -421,8 +424,9 @@ namespace TypeHelpers {
 
 	/// Helper to semi-implicitly select the applicable overload of a getter-like method given
 	/// by pointer-to-memberfunction syntax, when it designates an overload-set. Costs +1 ptr.
+	/// Added support for void mutators too.
+	/// @tparam T:	Qualified owner of getter method / param of free fun (i.e. AutoEnumerable<F>::TElem).
 	/// @tparam R:	Expected result of projection: Exact or Decayed return type of the getter. (!)
-	/// @tparam T:	Qualified owner of getter method (i.e. AutoEnumerable<F>::TElem).
 	/// @remarks
 	///		Consider use-cases like:	intervals.Select<int&>(&Interval::GetStart)
 	///									intervals.OrderBy<int&>(&Interval::GetStart)
@@ -483,6 +487,10 @@ namespace TypeHelpers {
 		// basically the discriminator
 		R (OverloadResolver::* const wrapper)(T&&) const;
 
+		
+		// a referenceable substitute for when R = void
+		using SR = OverrideT<R, None>;
+
 		union {
 			// ---- Acceptable Method pointers ----
 
@@ -499,13 +507,13 @@ namespace TypeHelpers {
 			// Auxiliary overloads to provide copy/materialization in most common situations
 			//	-> only if R is a prvalue
 
-			R&		 (OD::* uFunRef)();             //
-			const R& (OD::* cFunRef)()	const;		// important need: getter called on rvalue object
-			const R& (OD::* clFunRef)()	const &;	//
-			R&&		 (OD::* rFunRRef)() &&;         //
-			R&		 (OD::* lFunRef)() &;
+			SR&		  (OD::* uFunRef)();				//
+			const SR& (OD::* cFunRef)()  const;			// important need: getter called on rvalue object
+			const SR& (OD::* clFunRef)() const &;		//
+			SR&&	  (OD::* rFunRRef)() &&;			//
+			SR&		  (OD::* lFunRef)()  &;
 
-			R&&		 (OD::* uFunRRef)();			// convenience extra: move-out pattern ".PassXY()"
+			SR&&	  (OD::* uFunRRef)();				// convenience extra: move-out pattern ".PassXY()"
 
 			// Providing all viable combinations would cause ambiguity.
 			// Fortunately left-outs are not all sensible, e.g.:
@@ -518,7 +526,7 @@ namespace TypeHelpers {
 			R	(*vFreeFun)(DT);		// copy/move into param - if prval overload exists, it should be the only one -> no ambiguity
 			R	(*cFreeFun)(const DT&);	// if T is nonconst
 
-			const R&	(*cFreeFunRef)(const DT&);	// prob. the only important materializing free-fun. case
+			const SR&	(*cFreeFunRef)(const DT&);	// prob. the only important materializing free-fun. case
 		};
 
 
@@ -622,8 +630,8 @@ namespace TypeHelpers {
 		constexpr OverloadResolver(R (*f)(T&&))				: tFreeFun { f }, wrapper { &OverloadResolver::CallFreeT }	{}
 		constexpr OverloadResolver(R (*f)(DT))				: vFreeFun { f }, wrapper { &OverloadResolver::CallFreeV }	{}
 
-		template <class TT = T> constexpr
-		OverloadResolver(R (*f)(const IfValueOrMutable<TT, DT>&))	: cFreeFun { f }, wrapper { &OverloadResolver::CallFreeC }	{}
+		template <class TT = T, class RR = R> constexpr
+		OverloadResolver(IfNonvoid<RR> (*f)(const IfValueOrMutable<TT, DT>&))	: cFreeFun { f }, wrapper { &OverloadResolver::CallFreeC }	{}
 
 		// ----  Free function selection - materializing the result ----
 
@@ -753,6 +761,11 @@ namespace TypeHelpers {
 		}
 
 
+		// Storable result of CustomMapper<T, R>(L)
+		template <class T, class L, class R = void>
+		using CustomMapperT = BaseT<decltype(CustomMapper<T, R>(declval<L>()))>;
+
+
 
 		// ==== Map as Projection - ensuring member lifetime =================================
 
@@ -779,6 +792,11 @@ namespace TypeHelpers {
 		{
 			return Selector<T, R>(MemberPointerHelpers::MemberCaller<Mptr> { p });
 		}
+
+
+		// Storable result of Selector<T, R>(L)
+		template <class T, class L, class R = void>
+		using SelectorT = BaseT<decltype(Selector<T, R>(declval<L>()))>;
 
 
 
@@ -808,6 +826,12 @@ namespace TypeHelpers {
 		{
 			return Predicate<T>(MemberPointerHelpers::MemberCaller<Mptr> { p });
 		}
+
+		
+		// Storable result of Predicate<T>(L)
+		template <class T, class L>
+		using PredicateT = BaseT<decltype(Predicate<T>(declval<L>()))>;
+
 
 	}	// namespace LambdaCreators
 
@@ -870,6 +894,11 @@ namespace TypeHelpers {
 			return BinaryMapper<T1, T2, R>(MemberPointerHelpers::MemberBinopCaller<Mptr> { p });
 		}
 
+		
+		// Storable result of BinaryMapper<Lhs, Rhs, R>(L)
+		template <class Lhs, class Rhs, class L, class R = void>
+		using BinaryMapperT = BaseT<decltype(BinaryMapper<Lhs, Rhs, R>(declval<L>()))>;
+
 	}
 
 
@@ -930,6 +959,12 @@ namespace TypeHelpers {
 		using Storage::PassValue;
 		using Storage::operator *;
 		using Storage::operator ->;
+		
+
+		// Avoid where possible, but useful to make simple calls/returns uniform in generic code
+		// No && overload, many conversions (incl. return) wouldn't trigger it.
+		operator       T& ()	   noexcept  { return Value(); }
+		operator const T& () const noexcept  { return Value(); }
 
 
 		template <class S>

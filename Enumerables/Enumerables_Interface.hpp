@@ -436,7 +436,7 @@ namespace Def {
 		template <class ForcedAcc, class Init>
 		using IfInitByMapping = enable_if_t<IsAccuInit<TElem, Init, ForcedAcc>::byMapping, int>;
 
-		using DeduceAccumulator = AccuDeducer<TElem>;
+		using DeduceAccumulator = ScanAccuDeducer<TElem>;
 
 	public:
 	#pragma endregion
@@ -1185,34 +1185,113 @@ namespace Def {
 
 
 
+
+	template <class Seed, class Step, class Acc, class ForcedElem = void>
+	struct SequenceFactory {
+		Seed	seed;
+		Step	step;
+
+		static_assert (is_reference<Seed>::value || !is_reference<Acc>::value,
+					   "Accumulator can't reference the Seed value in the factory. "
+					   "Modify ForcedAcc or the result of 'step' to a decayed type!");
+
+		static_assert (!is_rvalue_reference<Acc>::value, "X-value accumulator is not supported.");
+
+
+		SequenceEnumerator<Acc, Step, ForcedElem>	operator ()() const
+		{
+			return { seed, step };
+		}
+	};
+
+
 	/// Custom infinite sequence specified by the starting value/reference and a step function.
+	/// The step function can be pure or a void mutator action over a decayed Accumulator type.
+	/// @param start:  	captured ref/value to initialize Acc for the first element [copy-converts on query]
+	/// @param step:	function or member-pointer to get the next element
+	///					-- void(Acc&) mutator or
+	///					-- Acc(Acc&) pure function [may move]
+	/// @tparam Elem:  		yielded element type     	[default = Accumulator type; can be & iff Acc is & too]
+	/// @tparam ForcedAcc:	explicit accumulator type	[default = StepFun's result / Seed]
 	/// @remarks
-	///		Deduced mode: 	Result = accumulator = result_of @p step
-	///		Explicit more:	Result = accumulator = V
-	///		Usages:
-	///			A ) Sequence(5, x => x*7)						---> store/give prvalue
-	///			A') Sequence(n, x => x*7)						---> store & / give prvalue
-	///			B ) Sequence(headObj, (auto& o) => o.nNext())	---> store/give &
-	template <class V = void, class StepFun, class Vin>
-	auto Sequence(Vin&& seed, StepFun&& step)
+	///		Examples:
+	///			A ) Sequence(5, x => x*7)					---> store/yield prvalue
+	///			A') Sequence(5, (int& x){ x*=7 })			---> same via mutator
+	///			B ) Sequence(n, x => x*7)					---> store & / yield prvalue
+	///			B') Sequence(n, (int& x){ x*=7 })			---> same(!) via mutator - mutating Acc must be decayed!
+	///			C ) Sequence(headObj, o => o.Next())		---> store/yield &
+	template <class Elem = void, class ForcedAcc = Elem, class Seed, class StepFunction,
+			  IfNotScalarConversion<Seed, ForcedAcc> = 0>
+	auto Sequence(Seed&& start, StepFunction&& step)
 	{
-		using SeedStorage = typename SeededEnumerationTypes<Vin>::SeedStorage;
-		using StepStorage = BaseT<StepFun>;
-		using StepRes	  = MappedT<OverrideT<V, const Vin&>, const StepStorage&>;
-		using Acc		  = OverrideT<V, StepRes>;
+		using SeedStorage = typename SeededEnumerationTypes<Seed, ForcedAcc>::SeedStorage;
+		using Acc		  = typename SeqAccuDeducer<ForcedAcc, SeedStorage, StepFunction>::TAccumulator;
+		using StepStorage = LambdaCreators::CustomMapperT<Acc&, StepFunction>;
 
-		struct SequenceFactory {
-			SeedStorage	seed;
-			StepStorage	step;
-
-			SequenceEnumerator<Acc, StepStorage>	operator ()() const
-			{
-				return { static_cast<Acc>(seed), step };	// Narrowing allowed if explicit
-			}
-		};
-
-		return WrapFactory(SequenceFactory { forward<Vin>(seed), forward<StepFun>(step) });
+		return WrapFactory(SequenceFactory<SeedStorage, StepStorage, Acc, Elem> {
+			forward<Seed>(start),
+			LambdaCreators::CustomMapper<Acc&>(forward<StepFunction>(step))
+		});
 	}
+
+
+	/// [resolves overloaded step function]
+	template <class Elem, class Acc = Elem, class Seed,
+			  IfNotScalarConversion<Seed, Acc> = 0    >
+	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, Acc>> step)
+	{
+		// force main overload  ---------v
+		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, Acc>&>(forward<Seed>(start), step);
+	}
+
+
+	/// [resolves overloaded step mutator]
+	template <class Elem, class Acc = Elem, class Seed,
+			  IfNotScalarConversion<Seed, Acc> = 0    >
+	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, void>> step)
+	{
+		// force main overload  ---------v
+		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, void>&>(forward<Seed>(start), step);
+	}
+
+	// NOTE: NoDeduce for OverloadResolver params is required by MSVC.
+	//		 It's sensible to protect Acc's default, but deduction is probably too eager here...
+
+
+	/// Custom infinite sequence of an explicitly specified scalar type.
+	/// [Explicit scalar-rvalue overload]
+	/// @tparam Elem:    	yielded element type [anything convertible]
+	/// @tparam ScalarAcc:	scalar accumulator type, if differs from Elem
+	/// @param  step:		pure function to next value or a void mutator
+	template <class Elem, class ScalarAcc = Elem, class StepFun>
+	auto Sequence(IfScalar<ScalarAcc>&& start, StepFun&& step)
+	{
+		using Acc = typename SeqAccuDeducer<ScalarAcc, ScalarAcc, StepFun>::TAccumulator;
+
+		return WrapFactory(SequenceFactory<ScalarAcc, BaseT<StepFun>, Acc, Elem> {
+			start,
+			forward<StepFun>(step)
+		});
+	}
+
+
+	/// [Explicit scalar-rvalue overload; resolves overloaded step function]
+	template <class Elem, class ScalarAcc = Elem>
+	auto Sequence(IfScalar<ScalarAcc>&& start, NoDeduce<OverloadResolver<ScalarAcc&, ScalarAcc>> step)
+	{
+		// force main scalar overload ---v
+		return Sequence<Elem, ScalarAcc, OverloadResolver<ScalarAcc&, ScalarAcc>&>(move(start), step);
+	}
+
+
+	/// [Explicit scalar-rvalue overload; resolves overloaded step mutator]
+	template <class Elem, class ScalarAcc = Elem>
+	auto Sequence(IfScalar<ScalarAcc>&& start, NoDeduce<OverloadResolver<ScalarAcc&, void>> step)
+	{
+		// force main scalar overload ---v
+		return Sequence<Elem, ScalarAcc, OverloadResolver<ScalarAcc&, void>&>(move(start), step);
+	}
+
 
 
 	/// Range of given length generated by operator++ [value capture only].
@@ -1281,7 +1360,7 @@ namespace Def {
 				auto advance  = [](V x)	{ return ++x; };
 
 				using SeqGen  = SequenceEnumerator<V, decltype(advance)>;
-				auto startSeq = [&]()	{ return SeqGen { 0, advance }; };
+				auto startSeq = [&]()	{ return SeqGen { V {}, advance }; };
 
 				return CounterEnumerator<SeqGen> {
 					startSeq,
@@ -1309,7 +1388,7 @@ namespace Def {
 				auto advance  = [](V x)	{ return --x; };
 
 				using SeqGen  = SequenceEnumerator<V, decltype(advance)>;
-				auto startSeq = [&]()	{ return SeqGen { GetSize(list) - 1, advance }; };
+				auto startSeq = [&]()	{ return SeqGen { static_cast<V>(GetSize(list) - 1), advance }; };
 
 				return CounterEnumerator<SeqGen> {
 					startSeq,

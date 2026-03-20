@@ -28,10 +28,14 @@ namespace EnumerableTests {
 			DerivedB(int bx, char c) : Base { bx }, c { c } {}
 		};
 
+
+
+		static void Add2Float(float& x)		{ x += 2.0f; }
+
+		static void CutToSqrt(float& x)		{ x = std::sqrt(x); }
+		static void CutToSqrt(double& x)	{ x = std::sqrt(x); }
 	}
 
-
-	// NOTE: Old code, has incomplete testcases - should cover together with Introduction tests.
 
 
 	// Construction functions using single-object seeds
@@ -242,44 +246,303 @@ namespace EnumerableTests {
 			ASSERT_EQ (10, zeroTen.Last());
 			ASSERT_EQ (11, zeroElev.Last());
 		}
+	}
 
 
-		// Custom sequences
+
+	static void SeededConstructionAdvanced()
+	{
+#	if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
+		// Older MSVC doesn't apply NRVO in debug + its move ctor does allocate!
+		constexpr unsigned ResultMoves = 1;
+#	else
+		constexpr unsigned ResultMoves = 0;
+#	endif
+		
+		auto nextChar = [](char c) -> char { return static_cast<char>(c + 1); };
+
+
+		// ------ I. Custom sequences - using pure step function ------
+
+		// 1. Deduced elem type = Acc = decltype(step(seed)), or the declared result type of step if available
 		{
-			auto pow2s = Sequence(1u, FUN(x,  2 * x));
+			auto pow2s = Sequence(1u, FUN(x,  2 * x));							// template lambda
 			ASSERT_ELEM_TYPE (unsigned,	pow2s);
 			ASSERT_EQ		 (1,		pow2s.First());
 			ASSERT_EQ		 (64,		pow2s.ElementAt(6));
 
-			auto sqrts = Sequence(16, &std::sqrtl);
-			ASSERT_ELEM_TYPE (long double,	sqrts);
-			ASSERT_EQ		 (16.0,			sqrts.First());
-			ASSERT_EQ		 (2.0,			sqrts.ElementAt(2));
+			auto odds1 = Sequence(1, [](long x) -> long { return x + 2; });		// declared return type
+			auto odds2 = Sequence(1, [](long x)         { return x + 2; });		// implicit, but same
+			ASSERT_ELEM_TYPE (long,	odds1);
+			ASSERT_ELEM_TYPE (long,	odds2);
+			ASSERT_EQ		 (1,	odds1.First());
+			ASSERT_EQ		 (1,	odds2.First());
+			ASSERT_EQ		 (11,	odds1.ElementAt(5));
+			ASSERT_EQ		 (11,	odds2.ElementAt(5));
 
-			// some extremeness
+			auto fsqrts1 = Sequence(16.0f, &std::sqrtf);	// matching types, no overloading
+		 	auto fsqrts2 = Sequence(16,    &std::sqrtf);	// compiles with warning: Seed -> Accumulator is narrowing init!
+			ASSERT_ELEM_TYPE (float,	fsqrts1);
+			ASSERT_ELEM_TYPE (float,	fsqrts2);			// element/accumulator type is inferred from step result
+			ASSERT_EQ		 (16.0f,	fsqrts1.First());
+			ASSERT_EQ		 (2.0f,		fsqrts1.ElementAt(2));
+			ASSERT_EQ		 (2.0f,		fsqrts2.ElementAt(2));
+
+			// Seed != Accumulator, illustrating deduction through "probing call"
+			auto strings1 = Sequence("a", FUN(s,  std::string(1, nextChar(s[0])) + '-' + s));
+			ASSERT_ELEM_TYPE (std::string,	strings1);
+			ASSERT_EQ		 ("a",		strings1.First());
+			ASSERT_EQ		 ("b-a",	strings1.ElementAt(1));
+			ASSERT_EQ		 ("c-b-a",	strings1.ElementAt(2));
+
+			// moving to next elem is allowed (although a bit weird example)
+			auto strings2 = Sequence(std::string("x"), [](std::string& s) {
+				if (s.back() == '-') {
+					s.back() = s[s.size() - 2];
+					return std::move(s);
+				}
+				return std::move(s) + '-';
+			});
+			ASSERT_ELEM_TYPE (std::string,	strings2);
+			ASSERT_EQ		 ("x",		strings2.First());
+			ASSERT_EQ		 ("x-",		strings2.ElementAt(1));
+			ASSERT_EQ		 ("xx",		strings2.ElementAt(2));
+			ASSERT_EQ		 ("xx-",	strings2.ElementAt(3));
+		}
+
+		// 2. explicit type: can constexpr-narrow scalar seed + enables overload resolution!
+		{
+			auto dsqrts = Sequence<double>(16, &std::sqrt);		// overload selected +
+			ASSERT_ELEM_TYPE (double,	dsqrts);				// "16" is stored as double!
+			ASSERT_EQ		 (16.0,		dsqrts.First());
+			ASSERT_EQ		 (2.0,		dsqrts.ElementAt(2));
+
+			auto sqrts = Sequence<float>(16, &std::sqrtf);		// not overloaded, but
+			ASSERT_ELEM_TYPE (float,	sqrts);					// pre-converts seed
+			ASSERT_EQ		 (16.0,		sqrts.First());
+			ASSERT_EQ		 (2.0,		sqrts.ElementAt(2));
+
+			auto pow2sf = Sequence<float>(1, FUN(x,  2 * x));
+			ASSERT_ELEM_TYPE (float,	pow2sf);
+			ASSERT_EQ		 (1.0f,		pow2sf.First());
+			ASSERT_EQ		 (8.0f,		pow2sf.ElementAt(3));
+
+			// Seed -> Accumulator conversion
+			auto strings = Sequence<std::string>("a", FUN(s,  s + '-' + nextChar(s.back())));
+			ASSERT_ELEM_TYPE (std::string,	strings);
+			ASSERT_EQ		 ("a",		strings.First());
+			ASSERT_EQ		 ("a-b-c",	strings.ElementAt(2));
+
+			// Explicit type => type in lambda is exact (as opposed to when deduction from seed is needed)
+			// Only the seed [this time: int] is stored in the factory
+			auto wrappedOdds = Sequence<CountedCopy<int>>(5, FUN(x, x.data + 2));
+			ASSERT_ELEM_TYPE (CountedCopy<int>,	wrappedOdds);
+			ASSERT_EQ		 (5,				*wrappedOdds.First());
+			ASSERT_EQ		 (9,				**wrappedOdds.ElementAt(2));
+			ASSERT_EQ		 (1,				wrappedOdds.ElementAt(2)->copyCount);
+			ASSERT_EQ		 (ResultMoves,		wrappedOdds.ElementAt(2)->moveCount);
+
+			// Separate Element and Acc. type - convert to complex type only on output
+			auto nocopyOdds = Sequence<MoveOnly<int>, int>(5, FUN(x, x + 2));
+			ASSERT_ELEM_TYPE (MoveOnly<int>,	nocopyOdds);
+			ASSERT_EQ		 (5,				*nocopyOdds.First());
+			ASSERT_EQ		 (9,				**nocopyOdds.ElementAt(2));
+			ASSERT_EQ		 (ResultMoves,		nocopyOdds.ElementAt(2)->moveCount);
+
+		}
+
+		// +1. Some extremeness + test ref elements at once
+		{
 			struct Linked {
 				int			data;
 				Linked*		next;
 
-				bool	HasNext()	{ return next != nullptr; }
-				Linked& Next()		{ return *next; }
+				bool	HasNext()	const { return next != nullptr; }
+				Linked& Next()			  { return *next; }
+				// intentionally no const overload!
 			};
 
 			Linked l3 { 3, nullptr };
 			Linked l2 { 2, &l3 };
 			Linked l1 { 1, &l2 };
 
-			auto linkedElems = Sequence(l1, FUN(x, x.Next()))
+			auto linkedElems1 = Sequence(l1, FUN(x, x.Next()))
 								.TakeUntilFinal(FUN(x, !x.HasNext()));
+			
+			auto linkedElems2 = Sequence(l1, &Linked::Next)			// test member-pointers -
+								.TakeWhile(&Linked::HasNext);		// this logic will skip l3!
 
-			ASSERT_ELEM_TYPE (Linked&,	linkedElems);
-			ASSERT_EQ		 (3,		linkedElems.Count());
-			ASSERT_EQ		 (3,		linkedElems.Last().data);
+			auto linkedPtrs = Sequence(&l1, &Linked::next)
+								.TakeWhile(FUN(x,  x != nullptr));	// this works well again
+
+			ASSERT_ELEM_TYPE (Linked&,	linkedElems1);
+			ASSERT_ELEM_TYPE (Linked&,	linkedElems2);
+			ASSERT_ELEM_TYPE (Linked*,	linkedPtrs);
+			ASSERT_EQ		 (3,		linkedElems1.Count());
+			ASSERT_EQ		 (3,		linkedElems1.Last().data);
+			ASSERT_EQ		 (2,		linkedElems2.Count());
+			ASSERT_EQ		 (2,		linkedElems2.Last().data);
+			ASSERT_EQ		 (3,		linkedPtrs.Count());
+			ASSERT_EQ		 (&l3,		linkedPtrs.Last());
+
+			// Elements as const - using different output and accumulator types
+			auto constElems = Sequence<const Linked&, Linked&>(l1, &Linked::Next)
+								.TakeUntilFinal(FUN(x, !x.HasNext()));
+			
+			ASSERT_ELEM_TYPE (const Linked&, constElems);
+			ASSERT_EQ		 (3,			 constElems.Count());
+			ASSERT_EQ		 (3,			 constElems.Last().data);
+		}
+
+		// +2: Member overload resolution
+		{
+			struct WrappedInt {
+				int value;
+
+				WrappedInt(int v) : value { v } {}
+
+				// for testing, no actual sense of overloading
+				WrappedInt Next()		{ return { value + 1 }; }
+				WrappedInt Next() const { return { value + 1 }; }
+
+				// for testing, utterly ridiculous :)
+				void Step()			{ ++value; }
+				int  Step() const	{ return value + 1; }
+			};
+
+			auto numsPureStep = Sequence<WrappedInt>(1, &WrappedInt::Next);
+			auto numsMutating = Sequence<WrappedInt>(1, &WrappedInt::Step);
+			ASSERT_ELEM_TYPE (WrappedInt,	numsPureStep);
+			ASSERT_ELEM_TYPE (WrappedInt,	numsMutating);
+
+			ASSERT_EQ (1, numsPureStep.First().value);
+			ASSERT_EQ (1, numsMutating.First().value);
+			ASSERT_EQ (3, numsPureStep.ElementAt(2)->value);
+			ASSERT_EQ (3, numsMutating.ElementAt(2)->value);
+
+			WrappedInt (WrappedInt::* constNext)() const = &WrappedInt::Next;
+			int	       (WrappedInt::* constStep)() const = &WrappedInt::Step;
+			UNUSED (constNext);
+			UNUSED (constStep);
+		}
+
+
+		// ------ II. Custom sequences - using mutator step action ------
+
+		// 1. Deduced elem type = Acc = seed
+		{
+			auto pow2s = Sequence(1u, [](auto& x) { x *= 2; });		// template lambda
+			ASSERT_ELEM_TYPE (unsigned,	pow2s);
+			ASSERT_EQ		 (1,		pow2s.First());
+			ASSERT_EQ		 (64,		pow2s.ElementAt(6));
+
+			auto odds = Sequence(1u, [](unsigned& x) { x += 2; });	// declared parameter type -
+			ASSERT_ELEM_TYPE (unsigned,	odds);						// must match Acc& (or compatible &)!
+			ASSERT_EQ		 (1,	odds.First());
+			ASSERT_EQ		 (11,	odds.ElementAt(5));
+		 //	auto odds2 = Sequence(1, [](unsigned& x) { x += 2; });	// CTE, Acc = int
+
+			auto evens = Sequence(16.0f, &Add2Float);				// matching types, no overloading
+			ASSERT_ELEM_TYPE (float,	evens);
+			ASSERT_EQ		 (16.0f,	evens.First());
+			ASSERT_EQ		 (20.0f,	evens.ElementAt(2));
+
+			auto strings = Sequence(std::string("x"), [](std::string& s) {
+				if (s.back() == '-')
+					s.back() = s[s.size() - 2];
+				else
+					s += '-';
+			});
+			ASSERT_ELEM_TYPE (std::string,	strings);
+			ASSERT_EQ		 ("x",		strings.First());
+			ASSERT_EQ		 ("x-",		strings.ElementAt(1));
+			ASSERT_EQ		 ("xx",		strings.ElementAt(2));
+			ASSERT_EQ		 ("xx-",	strings.ElementAt(3));
+
+			// Using a mutator function, the accumulator must be decayed
+			// - though the seed can be ref-captured still:
+			float start = 4.0;
+			auto refInit = Sequence(start, &Add2Float);
+			ASSERT_ELEM_TYPE (float,	refInit);
+			start = 3.0;
+			ASSERT_EQ		 (7.0f,		refInit.ElementAt(2));
+			ASSERT_EQ		 (3.0f,		refInit.First());
+			start = -1.0;
+			ASSERT_EQ		 (-1.0f,	refInit.First());
+			ASSERT_EQ		 (+3.0f,	refInit.ElementAt(2));
+		}
+
+		// 2. explicit type
+		{
+			auto dsqrts = Sequence<double>(16, &CutToSqrt);			// overload selected +
+			ASSERT_ELEM_TYPE (double,	dsqrts);					// "16" is stored as double!
+			ASSERT_EQ		 (16.0,		dsqrts.First());
+			ASSERT_EQ		 (2.0,		dsqrts.ElementAt(2));
+			{
+				void (& flOverload)(float&) = CutToSqrt;
+				UNUSED (flOverload);
+			}
+
+			auto evens = Sequence<float>(16, &Add2Float);			// not overloaded, but
+			ASSERT_ELEM_TYPE (float,	evens);						// pre-converts seed
+			ASSERT_EQ		 (16.0,		evens.First());
+			ASSERT_EQ		 (20.0,		evens.ElementAt(2));
+	
+			auto pow2sf = Sequence<float>(1, [](float& x) { x *= 2; });
+			ASSERT_ELEM_TYPE (float,	pow2sf);
+			ASSERT_EQ		 (1.0f,		pow2sf.First());
+			ASSERT_EQ		 (8.0f,		pow2sf.ElementAt(3));
+	
+			// Seed -> Accumulator conversion
+			auto strings = Sequence<std::string>("a", [&](auto& s) { s += nextChar(s.back()); });
+			ASSERT_ELEM_TYPE (std::string,	strings);
+			ASSERT_EQ		 ("a",			strings.First());
+			ASSERT_EQ		 ("abc",		strings.ElementAt(2));
+
+			// Only the seed [this time: int] is stored in the factory
+			auto wrappedOdds = Sequence<CountedCopy<int>>(5, [](auto& x) { x.data += 2; });
+			ASSERT_ELEM_TYPE (CountedCopy<int>,	wrappedOdds);
+			ASSERT_EQ		 (5,				*wrappedOdds.First());
+			ASSERT_EQ		 (9,				**wrappedOdds.ElementAt(2));
+			ASSERT_EQ		 (1,				wrappedOdds.ElementAt(2)->copyCount);	// each elem is copied from Acc
+			ASSERT_EQ		 (ResultMoves,		wrappedOdds.ElementAt(2)->moveCount);	// Acc constructed in-place from int Seed
+
+			// Separate Element and Acc. type - convert to complex type only on output
+			auto nocopyOdds = Sequence<MoveOnly<int>, int>(5, [](int& x) { x += 2; });
+			ASSERT_ELEM_TYPE (MoveOnly<int>,	nocopyOdds);
+			ASSERT_EQ		 (5,				*nocopyOdds.First());
+			ASSERT_EQ		 (9,				**nocopyOdds.ElementAt(2));
+			ASSERT_EQ		 (ResultMoves,		nocopyOdds.ElementAt(2)->moveCount);
+
+			// Ref-captured seed should work with explicit type as well:
+			float start = 4.0;
+			auto refInit = Sequence<float>(start, &Add2Float);
+			ASSERT_ELEM_TYPE (float,	refInit);
+			start = 3.0;
+			ASSERT_EQ		 (7.0f,		refInit.ElementAt(2));
+			ASSERT_EQ		 (3.0f,		refInit.First());
+			start = -1.0;
+			ASSERT_EQ		 (-1.0f,	refInit.First());
+			ASSERT_EQ		 (+3.0f,	refInit.ElementAt(2));
+		}
+
+		// +1: Using a void mutator function entails a decayed<Seed> accumulator and element
+		{
+			int s = 7;
+			auto odds = Sequence(s, [](int& x) { x += 2; });
+			ASSERT_ELEM_TYPE (int,	odds);
+			ASSERT_EQ (7,	odds.First());
+			ASSERT_EQ (11,	odds.ElementAt(2));
+			s = 1;
+			ASSERT_EQ (1,	odds.First());
+			ASSERT_EQ (5,	odds.ElementAt(2));
 		}
 	}
 
+	
 
 	// Wrapping collections
+	// NOTE: Old code, incomplete - should cover together with Introduction tests.
 	static void CollectionBasics()
 	{
 		std::vector<int> vec;
@@ -299,6 +562,7 @@ namespace EnumerableTests {
 		ASSERT (nums.All( FUN(x,  x < 10)));
 		ASSERT (!nums.All(FUN(x,  x > 5)));
 	}
+
 
 
 	// Direct (r-value) braced initializer - using "capture-syntax"
@@ -983,6 +1247,7 @@ namespace EnumerableTests {
 	}
 
 
+
 	// Concatenation of derived types
 	static void ConcatenationsInheritance()
 	{
@@ -1173,6 +1438,7 @@ namespace EnumerableTests {
 	}
 
 
+
 	// Wrapping rvalue collection by value, move internal data on chained operations
 	static void ConstructionByMove()
 	{
@@ -1203,6 +1469,7 @@ namespace EnumerableTests {
 		Greet("Construction");
 
 		SeededConstruction();
+		SeededConstructionAdvanced();
 		CollectionBasics();
 		BracedInit();
 		BracedInitWithAllocator();
