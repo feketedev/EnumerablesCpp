@@ -1093,58 +1093,96 @@ namespace Def {
 	#pragma region Generate sequences
 
 	/// A 0-length sequence of any type is gladly provided.
-	template <class V>
+	template <class T>
 	auto Empty()
 	{
-		return WrapFactory([]() { return EmptyEnumerator<V> {}; });
+		return WrapFactory([]() { return EmptyEnumerator<T> {}; });
 	}
+
+
+
+	template <class Storage, class Output>
+	struct InfRepeaterFactory {
+		Storage seed;
+
+		RepeaterEnumerator<Storage, Output>   operator ()() const   { return { seed }; }
+	};
 
 
 	/// Infinitely repeat a value/reference.
-	template <class V = void, class Vin>
-	auto Repeat(Vin&& val)
+	/// @tparam TForced:	forced element type [convertible from stored value]
+	/// @param  value:   	stored value to repeat [ref/move-captured]
+	template <class TForced = void, class Seed, IfNotScalarConversion<Seed, TForced> = 0>
+	auto Repeat(Seed&& value)
 	{
-		using Storage = typename SeededEnumerationTypes<Vin, V>::SeedStorage;
-		using Output  = typename SeededEnumerationTypes<Vin, V>::Output;
+		using Storage = typename SeededEnumerationTypes<Seed, TForced>::SeedStorage;
+		using Output  = typename SeededEnumerationTypes<Seed, TForced>::Output;
 
-		struct InfRepeaterFactory {
-			Storage seed;
-
-			RepeaterEnumerator<Storage, Output>   operator ()() const   { return { seed }; }
-		};
-
-		return WrapFactory(InfRepeaterFactory { forward<Vin>(val) });
+		return WrapFactory(InfRepeaterFactory<Storage, Output> { forward<Seed>(value) });
 	}
 
 
-	/// Repeat a value/reference the given number of times.
-	template <class V = void, class Vin>
-	auto Repeat(Vin&& val, size_t count)
+	/// Infinitely repeat a value. [Explicit scalar-rvalue overload.]
+	template <class TForced>
+	auto Repeat(IfScalar<TForced>&& value)
 	{
-		using Storage = typename SeededEnumerationTypes<Vin, V>::SeedStorage;
-		using Output  = typename SeededEnumerationTypes<Vin, V>::Output;
+		return WrapFactory(InfRepeaterFactory<TForced, TForced> { value });
+	}
 
-		struct RepeaterFactory {
-			Storage	seed;
-			size_t	count;
 
-			CounterEnumerator<RepeaterEnumerator<Storage, Output>>  operator ()() const
-			{
-				auto createRepeater = [this]() { return RepeaterEnumerator<Storage, Output>{ seed }; };
-				return { createRepeater, FilterMode::TakeWhile, count };
-			}
-		};
 
-		return WrapFactory(RepeaterFactory { forward<Vin>(val), count });
+	template <class Storage, class Output>
+	struct RepeaterFactory {
+		Storage	seed;
+		size_t	count;
+
+		CounterEnumerator<RepeaterEnumerator<Storage, Output>>  operator ()() const
+		{
+			auto createRepeater = [this]() {
+				return RepeaterEnumerator<Storage, Output> { seed };
+			};
+			return { createRepeater, FilterMode::TakeWhile, count };
+		}
+	};
+
+
+	/// Repeat a value/reference the given number of times.
+	/// @tparam TForced:  forced element type [convertible from stored value]
+	/// @param value:	  stored value to repeat [ref/move-captured]
+	/// @param count:	  length of sequence
+	template <class TForced = void, class Seed, IfNotScalarConversion<Seed, TForced> = 0>
+	auto Repeat(Seed&& value, size_t count)
+	{
+		using Storage = typename SeededEnumerationTypes<Seed, TForced>::SeedStorage;
+		using Output  = typename SeededEnumerationTypes<Seed, TForced>::Output;
+
+		return WrapFactory(RepeaterFactory<Storage, Output> { forward<Seed>(value), count });
+	}
+
+
+	/// Repeat a value the given number of times. [Explicit scalar-rvalue overload]
+	template <class TForced>
+	auto Repeat(IfScalar<TForced>&& value, size_t count)
+	{
+		return WrapFactory(RepeaterFactory<TForced, TForced> { value, count });
 	}
 
 
 	/// A single-element sequence (value/reference).
-	template <class V = void, class Vin>
-	auto Once(Vin&& val)
+	template <class TForced = void, class Seed, IfNotScalarConversion<Seed, TForced> = 0>
+	auto Once(Seed&& value)
 	{
-		return Repeat<V>(forward<Vin>(val), 1u);
+		return Repeat<TForced>(forward<Seed>(value), 1u);
 	}
+
+
+	/// A single-element sequence. [Explicit scalar-rvalue overload]
+	template <class TForced>
+	auto Once(IfScalar<TForced>&& value)
+	{
+		return Repeat<TForced>(move(value), 1u);
+	}
+
 
 
 	/// Custom infinite sequence specified by the starting value/reference and a step function.

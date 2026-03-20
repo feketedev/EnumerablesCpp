@@ -75,12 +75,19 @@ namespace EnumerableTests {
 			ASSERT_EQ		 (&mx,		 &infRefs.First());
 			ASSERT_EQ		 (&mx,		 &*infRefs.ElementAt(30));
 
-			// 3. Nothing prevents requesting copies of a reference-captured item:
+			// 3. Explicit output (element) type
+			// 3.1  Nothing prevents requesting copies of a reference-captured item:
 			auto dataCopies = Repeat<int>(mx.data);
 			ASSERT_ELEM_TYPE (int, dataCopies);
 			ASSERT_EQ		 (7,   dataCopies.First());
 			mx.data++;
 			ASSERT_EQ		 (8,   dataCopies.First());
+
+			// 3.2  Narrowing rvalue scalars happens at construction
+			//		-> constexpr values can be used without warnings
+			auto narrowedSix = Repeat<unsigned short>(6);
+			ASSERT_ELEM_TYPE (unsigned short, narrowedSix);
+			ASSERT_EQ		 (6, narrowedSix.First());
 
 			// 4. Advanced usage
 			// 4.1	The explicitly typed object can be the result of conversion, apparently...
@@ -160,6 +167,11 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (double, oneDouble);
 			ASSERT_EQ		 (1,	  oneDouble.Count());
 			ASSERT_EQ		 (8.0,	  oneDouble.Single());
+
+			auto oneFloat = Once<float>(9.0);
+			ASSERT_ELEM_TYPE (float, oneFloat);
+			ASSERT_EQ		 (1,	 oneFloat.Count());
+			ASSERT_EQ		 (9.0f,	 oneFloat.Single());
 
 			auto oneBase = Once<const Base&>(DerivedA { 2, 4.5 });
 			ASSERT_ELEM_TYPE (const Base&,  oneBase);

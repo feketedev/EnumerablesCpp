@@ -588,18 +588,16 @@ namespace Def {
 
 
 
-	/// Repeats a single value indefinitely.
-	template <class V, class Result = void>
-	class RepeaterEnumerator : public IEnumerator<OverrideT<Result, V>> {
-		const V&	value;
+	/// Repeats a single value indefinitely, through a possible return-conversion.
+	template <class V, class Result>
+	class RepeaterEnumerator : public IEnumerator<Result> {
+		const V&  value;
 
 	public:
-		using typename RepeaterEnumerator::IEnumerator::TElem;
-
-		bool				FetchNext()		  override	{ return true; }
-		TElem				Current()		  override	{ return value; }
-		SizeInfo			Measure()	const override	{ return Boundedness::Unbounded; }
-		IEnumerator<TElem>*	MoveTo(void* mem) override	{ return new (mem) RepeaterEnumerator { std::move(*this) }; }
+		bool				  FetchNext()		override	{ return true; }
+		Result				  Current()			override	{ return value; }
+		SizeInfo			  Measure()	  const override	{ return Boundedness::Unbounded; }
+		IEnumerator<Result>*  MoveTo(void* mem) override	{ return new (mem) RepeaterEnumerator { std::move(*this) }; }
 
 		RepeaterEnumerator(const V& val) : value { val } {}
 		RepeaterEnumerator(RepeaterEnumerator&&) = default;

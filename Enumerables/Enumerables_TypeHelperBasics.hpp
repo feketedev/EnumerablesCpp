@@ -634,6 +634,13 @@ namespace TypeHelpers {
 	using IfNonScalar = enable_if_t<!is_scalar<T>::value, S>;
 
 	template <class T, class S = T>
+	using IfScalar = enable_if_t<is_scalar<T>::value, S>;
+
+	// To avoid potential narrowing
+	template <class F, class T>
+	using IfNotScalarConversion = enable_if_t<!is_scalar<F>::value || !is_scalar<T>::value, int>;
+
+	template <class T, class S = T>
 	using IfPRValue = enable_if_t<!is_reference<T>::value, S>;
 
 	template <class T, class S = T>

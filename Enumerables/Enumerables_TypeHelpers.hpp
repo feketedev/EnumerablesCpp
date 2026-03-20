@@ -111,25 +111,26 @@ namespace TypeHelpers {
 	struct SeededEnumerationTypes {
 
 		/// Stored single-value type for the user-given universal reference.
-		using SeedStorage = conditional_t< is_lvalue_reference<UniversalInit>::value,
-											UniversalInit,
-											BaseT<UniversalInit> >;
+		using SeedStorage = conditional_t< is_lvalue_reference<UniversalInit>::value,	UniversalInit,
+							conditional_t< is_scalar<RequestedOutput>::value,			BaseT<RequestedOutput>,
+																						BaseT<UniversalInit>	>>;
+							// - BaseT removes const for the Enumerable to stay moveable!
+							// - Storing scalars in output format to force possible narrowing conversions early, during initialization
 
-							// BaseT removes const for the Enumerable to stay moveable!
+		static_assert (!is_rvalue_reference<SeedStorage>::value, "Storing r-value references as seed/accumulator is not supported.");
 
-		/// Element type of the resulting enumerable.
+
+		/// Element type of an enumerable publishing the value of its SeedStorage (through an allowed conversion).
 		using Output = OverrideT<RequestedOutput, SeedStorage>;
 
 		// NOTE: Defaulting to const& (in favour of more complex types) would be somewhat analogous to Enumerate(Container&&),
 		//		 but self-contained const& Enumerables have more caveats, and seem less intuitive here!
 
-		static_assert (!is_rvalue_reference<SeedStorage>::value, "Enumerables internal error.");
-
 		static_assert (is_reference<SeedStorage>::value || !is_reference<Output>::value || HasConstValue<Output>,
 					   "Mutable ref output requested, but that requires (l-value) ref initialization! "
 					   "Initializing with r-value results in materialized enumerable (having const& / pr-value support).");
 
-		static_assert (is_reference<SeedStorage>::value || !is_reference<Output>::value || is_convertible<BaseT<SeedStorage>*, BaseT<Output>*>::value,
+		static_assert (is_reference<SeedStorage>::value || !is_reference<Output>::value || IsRefCompatible<Output, SeedStorage>,
 					   "Const & output for a materialized enumerable is possible only with compatible types!");
 	};
 
