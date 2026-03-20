@@ -896,7 +896,7 @@ namespace TypeHelpers {
 		}
 
 		template <class... Args>
-		Reassignable(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		Reassignable(ForcedBracesSelector, Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			Storage::ConstructBraced(forward<Args>(args)...);
 		}
@@ -1001,7 +1001,7 @@ namespace TypeHelpers {
 				Storage::MoveFrom(src);
 		}
 
-		void EnsureDestroyed()	noexcept(std::is_nothrow_destructible<T>::value)
+		void EnsureDestroyed()	noexcept(is_nothrow_destructible<T>::value)
 		{
 			if (IsInitialized())
 				Storage::Destroy();

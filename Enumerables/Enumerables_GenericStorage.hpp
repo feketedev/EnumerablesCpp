@@ -173,13 +173,13 @@ namespace TypeHelpers {
 		}
 
 		template <class... Args>
-		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 			: obj { forward<Args>(args)... }
 		{
 		}
 
 		template <class... Args>
-		Emplacer(Args&&... args)  noexcept(noexcept(T (forward<Args>(args)...)))
+		Emplacer(Args&&... args)  noexcept(is_nothrow_constructible<T, Args...>::value)
 			: obj(forward<Args>(args)...)
 		{
 		}
@@ -272,7 +272,7 @@ namespace TypeHelpers {
 		GenericStorage()  = default;
 		~GenericStorage() = default;
 
-		void Destroy()  noexcept(std::is_nothrow_destructible<T>::value)
+		void Destroy()  noexcept(is_nothrow_destructible<T>::value)
 		{
 			storage.Destroy();
 		}
@@ -298,7 +298,7 @@ namespace TypeHelpers {
 
 		// guard needed against RefHolder
 		template <class... Args, class = enable_if_t<!is_reference<AsDependentT<T, Args...>>::value>>
-		void ConstructBraced(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
+		void ConstructBraced(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			storage.Construct(TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)...);
 		}
@@ -307,12 +307,12 @@ namespace TypeHelpers {
 		template <class Trg, class = enable_if_t<is_reference<AsDependentT<T, Trg>>::value>>
 		void ConstructBraced(Trg&& referred)	  noexcept
 		{
-			storage.Construct(forward<Trg>(referred)...);
+			storage.Construct(forward<Trg>(referred));
 		}
 
 
 		template <class... Args>
-		void ConstructParens(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
+		void ConstructParens(Args&&... ctorArgs)  noexcept(is_nothrow_constructible<T, Args...>::value)
 		{
 			storage.Construct(forward<Args>(ctorArgs)...);
 		}
@@ -320,14 +320,14 @@ namespace TypeHelpers {
 
 		template <class... Args>
 		enable_if_t<is_constructible<T, Args...>::value>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible<T, Args...>::value)
 		{
 			ConstructParens(forward<Args>(ctorArgs)...);
 		}
 
 		template <class... Args>
 		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible<T, Args...>::value>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			ConstructBraced(forward<Args>(ctorArgs)...);
 		}
@@ -410,12 +410,12 @@ namespace TypeHelpers {
 		BytesStorage(const BytesStorage&) = delete;
 
 		template <class... Args>
-		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		void Construct(Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			ptr = new (buffer) T { forward<Args>(args)... };
 		}
 
-		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		void Destroy() noexcept(is_nothrow_destructible<T>::value)
 		{
 			T& obj = Get();
 			ptr = nullptr;		// lifetime ends by dtor start
@@ -443,12 +443,12 @@ namespace TypeHelpers {
 		UnionStorage()  noexcept {}
 
 		template <class... Args>
-		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		void Construct(Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			new (&value) T { forward<Args>(args)... };
 		}
 
-		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		void Destroy() noexcept(is_nothrow_destructible<T>::value)
 		{
 			value.~T();
 		}
@@ -471,13 +471,13 @@ namespace TypeHelpers {
 		bool IsConstructed() const noexcept  { return isConstructed; }
 
 		template <class... Args>
-		void Construct(Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		void Construct(Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			UnionStorage<T>::Construct(forward<Args>(args)...);
 			isConstructed = true;
 		}
 
-		void Destroy() noexcept(std::is_nothrow_destructible<T>::value)
+		void Destroy() noexcept(is_nothrow_destructible<T>::value)
 		{
 			isConstructed = false;		// lifetime ends by dtor start
 			UnionStorage<T>::Destroy();

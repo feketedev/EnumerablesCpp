@@ -562,6 +562,27 @@ namespace TypeHelpers {
 	};
 
 
+	// NOTE: For MSVC v141 tolerates inline "noexcept(T { declval<Args...>() })" checks badly.
+	//		 (Seems to instantiate default-ctor calls where we don't have SFINAE against that.)
+	template <class T, class... Args>
+	struct IsNothrowBraceConstructible {
+
+		// Even here, the expression can't be present in the parameter list!
+		template <class TT = T, class = decltype(TT { declval<Args>()... })>
+		constexpr static bool Check(TT* = nullptr)
+		{
+			return noexcept(TT { declval<Args>()... });
+		}
+
+		constexpr static bool Check(...)
+		{
+			return false;
+		}
+
+		constexpr static bool value = Check(nullptr);
+	};
+
+
 
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
 	template <class T, class... Args>
