@@ -7,6 +7,7 @@
 #include "TestUtils.hpp"
 #include "TestAllocator.hpp"
 #include "Enumerables.hpp"
+#include <climits>
 
 
 
@@ -201,6 +202,18 @@ namespace EnumerableTests {
 			auto tenFive = RangeDownBetween(10u, 5u);
 			ASSERT_ELEM_TYPE (unsigned,			 tenFive);
 			ASSERT (AreEqual (RangeDown(10u, 6), tenFive));
+		
+			// edge-case + constexpr narrowing
+			auto fiveUp = RangeBetween<short>(5u, 5u);
+			auto fiveDn = RangeDownBetween<unsigned short>(5, 5);
+			ASSERT_ELEM_TYPE (short,			fiveUp);
+			ASSERT_ELEM_TYPE (unsigned short,	fiveDn);
+			ASSERT_EQ		 (5, fiveUp.Single());
+			ASSERT_EQ		 (5, fiveDn.Single());
+
+			// Caution: no overflow check (-Between variants can't create an Empty)
+			auto overflowing = RangeBetween<unsigned char>(UCHAR_MAX - 2, 0);
+			ASSERT_EQ (4, overflowing.Count());
 
 			// Range/RangeBetween use value capture only to avoid surprises
 			long n  = 67;
