@@ -512,8 +512,15 @@ namespace EnumerableTests {
 			ASSERT_EQ		 ("a",			strings.First());
 			ASSERT_EQ		 ("abc",		strings.ElementAt(2));
 
+#if  !defined(__clang__) && (1930 <= _MSC_VER)
+			// 2022 Visual C++'s overly eager deduction + lambda conversion messes up overload-resolution,
+			// instantiating a hard error with template lambdas (using const & parameter).
+			// Fixing the parameter type or (in this case) the void return can prevent it trying!
+			auto wrappedOdds = Sequence<CountedCopy<int>>(5, [](auto& x) -> void { x.data += 2; });
+#else
 			// Only the seed [this time: int] is stored in the factory
 			auto wrappedOdds = Sequence<CountedCopy<int>>(5, [](auto& x) { x.data += 2; });
+#endif
 			ASSERT_ELEM_TYPE (CountedCopy<int>,	wrappedOdds);
 			ASSERT_EQ		 (5,				*wrappedOdds.First());
 			ASSERT_EQ		 (9,				**wrappedOdds.ElementAt(2));
