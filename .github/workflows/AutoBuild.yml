@@ -32,12 +32,12 @@ jobs:
       matrix:
         platform: [x64, Win32]
         config: [Debug, Release]
-        testResultsView: [null]
+        testResultsView: [null]   # default set by Tests/Enumerables.cpp
         include:
         - platform: x64
           config: Debug
-          testResultsView: 2    # evaluate all on creation - compiles an extra code path, but does not force-generate Test/Print functions
-                                # NOTE: using 0 leads to error! (found no way to tell it apart from null)
+          testResultsView: "2"    # evaluate all on creation - compiles an extra code path,
+                                  # while cancels forcing the emission of Test/Print functions
     env:
       # ideally, config and ResultsView level should be irrelevant
       WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}${{matrix.testResultsView}}.txt
