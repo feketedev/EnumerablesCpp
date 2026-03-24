@@ -32,11 +32,18 @@ jobs:
       matrix:
         platform: [x64, Win32]
         config: [Debug, Release]
-
+        testResultsView: [null]
+        include:
+        - platform: x64
+          config: Debug
+          testResultsView: 2    # evaluate all on creation - compiles an extra code path, but does not force-generate Test/Print functions
+                                # NOTE: using 0 leads to error! (found no way to tell it apart from null)
     env:
-      # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}.txt
+      # ideally, config and ResultsView level should be irrelevant
+      WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}${{matrix.testResultsView}}.txt
       WARNINGS_REFERENCE: Clang_${{matrix.platform}}.txt
+      EXTRA_PROPS: &extraProperties >-
+        ${{matrix.testResultsView && ',TestResultsView=' || ''}}${{matrix.testResultsView}}
 
     steps:
     - uses: actions/checkout@v4
@@ -47,7 +54,7 @@ jobs:
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: >
-        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}
+        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}${{env.EXTRA_PROPS}}
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         TestsClang\TestsClang.vcxproj
 
@@ -80,8 +87,9 @@ jobs:
 
     env:
       # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform}}_${{matrix.config}}.txt
+      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform}}_${{matrix.config}}${{matrix.testResultsView}}.txt
       WARNINGS_REFERENCE: MSVC_${{matrix.platform}}.txt
+      EXTRA_PROPS: *extraProperties
 
     steps:
     - uses: actions/checkout@v4
@@ -93,7 +101,7 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # only later toolsets are available -> override project setting!
       run: >
-        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}},PlatformToolset=v142
+        msbuild /M /P:Platform=${{matrix.platform}},Configuration=${{matrix.config}}${{env.EXTRA_PROPS}},PlatformToolset=v142
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         TestsMSVC\TestsMSVC.vcxproj
 
