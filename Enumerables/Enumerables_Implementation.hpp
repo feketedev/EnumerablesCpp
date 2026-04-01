@@ -247,7 +247,7 @@ namespace Def {
 	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
 	enable_if_t<HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
-	BuildDictObtainCache(Source& etor, size_t /*hint*/, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
+	BuildDictObtainCache(Source& etor, size_t /*hint*/, const KeyMap& toKey, const ValMap& toValue, const Options&... opts)
 	{
 		auto cache = etor.CalcResults();
 
@@ -262,7 +262,7 @@ namespace Def {
 	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
 	enable_if_t<!HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
-	BuildDictObtainCache(Source& etor, size_t hint, KeyMap&& toKey, ValMap&& toValue, const Options&... opts)
+	BuildDictObtainCache(Source& etor, size_t hint, const KeyMap& toKey, const ValMap& toValue, const Options&... opts)
 	{
 		SizeInfo si  = etor.Measure();
 		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
@@ -281,7 +281,7 @@ namespace Def {
 
 	template <class K, class V, class KeyMap, class ValMap, class T, class... Options>
 	DictionaryType<K, V, Options...>   BuildDictObtainCache(InterfacedEnumerator<T>& etor, size_t hint,
-															KeyMap&& toKey, ValMap&& toValue,
+															const KeyMap& toKey, const ValMap& toValue,
 															const Options&... opts					  )
 	{
 		// Only List-Cachings exist so far -- see ObtainCachedResults notes
@@ -601,8 +601,10 @@ namespace Def {
 	// Formerly: ToReferenced().Minimums().First(), but let's be more lightweigth.
 	template<class TFactory>
 	template<class Comp>
-	auto AutoEnumerable<TFactory>::Min(Comp&& isLess) const -> Optional<TElemDecayed>
+	auto AutoEnumerable<TFactory>::Min(const Comp& isLess) const -> Optional<TElemDecayed>
 	{
+		const auto& isLessFun = BinPred(isLess);
+
 		auto et = GetEnumerator();
 		if (!et.FetchNext())
 			return NoValue<TElemDecayed>(StopReason::Empty);
@@ -611,7 +613,7 @@ namespace Def {
 
 		while (et.FetchNext()) {
 			TElem curr = et.Current();
-			if (isLess(curr, *min))
+			if (isLessFun(curr, *min))
 				min.AssignHeadMoved(curr);
 		}
 		return min.PassValue();
@@ -701,12 +703,12 @@ namespace Def {
 
 	template<class TFactory>
 	template<class... Options, class KeyMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, size_t hint) const
+	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, size_t hint) const
 		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		auto toKeyLambda = KeyMapper(toKey);
-		auto fwdValue	 = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+		const auto& toKeyLambda        = KeyMapper(toKey);		// TODO: These should avoid wrapping!
+		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
 
 		using Key = DecayedResultLV<decltype(toKeyLambda)>;
 
@@ -716,11 +718,11 @@ namespace Def {
 
 	template<class TFactory>
 	template<class... Options, class KeyMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, size_t hint, const Options&... opts) const
+	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, size_t hint, const Options&... opts) const
 		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
 	{
-		auto toKeyLambda = KeyMapper(toKey);
-		auto fwdValue	 = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+		const auto& toKeyLambda        = KeyMapper(toKey);
+		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
 
 		using Key = DecayedResultLV<decltype(toKeyLambda)>;
 
@@ -735,7 +737,7 @@ namespace Def {
 		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		auto fwdValue = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+		TElem&& (&fwdValue)(TElem&&) = &std::forward<TElem>;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, Options {}...);
@@ -746,7 +748,7 @@ namespace Def {
 	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint, const Options&... opts) const
 		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
 	{
-		auto fwdValue = [](TElem&& e) -> TElem&&  { return forward<TElem>(e); };
+		TElem&& (&fwdValue)(TElem&&) = &std::forward<TElem>;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, opts...);
@@ -755,14 +757,14 @@ namespace Def {
 
 	template<class TFactory>
 	template<class... Options, class KeyMap, class ValMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, ValMap&& toValue, size_t hint) const
+	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, const ValMap& toValue, size_t hint) const
 		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
 						  DecayedResult<decltype(ValueMapper(toValue))>,
 						  Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		auto toKeyLambda   = KeyMapper(toKey);
-		auto toValueLambda = ValueMapper(toValue);
+		const auto& toKeyLambda   = KeyMapper(toKey);
+		const auto& toValueLambda = ValueMapper(toValue);
 
 		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
 		using Value = DecayedResult<decltype(toValueLambda)>;
@@ -773,13 +775,13 @@ namespace Def {
 
 	template<class TFactory>
 	template<class... Options, class KeyMap, class ValMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(KeyMap&& toKey, ValMap&& toValue, size_t hint, const Options&... opts) const
+	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, const ValMap& toValue, size_t hint, const Options&... opts) const
 		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
 						  DecayedResult<decltype(ValueMapper(toValue))>,
 						  Options...>
 	{
-		auto toKeyLambda   = KeyMapper(toKey);
-		auto toValueLambda = ValueMapper(toValue);
+		const auto& toKeyLambda   = KeyMapper(toKey);
+		const auto& toValueLambda = ValueMapper(toValue);
 
 		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
 		using Value = DecayedResult<decltype(toValueLambda)>;

@@ -341,7 +341,7 @@ namespace Def {
 		template <class Mapper, class VForced = void>
 		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m)); }
 
-		// Forced l-value variant for ToDictionary
+		// Forced l-value variant to extract a Key before potentially moving the rest as a Value (for ToDictionary, GroupBy etc.)
 		template <class Mapper>
 		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem&>(forward<Mapper>(m)); }
 
@@ -361,7 +361,7 @@ namespace Def {
 		static decltype(auto) Predicate(Pred& p)	{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
 
 		template <class Pred>
-		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryMapper<TElemConstParam, TElemConstParam, bool>(forward<Pred>(p)); }
+		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryPredicate<TElemConstParam>(forward<Pred>(p)); }
 
 
 
@@ -412,14 +412,6 @@ namespace Def {
 		// Custom binary operation: (TElem, TRight) -> VForced / auto
 		template <class TRight, class Mapper, class VForced = void>
 		static decltype(auto) CombinerR(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TRight, VForced>(forward<Mapper>(m)); }
-
-
-		// Forward binary operation with reversed operand order
-		template <class BinOp>
-		static auto SwappedBinop(BinOp&& opp)
-		{
-			return [op = forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
-		}
 
 
 	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
@@ -760,24 +752,24 @@ namespace Def {
 		Optional<TElem>		ElementAt(size_t i) const						{ return ToReferenced().Skip(i).FirstIfAny(); }
 
 		/// Apply binary predicate to each pair of consequtive elements.
-		template <class BinPred>  bool AllNeighbors(BinPred&& p) const		{ return !ToReferenced().template MapNeighbors<bool>(p).Contains(false); }
-		template <class BinPred>  bool AnyNeighbors(BinPred&& p) const		{ return ToReferenced() .template MapNeighbors<bool>(p).Contains(true);  }
+		template <class BinPred>  bool AllNeighbors(const BinPred& p) const		{ return !ToReferenced().template MapNeighbors<bool>(RefLambda(p)).Contains(false); }
+		template <class BinPred>  bool AnyNeighbors(const BinPred& p) const		{ return ToReferenced() .template MapNeighbors<bool>(RefLambda(p)).Contains(true);  }
 
 
 	// ----- Shorthands taking a predicate -------------------------------------------------------------------------------------------
 
 		template <class Pred = PF>	bool			  All		  (const Pred& p) const;
-		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(p).Any();		   }
-		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(p).First();		   }
-		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
-		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(p).Single();	   }
-		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(p).FirstIfAny();   }
-		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(p).LastIfAny();    }
-		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
-		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
+		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Any();		  }
+		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).First();		  }
+		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Last();		  }
+		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Single();		  }
+		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).FirstIfAny();   }
+		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).LastIfAny();    }
+		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).SingleIfAny();  }
+		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).SingleOrNone(); }
 
 		template <class Pred = PF, class = enable_if_t<!is_convertible<Pred, TElemConstParam>::value>>
-		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
+		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(RefLambda(p)).Count(); }
 
 
 	// ----- Shorthands comparing to an element --------------------------------------------------------------------------------------
@@ -795,7 +787,10 @@ namespace Def {
 		/// @throws		on empty input
 		/// @returns	Acc, or in case of implicit accumulator type: result of combiner(TElem, TElem)
 		template <class Acc = void, class F>
-		decltype(auto) Aggregate(F&& combiner) const	{ return ToReferenced().template Scan<Acc>(forward<F>(combiner)).Last(); }
+		decltype(auto) Aggregate(const F& combiner) const
+		{
+			return ToReferenced().template Scan<Acc>(RefLambda(combiner)).Last();
+		}
 
 
 		/// [N-1 calls for input length N, after mapping First()]
@@ -803,9 +798,9 @@ namespace Def {
 		/// @throws				on empty input
 		/// @returns			Acc, determined by initMapper in implicit case
 		template <class Acc = void, class M, class F>
-		decltype(auto) Aggregate(M&& initMapper, F&& combiner, IfInitByMapping<Acc, M> = 0) const
+		decltype(auto) Aggregate(const M& initMapper, const F& combiner, IfInitByMapping<Acc, M> = 0) const
 		{
-			return ToReferenced().template Scan<Acc>(forward<M>(initMapper), forward<F>(combiner)).Last();
+			return ToReferenced().template Scan<Acc>(RefLambda(initMapper), RefLambda(combiner)).Last();
 		}
 
 
@@ -813,11 +808,11 @@ namespace Def {
 		/// @param initVal: the initial value for accumulator
 		/// @returns		initVal directly in case of an empty sequence
 		template <class Acc = void, class Init, class F>
-		decltype(auto) Aggregate(Init&& initVal, F&& combiner, IfInitByValue<Acc, Init> = 0) const
+		decltype(auto) Aggregate(Init&& initVal, const F& combiner, IfInitByValue<Acc, Init> = 0) const
 		{
 			// CONSIDER: Separate implementation could avoid Init copy - along with its whole copyable requirement, which is naturally set by Scan.
 			return ToReferenced()
-				  .template Scan<Acc>(Init { initVal }, forward<F>(combiner))
+				  .template Scan<Acc>(Init { initVal }, RefLambda(combiner))
 				  .LastIfAny()
 				  .OrDefault(forward<Init>(initVal));
 		}
@@ -859,8 +854,8 @@ namespace Def {
 		template <class TProp>					auto OrderBy(ConstOverloadTo<TProp> getter)	&&		{ return Move().template OrderBy<TProp, ConstOverloadTo<TProp>>(move(getter)); }
 
 		/// Find extreme value, if not Empty.
-		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(Comp&& isLess = {}) const;
-		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(Comp&& isLess = {}) const	{ return Min(SwappedBinop(isLess)); }
+		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(const Comp& isLess = {}) const;
+		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(const Comp& isLess = {}) const   { return Min(SwappedBinopRef(BinPred(isLess))); }
 
 		template <class S = TElemDecayed>		Optional<S>				Avg() const;
 		template <class S = TElemDecayed>		S						Sum() const;
@@ -907,7 +902,7 @@ namespace Def {
 		/// @tparam Options:  Additional arguments for DictionaryType
 		/// @param  makeKey:  TElem& -> Key mapper function
 		template <class... Options, class KeyMap>
-		auto ToDictionary(KeyMap&& toKey, size_t sizeHint = 0)			 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
+		auto ToDictionary(const KeyMap& toKey, size_t sizeHint = 0)		 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
 																								 TElemDecayed,
 																								 Options...>;
 
@@ -922,10 +917,10 @@ namespace Def {
 		/// @param  k:		  TElem& -> Key   mapper function
 		/// @param  v:		  TElem  -> Value mapper function
 		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint = 0)	 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																								 DecayedResult<decltype(ValueMapper(v))>,
-																								 Options...>;
-
+		auto ToDictionary(const KeyMap& k, const ValMap& v, size_t sizeHint = 0)				 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																														 DecayedResult<decltype(ValueMapper(v))>,
+																														 Options...>;
+		
 		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
 		/// @tparam Options:  Additional arguments for DictionaryType
 		/// @tparam  K:		  Explicit type of keys   (required)
@@ -948,17 +943,18 @@ namespace Def {
 
 
 		template <class... Options, class KeyMap>
-		auto ToDictionary(KeyMap&& k, size_t sizeHint, const Options&...)				const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																												TElemDecayed,
-																												Options...>;
+		auto ToDictionary(const KeyMap& k, size_t sizeHint, const Options&...)		const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																											TElemDecayed,
+																											Options...>;
 		template <class K, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K>, size_t sizeHint, const Options&...)		const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+		auto ToDictionaryOf(LVOverloadTo<K>, size_t sizeHint, const Options&...)	const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
 
 
 		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint, const Options&...)	const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																												DecayedResult<decltype(ValueMapper(v))>,
-																												Options...>;
+		auto ToDictionary(const KeyMap& k, const ValMap& v, size_t sizeHint, const Options&...)	const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
+																														DecayedResult<decltype(ValueMapper(v))>,
+																														Options...>;
+
 		template <class K, class V, class... Options>
 		auto ToDictionaryOf(LVOverloadTo<K>, OverloadTo<V>, size_t sizeHint, const Options&...) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
 

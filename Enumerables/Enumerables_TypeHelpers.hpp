@@ -367,6 +367,71 @@ namespace TypeHelpers {
 
 
 
+#pragma region General Lambda utils
+
+	template <class L>
+	struct LambdaRef {
+
+		// convention: Enumerators accept const-callables only
+		const L& lambda;
+
+		template <class... Args>
+		decltype(auto)  operator ()(Args&&... args) const
+		{
+			return lambda(forward<Args>(args)...);
+		}
+	};
+
+
+	// function / member pointers -> pass them unmodified
+	template <class F>
+	F*				RefLambda(F* fptr)		{ return fptr; }
+
+	// lambda object -> prevent copies by wrapping its reference
+	template <class O>
+	LambdaRef<O>	RefLambda(const O& obj)	{ return { obj }; }
+
+
+
+
+	template <class F>
+	struct BinopSwapper {
+		F op;
+
+		template <class L, class R>
+		decltype(auto)  operator ()(L&& lhs, R&& rhs) const
+		{
+			return op(forward<R>(rhs), forward<L>(lhs));
+		}
+	};
+
+
+	/// Forward binary operation with reversed operand order
+	template <class BinOp>
+	static BinopSwapper<decay_t<BinOp>>   SwappedBinop(BinOp&& callable)
+	{
+		return { forward<BinOp>(callable) };
+	}
+
+
+	/// Refer to a binary operation with reversed operand order
+	template <class BinOp>
+	static BinopSwapper<const BinOp&>	SwappedBinopRef(const BinOp& callable)
+	{
+		return { callable };
+	}
+
+	template <class BinOp>
+	static BinopSwapper<BinOp*>			SwappedBinopRef(BinOp* callable)
+	{
+		return { callable };
+	}
+
+#pragma endregion
+
+
+
+
 #pragma region Unified Projection
 
 	/// Navigate to a field of an object (or get a derived value) via a member-pointer.
@@ -406,7 +471,7 @@ namespace TypeHelpers {
 		// Named lambda-object to select a member.
 		template <class Mptr>
 		struct MemberCaller {
-			Mptr member;
+			const Mptr member;
 
 			template <class Obj>
 			decltype(auto)  operator ()(Obj&& obj) const
@@ -705,9 +770,7 @@ namespace TypeHelpers {
 			L lambda;
 
 			// variadic: extended for binary ops (or anything more)
-			template <class... P>
-			R operator ()(P&&... in)		{ return lambda(forward<P>(in)...); }
-
+			// const:	 convention of Enumerators to accept const-callables only
 			template <class... P>
 			R operator ()(P&&... in) const	{ return lambda(forward<P>(in)...); }
 		};
@@ -726,11 +789,13 @@ namespace TypeHelpers {
 			static_assert (!is_reference<Trg>::value || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
 						   "Requested result type loses const qualifier.");
 			static_assert (is_convertible<DeducedRes, Trg>::value,
-						   "Given function has incompatible return type.");
+						   "Given lambda has incompatible return type.");
 			static_assert (!is_void<DeducedRes>::value,
 						   "HINT: Return type deduced to void. Can happen with unbound template-parameters for a function.");
-			static_assert (is_reference<DeducedRes>::value && !is_rvalue_reference<DeducedRes>::value || !is_reference<Trg>::value,
+			static_assert (!is_reference<Trg>::value || is_lvalue_reference<DeducedRes>::value,
 						   "Function returns r-value, expected reference would become dangling!");
+			static_assert (!is_reference<Trg>::value || IsRefCompatible<Trg, DeducedRes>,
+						   "Requested type is not reference-compatible with the lambda's result - could return reference to a temporary.");
 
 			return ReturnConverter<decay_t<L>, Trg> { forward<L>(lambda) };
 		}
@@ -803,9 +868,8 @@ namespace TypeHelpers {
 		// ==== Map to bool (Predicate) ======================================================
 
 		template <class T, class L>
-		decltype(auto) Predicate(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		L&& Predicate(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
 		{
-			// will be stored inside Enumerable ==> should not find && overload; constness required!
 			using AppliedL = ConstValueT<L>&;
 
 			// CONSIDER: Enforce constness of T? Currently idempotence of lambda objects is completely user responsibility.
@@ -815,9 +879,11 @@ namespace TypeHelpers {
 
 			using DeducedRes = decltype(declval<AppliedL>()(declval<T>()));
 
+			// No need to actually force the bool result by wrapping here, just a guarantee of
+			// implicit bool-convertibility [contextual is insufficient, to avoid ambiguities].
 			static_assert (is_convertible<DeducedRes, bool>::value, "The predicate function must evaluate to bool!");
 
-			return WrapIfConversionReqd<DeducedRes, bool>(forward<L>(lambda));
+			return forward<L>(lambda);
 		}
 
 
@@ -854,7 +920,7 @@ namespace TypeHelpers {
 		// Named lambda-object to apply a member binary operation.
 		template <class Mptr>
 		struct MemberBinopCaller {
-			Mptr member;
+			const Mptr member;
 
 			template <class Obj, class Rh>
 			decltype(auto)  operator ()(Obj&& obj, Rh&& rhs) const
@@ -898,6 +964,38 @@ namespace TypeHelpers {
 		// Storable result of BinaryMapper<Lhs, Rhs, R>(L)
 		template <class Lhs, class Rhs, class L, class R = void>
 		using BinaryMapperT = BaseT<decltype(BinaryMapper<Lhs, Rhs, R>(declval<L>()))>;
+
+
+
+		// ==== Binary predicate =============================================================
+
+		template <class T, class L>
+		decltype(auto) BinaryPredicate(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		{
+			using AppliedL = ConstValueT<L>&;
+			static_assert (IsCallable<AppliedL, T, T>::value, "This method expects a binary predicate: (const TElem&, const TElem&) -> bool."
+															  " Check lambda's parameter type including constness!"							 );
+
+			using DeducedRes = decltype(declval<AppliedL>()(declval<T>(), declval<T>()));
+
+			// No need to actually force the bool result by wrapping here, just a guarantee of
+			// implicit bool-convertibility [contextual is insufficient, to avoid ambiguities].
+			static_assert (is_convertible<DeducedRes, bool>::value, "The predicate function must evaluate to bool!");
+
+			return forward<L>(lambda);
+		}
+
+
+		template <class T, class Mptr>
+		auto BinaryPredicate(Mptr p, IfMemberPointer<Mptr> = 0)
+		{
+			return BinaryPredicate<T>(MemberPointerHelpers::MemberBinopCaller<Mptr> { p });
+		}
+
+
+		// Storable result of BinaryPredicate<T>(L)
+		template <class T, class L>
+		using BinaryPredicateT = BaseT<decltype(BinaryPredicate<T>(declval<L>()))>;
 
 	}
 

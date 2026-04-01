@@ -522,11 +522,11 @@ namespace EnumerableTests {
 			ASSERT (p3(constObj));
 			ASSERT (p4(constObj));
 
-			// conversion to bool is enforced
+			// bool-convertibility is enforced, but no wrapper imposed
 			static_assert (is_same<bool, decltype(p1(obj))>::value, "Changed return.");
 			static_assert (is_same<bool, decltype(p2(obj))>::value, "Changed return.");
-			static_assert (is_same<bool, decltype(p3(obj))>::value, "Changed return.");
-			static_assert (is_same<bool, decltype(p4(obj))>::value, "Changed return.");
+			static_assert (is_same<char&, decltype(p3(obj))>::value, "Changed return.");
+			static_assert (is_same<const char&, decltype(p4(obj))>::value, "Changed return.");
 		}
 
 		// Binary mappers
