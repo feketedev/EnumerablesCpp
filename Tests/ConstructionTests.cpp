@@ -202,7 +202,7 @@ namespace EnumerableTests {
 			auto tenFive = RangeDownBetween(10u, 5u);
 			ASSERT_ELEM_TYPE (unsigned,			 tenFive);
 			ASSERT (AreEqual (RangeDown(10u, 6), tenFive));
-		
+
 			// edge-case + constexpr narrowing
 			auto fiveUp = RangeBetween<short>(5u, 5u);
 			auto fiveDn = RangeDownBetween<unsigned short>(5, 5);
@@ -271,7 +271,7 @@ namespace EnumerableTests {
 #	else
 		constexpr unsigned ResultMoves = 0;
 #	endif
-		
+
 		auto nextChar = [](char c) -> char { return static_cast<char>(c + 1); };
 
 
@@ -381,7 +381,7 @@ namespace EnumerableTests {
 
 			auto linkedElems1 = Sequence(l1, FUN(x, x.Next()))
 								.TakeUntilFinal(FUN(x, !x.HasNext()));
-			
+
 			auto linkedElems2 = Sequence(l1, &Linked::Next)			// test member-pointers -
 								.TakeWhile(&Linked::HasNext);		// this logic will skip l3!
 
@@ -401,7 +401,7 @@ namespace EnumerableTests {
 			// Elements as const - using different output and accumulator types
 			auto constElems = Sequence<const Linked&, Linked&>(l1, &Linked::Next)
 								.TakeUntilFinal(FUN(x, !x.HasNext()));
-			
+
 			ASSERT_ELEM_TYPE (const Linked&, constElems);
 			ASSERT_EQ		 (3,			 constElems.Count());
 			ASSERT_EQ		 (3,			 constElems.Last().data);
@@ -500,12 +500,12 @@ namespace EnumerableTests {
 			ASSERT_ELEM_TYPE (float,	evens);						// pre-converts seed
 			ASSERT_EQ		 (16.0,		evens.First());
 			ASSERT_EQ		 (20.0,		evens.ElementAt(2));
-	
+
 			auto pow2sf = Sequence<float>(1, [](float& x) { x *= 2; });
 			ASSERT_ELEM_TYPE (float,	pow2sf);
 			ASSERT_EQ		 (1.0f,		pow2sf.First());
 			ASSERT_EQ		 (8.0f,		pow2sf.ElementAt(3));
-	
+
 			// Seed -> Accumulator conversion
 			auto strings = Sequence<std::string>("a", [&](auto& s) { s += nextChar(s.back()); });
 			ASSERT_ELEM_TYPE (std::string,	strings);
@@ -559,7 +559,7 @@ namespace EnumerableTests {
 		}
 	}
 
-	
+
 
 	// Wrapping collections
 	// NOTE: Old code, incomplete - should cover together with Introduction tests.

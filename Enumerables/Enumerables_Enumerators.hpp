@@ -608,12 +608,12 @@ namespace Def {
 	/// Generates infinite (unchecked) sequence. Requires termination from outside.
 	template <class Acc, class Stepper, class Result = void>
 	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, Acc>> {
-		
+
 		static_assert (IsConstCallable<Stepper, Acc&>::value,
 					   "Supplied step function is not callable on the Accumulator type.");
 
 		static constexpr bool StepByMutate = is_void<MappedT<Acc&, const Stepper&>>::value;
-		
+
 		using AccStore = conditional_t<StepByMutate, Acc, Reassignable<Acc>>;
 
 		AccStore		curr;
@@ -1861,7 +1861,7 @@ namespace Def {
 	/// Helper for SeqAccuDeducer
 	template <class Res, class SeedStorage, class StepFunction>
 	struct CheckedAccuFromDeducedResult {
-		
+
 		// void => assume mutator over (decayed) Seed type
 		using TAccumulator = OverrideT<Res, BaseT<SeedStorage>>;
 
@@ -1879,7 +1879,7 @@ namespace Def {
 	/// Helper for Enumerables::Sequence.
 	template <class ForcedAcc, class SeedStorage, class StepFunction, class = void>
 	struct SeqAccuDeducer {
-		
+
 		// default case: ForcedAcc is specified
 		using TAccumulator = ForcedAcc;
 
@@ -1890,7 +1890,7 @@ namespace Def {
 
 	template <class SeedStorage, class StepFunction>
 	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<typename DeclaredResult<StepFunction>::type>> {
-		
+
 		// Use declaration if exact (instead of probing with fictive argument)
 		// void => assume mutator over [decayed] Seed type
 		using TResult      = typename DeclaredResult<StepFunction>::type;
@@ -1899,7 +1899,7 @@ namespace Def {
 
 	template <class SeedStorage, class StepFunction>
 	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<enable_if_t<!DeclaredResult<StepFunction>::isFound>>> {
-		
+
 		// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
 		using ProbingArg = SeedStorage&;
 

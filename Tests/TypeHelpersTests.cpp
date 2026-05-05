@@ -1544,7 +1544,7 @@ namespace EnumerableTests {
 		static_assert (!IsCallableMember<V2,		FldX, V2*>::value,	"Error");
 		static_assert (!IsCallableMember<V2&,		FldX, V2*>::value,	"Error");
 		static_assert (!IsCallableMember<const V2&,	FldX, V2*>::value,	"Error");
-		
+
 		// --------
 
 		struct LeftCallable  { bool operator()(int&) &;				};

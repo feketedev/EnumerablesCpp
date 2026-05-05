@@ -494,247 +494,6 @@ namespace TypeHelpers {
 
 
 
-#pragma region Overload resolution
-
-	/// Helper to semi-implicitly select the applicable overload of a getter-like method given
-	/// by pointer-to-memberfunction syntax, when it designates an overload-set. Costs +1 ptr.
-	/// Added support for void mutators too.
-	/// @tparam T:	Qualified owner of getter method / param of free fun (i.e. AutoEnumerable<F>::TElem).
-	/// @tparam R:	Expected result of projection: Exact or Decayed return type of the getter. (!)
-	/// @remarks
-	///		Consider use-cases like:	intervals.Select<int&>(&Interval::GetStart)
-	///									intervals.OrderBy<int&>(&Interval::GetStart)
-	///									intervals.MapTo<int>(&Interval::CalcLength)
-	///			need to materialize:	data.Map(&ToInterval)
-	///										.Select<int>(&Interval::GetStart)
-	///
-	///		Note that if the pointer to member function is exactly specified (either casted
-	///		or not having an overload-set) then there's no need for this helper, nor for an
-	///		explicitly specified return type (if no conversion needed for the projection):
-	///									intervals.Map(&Interval::CalcLength)
-	///
-	///		In these exact (non-overloadset ptr) cases the compiler will prefer a templated
-	///		overload (providing exact match of parameter type) against an extra conversion,
-	///		so there should be no adverse effect of providing method overloads that receive
-	///		an OverloadResolver to solve the nonexact cases.
-	///
-	///		The helper narrows the acceptable overloads to those properly qualified based on
-	///		T's &-ness and constness. Even then, the return type can't be deduced as a language
-	///		limitation (nor even if it would be exact), hence it must be exactly known.
-	///		However, working with rvalue sequences often necessitate the materialization of
-	///		the results from a getter - leading to a target element type differring from the
-	///		getter's type!
-	///
-	///		To stay consistent, in methods like Select<R>(...), MapTo<R>(...) the user shall
-	///		specify the targeted element type after the projection, not the ref-qualified
-	///		return type of the getter. This is supported up to the materialization of typical
-	///		getter results. (This is minimal requirement, but can't introduce ambiguity.)
-	///
-	///			E.g. the getter			int&	Interval::GetStart();
-	///			can be used either as	intervals.Select<int&>(&Interval.GetStart)
-	///			or						intervals.Select<int>(&Interval.GetStart)
-	///			but no other way.
-	///			[ Workaround is to convert in a next step:
-	///									intervals.Select<int&>(&Interval.GetStart).AsConst()
-	///									intervals.Select<int>(&Interval.GetStart).As<long>() ]
-	///
-	///		This quadruplication here seems manageable.
-	///
-	///		To support unconstrained .MapTo<R>, no lifetime checks are in place here
-	///		- .Select checks that separately.
-	///
-	///		NOTE: const && / volatile support is out of scope!
-	///
-	template <class T, class R>
-	class OverloadResolver final {
-
-		using DT = decay_t<T>;
-
-		// qualified Object type - [const] & for [const] pointers
-		using O  = conditional_t< is_class<DT>::value,  T,
-				   conditional_t< is_pointer<DT>::value && is_class<remove_pointer_t<DT>>::value,  remove_pointer_t<DT>&,
-				   None>>;
-
-		// Decayed object type
-		using OD = decay_t<O>;
-
-		// basically the discriminator
-		R (OverloadResolver::* const wrapper)(T&&) const;
-
-
-		// a referenceable substitute for when R = void
-		using SR = OverrideT<R, None>;
-
-		union {
-			// ---- Acceptable Method pointers ----
-
-			// Possible overload-sets of exact R return type
-
-			R	(OD::* uFun)();
-			R	(OD::* cFun)()	const;
-
-			R	(OD::* lFun)()	&;
-			R	(OD::* clFun)()	const &;
-			R	(OD::* rFun)()	&&;
-
-
-			// Auxiliary overloads to provide copy/materialization in most common situations
-			//	-> only if R is a prvalue
-
-			SR&		  (OD::* uFunRef)();				//
-			const SR& (OD::* cFunRef)()  const;			// important need: getter called on rvalue object
-			const SR& (OD::* clFunRef)() const &;		//
-			SR&&	  (OD::* rFunRRef)() &&;			//
-			SR&		  (OD::* lFunRef)()  &;
-
-			SR&&	  (OD::* uFunRRef)();				// convenience extra: move-out pattern ".PassXY()"
-
-			// Providing all viable combinations would cause ambiguity.
-			// Fortunately left-outs are not all sensible, e.g.:
-			//   R& Get() const		// obviously not part of the object, lifetime not bound
-
-
-			// ---- Acceptable Free-function pointers ----
-
-			R	(*tFreeFun)(T&&);		// exact ref param		- [const]& / rval -> &&
-			R	(*vFreeFun)(DT);		// copy/move into param - if prval overload exists, it should be the only one -> no ambiguity
-			R	(*cFreeFun)(const DT&);	// if T is nonconst
-
-			const SR&	(*cFreeFunRef)(const DT&);	// prob. the only important materializing free-fun. case
-		};
-
-
-		// NOTE: could be templated?   (Seems tolerable so far.)
-		// Options for "wrapper".
-		R	CallU(T&& p)		const	{ return MemberPointerHelpers::Select(p, uFun);		}
-		R	CallCpyU(T&& p)		const	{ return MemberPointerHelpers::Select(p, uFunRef);	}
-		R	CallMaterU(T&& p)	const	{ return MemberPointerHelpers::Select(p, uFunRRef);	}
-		R	CallC(T&& p)		const	{ return MemberPointerHelpers::Select(p, cFun);		}
-		R	CallCpyC(T&& p)		const	{ return MemberPointerHelpers::Select(p, cFunRef);	}
-		R	CallL(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), lFun);	}
-		R	CallCpyL(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), lFunRef);	}
-		R	CallCL(T&& p)		const	{ return MemberPointerHelpers::Select(p, clFun);	}
-		R	CallCpyCL(T&& p)	const	{ return MemberPointerHelpers::Select(p, clFunRef);	}
-		R	CallR(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), rFun);	 }
-		R	CallMaterR(T&& p)	const	{ return MemberPointerHelpers::Select(forward<T>(p), rFunRRef); }
-
-		R	CallFreeT(T&& p)		const	{ return tFreeFun(forward<T>(p)); }
-		R	CallFreeV(T&& p)		const	{ return vFreeFun(forward<T>(p)); }
-		R	CallFreeC(T&& p)		const	{ return cFreeFun(p);	 }
-		R	CallMaterFreeC(T&& p)	const	{ return cFreeFunRef(p); }
-
-
-		// internal helper ctors for when mptr's type has already been decided
-		OverloadResolver(R (OD::* mptr)(),			void*)	: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
-		OverloadResolver(R (OD::* mptr)() const,	void*)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
-
-		OverloadResolver(R (OD::* mptr)() &,		void*)	: lFun  { mptr }, wrapper { &OverloadResolver::CallL }	{}
-		OverloadResolver(R (OD::* mptr)() &&,		void*)	: rFun  { mptr }, wrapper { &OverloadResolver::CallR }	{}
-		OverloadResolver(R (OD::* mptr)() const &,	void*)	: clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
-
-
-	public:
-		/// Apply the projection.
-		R operator ()(T&& obj) const	{ return (this->*wrapper)(forward<T>(obj)); }
-
-
-
-		// ---- Const/Mutable overload selection - exact return type ----
-
-		// On a mutable object, either const-qualified or nonqualified overload can be called (no enable_if narrowing),
-		// but the nonqualified version should be selected. For that we utilize the language feature:
-		// non-template overloads (with better parameter match) can hide templated ones - and that is not an ambiguity!
-		using PreferredGetter = conditional_t< is_const<remove_reference_t<O>>::value,
-											   R (OD::*)() const,
-											   R (OD::*)()		 >;
-		constexpr
-		OverloadResolver(PreferredGetter mptr)					: OverloadResolver { mptr, nullptr } {}
-
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)())		: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
-
-		template <class OO = O> constexpr						// template only to be unpreferred
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
-
-
-
-		// ---- Ref-qualified overload selection - exact return type ----
-
-		using PreferredRefQualGetter = conditional_t<is_const<remove_reference_t<O>>::value, R (OD::*)() const &,
-									   conditional_t<is_lvalue_reference<O>::value,			 R (OD::*)() &,
-									   														 R (OD::*)() &&		>>;
-		constexpr
-		OverloadResolver(PreferredRefQualGetter mptr)			  : OverloadResolver { mptr, nullptr } {}
-
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutLVal<OO, OD>::* mptr)() &)		  : lFun { mptr }, wrapper { &OverloadResolver::CallL }		{}
-
-		template <class OO = O> constexpr						  // template only to be unpreferred
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const &) : clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
-
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutRVal<OO, OD>::* mptr)() &&)	  : rFun { mptr }, wrapper { &OverloadResolver::CallR }		{}
-
-
-
-		// ---- Member overload selection for materielizing the result ----
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(const IfPRValue<RR>& (IfConst<OO, OD>::* mptr)() const)	: cFunRef { mptr },  wrapper { &OverloadResolver::CallCpyC }	{}
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(const IfPRValue<RR>& (IfConst<OO, OD>::* mptr)() const &)	: clFunRef { mptr }, wrapper { &OverloadResolver::CallCpyCL }	{}
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(IfPRValue<RR>& (IfMutLVal<OO, OD>::* mptr)() &)			: lFunRef { mptr },  wrapper { &OverloadResolver::CallCpyL }	{}
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(IfPRValue<RR>& (IfMutable<OO, OD>::* mptr)())				: uFunRef { mptr },  wrapper { &OverloadResolver::CallCpyU }	{}
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(IfPRValue<RR>&& (IfMutable<OO, OD>::* mptr)())				: uFunRRef { mptr }, wrapper { &OverloadResolver::CallMaterU }	{}
-
-		template <class OO = O, class RR = R> constexpr
-		OverloadResolver(IfPRValue<RR>&& (IfMutRVal<OO, OD>::* mptr)() &&)			: rFunRRef { mptr }, wrapper { &OverloadResolver::CallMaterR }	{}
-
-
-
-		// ---- Free function selection ----
-
-		constexpr OverloadResolver(R (*f)(T&&))				: tFreeFun { f }, wrapper { &OverloadResolver::CallFreeT }	{}
-		constexpr OverloadResolver(R (*f)(DT))				: vFreeFun { f }, wrapper { &OverloadResolver::CallFreeV }	{}
-
-		template <class TT = T, class RR = R> constexpr
-		OverloadResolver(IfNonvoid<RR> (*f)(const IfValueOrMutable<TT, DT>&))	: cFreeFun { f }, wrapper { &OverloadResolver::CallFreeC }	{}
-
-		// ----  Free function selection - materializing the result ----
-
-		template <class RR = R> constexpr
-		OverloadResolver(const IfPRValue<RR>& (*f)(const DT&))		: cFreeFunRef { f }, wrapper { &OverloadResolver::CallMaterFreeC }	{}
-	};
-
-
-
-	/// Potential type of a free Predicate function. Conventionally non-scalars are taken by const&.
-	/// @remarks
-	///		Used as the default type for the template argument of a parameter expecting a predicate lambda
-	///		provides a more limited, but overhead-free and syntactically light alternative to OverloadResolver.
-	///		Assumptions:
-	///		- Predicate member-functions are typically just const, and should not have an overload set.
-	///		- Free functions are often overloaded by type, but conventionally take either const& or decayed value depending on size.
-	///		This way the usual cases are covered for free.
-	template <class TDecayed>
-	using FreePredicatePtr = conditional_t< is_scalar<TDecayed>::value,
-											bool (*)(TDecayed),
-											bool (*)(const TDecayed&) >;
-
-	// CONSIDER: No overload resolution for binary ops yet.
-
-#pragma endregion
-
-
-
-
 #pragma region LambdaCreator type-utils
 
 	namespace LambdaCreators {
@@ -1102,6 +861,247 @@ namespace TypeHelpers {
 		}
 
 	}
+
+#pragma endregion
+
+
+
+
+#pragma region Overload resolution
+
+	/// Helper to semi-implicitly select the applicable overload of a getter-like method given
+	/// by pointer-to-memberfunction syntax, when it designates an overload-set. Costs +1 ptr.
+	/// Added support for void mutators too.
+	/// @tparam T:	Qualified owner of getter method / param of free fun (i.e. AutoEnumerable<F>::TElem).
+	/// @tparam R:	Expected result of projection: Exact or Decayed return type of the getter. (!)
+	/// @remarks
+	///		Consider use-cases like:	intervals.Select<int&>(&Interval::GetStart)
+	///									intervals.OrderBy<int&>(&Interval::GetStart)
+	///									intervals.MapTo<int>(&Interval::CalcLength)
+	///			need to materialize:	data.Map(&ToInterval)
+	///										.Select<int>(&Interval::GetStart)
+	///
+	///		Note that if the pointer to member function is exactly specified (either casted
+	///		or not having an overload-set) then there's no need for this helper, nor for an
+	///		explicitly specified return type (if no conversion needed for the projection):
+	///									intervals.Map(&Interval::CalcLength)
+	///
+	///		In these exact (non-overloadset ptr) cases the compiler will prefer a templated
+	///		overload (providing exact match of parameter type) against an extra conversion,
+	///		so there should be no adverse effect of providing method overloads that receive
+	///		an OverloadResolver to solve the nonexact cases.
+	///
+	///		The helper narrows the acceptable overloads to those properly qualified based on
+	///		T's &-ness and constness. Even then, the return type can't be deduced as a language
+	///		limitation (nor even if it would be exact), hence it must be exactly known.
+	///		However, working with rvalue sequences often necessitate the materialization of
+	///		the results from a getter - leading to a target element type differring from the
+	///		getter's type!
+	///
+	///		To stay consistent, in methods like Select<R>(...), MapTo<R>(...) the user shall
+	///		specify the targeted element type after the projection, not the ref-qualified
+	///		return type of the getter. This is supported up to the materialization of typical
+	///		getter results. (This is minimal requirement, but can't introduce ambiguity.)
+	///
+	///			E.g. the getter			int&	Interval::GetStart();
+	///			can be used either as	intervals.Select<int&>(&Interval.GetStart)
+	///			or						intervals.Select<int>(&Interval.GetStart)
+	///			but no other way.
+	///			[ Workaround is to convert in a next step:
+	///									intervals.Select<int&>(&Interval.GetStart).AsConst()
+	///									intervals.Select<int>(&Interval.GetStart).As<long>() ]
+	///
+	///		This quadruplication here seems manageable.
+	///
+	///		To support unconstrained .MapTo<R>, no lifetime checks are in place here
+	///		- .Select checks that separately.
+	///
+	///		NOTE: const && / volatile support is out of scope!
+	///
+	template <class T, class R>
+	class OverloadResolver final {
+
+		using DT = decay_t<T>;
+
+		// qualified Object type - [const] & for [const] pointers
+		using O  = conditional_t< is_class<DT>::value,  T,
+				   conditional_t< is_pointer<DT>::value && is_class<remove_pointer_t<DT>>::value,  remove_pointer_t<DT>&,
+				   None>>;
+
+		// Decayed object type
+		using OD = decay_t<O>;
+
+		// basically the discriminator
+		R (OverloadResolver::* const wrapper)(T&&) const;
+
+
+		// a referenceable substitute for when R = void
+		using SR = OverrideT<R, None>;
+
+		union {
+			// ---- Acceptable Method pointers ----
+
+			// Possible overload-sets of exact R return type
+
+			R	(OD::* uFun)();
+			R	(OD::* cFun)()	const;
+
+			R	(OD::* lFun)()	&;
+			R	(OD::* clFun)()	const &;
+			R	(OD::* rFun)()	&&;
+
+
+			// Auxiliary overloads to provide copy/materialization in most common situations
+			//	-> only if R is a prvalue
+
+			SR&		  (OD::* uFunRef)();				//
+			const SR& (OD::* cFunRef)()  const;			// important need: getter called on rvalue object
+			const SR& (OD::* clFunRef)() const &;		//
+			SR&&	  (OD::* rFunRRef)() &&;			//
+			SR&		  (OD::* lFunRef)()  &;
+
+			SR&&	  (OD::* uFunRRef)();				// convenience extra: move-out pattern ".PassXY()"
+
+			// Providing all viable combinations would cause ambiguity.
+			// Fortunately left-outs are not all sensible, e.g.:
+			//   R& Get() const		// obviously not part of the object, lifetime not bound
+
+
+			// ---- Acceptable Free-function pointers ----
+
+			R	(*tFreeFun)(T&&);		// exact ref param		- [const]& / rval -> &&
+			R	(*vFreeFun)(DT);		// copy/move into param - if prval overload exists, it should be the only one -> no ambiguity
+			R	(*cFreeFun)(const DT&);	// if T is nonconst
+
+			const SR&	(*cFreeFunRef)(const DT&);	// prob. the only important materializing free-fun. case
+		};
+
+
+		// NOTE: could be templated?   (Seems tolerable so far.)
+		// Options for "wrapper".
+		R	CallU(T&& p)		const	{ return MemberPointerHelpers::Select(p, uFun);		}
+		R	CallCpyU(T&& p)		const	{ return MemberPointerHelpers::Select(p, uFunRef);	}
+		R	CallMaterU(T&& p)	const	{ return MemberPointerHelpers::Select(p, uFunRRef);	}
+		R	CallC(T&& p)		const	{ return MemberPointerHelpers::Select(p, cFun);		}
+		R	CallCpyC(T&& p)		const	{ return MemberPointerHelpers::Select(p, cFunRef);	}
+		R	CallL(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), lFun);	}
+		R	CallCpyL(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), lFunRef);	}
+		R	CallCL(T&& p)		const	{ return MemberPointerHelpers::Select(p, clFun);	}
+		R	CallCpyCL(T&& p)	const	{ return MemberPointerHelpers::Select(p, clFunRef);	}
+		R	CallR(T&& p)		const	{ return MemberPointerHelpers::Select(forward<T>(p), rFun);	 }
+		R	CallMaterR(T&& p)	const	{ return MemberPointerHelpers::Select(forward<T>(p), rFunRRef); }
+
+		R	CallFreeT(T&& p)		const	{ return tFreeFun(forward<T>(p)); }
+		R	CallFreeV(T&& p)		const	{ return vFreeFun(forward<T>(p)); }
+		R	CallFreeC(T&& p)		const	{ return cFreeFun(p);	 }
+		R	CallMaterFreeC(T&& p)	const	{ return cFreeFunRef(p); }
+
+
+		// internal helper ctors for when mptr's type has already been decided
+		OverloadResolver(R (OD::* mptr)(),			void*)	: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
+		OverloadResolver(R (OD::* mptr)() const,	void*)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
+
+		OverloadResolver(R (OD::* mptr)() &,		void*)	: lFun  { mptr }, wrapper { &OverloadResolver::CallL }	{}
+		OverloadResolver(R (OD::* mptr)() &&,		void*)	: rFun  { mptr }, wrapper { &OverloadResolver::CallR }	{}
+		OverloadResolver(R (OD::* mptr)() const &,	void*)	: clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
+
+
+	public:
+		/// Apply the projection.
+		R operator ()(T&& obj) const	{ return (this->*wrapper)(forward<T>(obj)); }
+
+
+
+		// ---- Const/Mutable overload selection - exact return type ----
+
+		// On a mutable object, either const-qualified or nonqualified overload can be called (no enable_if narrowing),
+		// but the nonqualified version should be selected. For that we utilize the language feature:
+		// non-template overloads (with better parameter match) can hide templated ones - and that is not an ambiguity!
+		using PreferredGetter = conditional_t< is_const<remove_reference_t<O>>::value,
+											   R (OD::*)() const,
+											   R (OD::*)()		 >;
+		constexpr
+		OverloadResolver(PreferredGetter mptr)					: OverloadResolver { mptr, nullptr } {}
+
+		template <class OO = O> constexpr
+		OverloadResolver(R (IfMutable<OO, OD>::* mptr)())		: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
+
+		template <class OO = O> constexpr						// template only to be unpreferred
+		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
+
+
+
+		// ---- Ref-qualified overload selection - exact return type ----
+
+		using PreferredRefQualGetter = conditional_t<is_const<remove_reference_t<O>>::value, R (OD::*)() const &,
+									   conditional_t<is_lvalue_reference<O>::value,			 R (OD::*)() &,
+									   														 R (OD::*)() &&		>>;
+		constexpr
+		OverloadResolver(PreferredRefQualGetter mptr)			  : OverloadResolver { mptr, nullptr } {}
+
+		template <class OO = O> constexpr
+		OverloadResolver(R (IfMutLVal<OO, OD>::* mptr)() &)		  : lFun { mptr }, wrapper { &OverloadResolver::CallL }		{}
+
+		template <class OO = O> constexpr						  // template only to be unpreferred
+		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const &) : clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
+
+		template <class OO = O> constexpr
+		OverloadResolver(R (IfMutRVal<OO, OD>::* mptr)() &&)	  : rFun { mptr }, wrapper { &OverloadResolver::CallR }		{}
+
+
+
+		// ---- Member overload selection for materielizing the result ----
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(const IfPRValue<RR>& (IfConst<OO, OD>::* mptr)() const)	: cFunRef { mptr },  wrapper { &OverloadResolver::CallCpyC }	{}
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(const IfPRValue<RR>& (IfConst<OO, OD>::* mptr)() const &)	: clFunRef { mptr }, wrapper { &OverloadResolver::CallCpyCL }	{}
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(IfPRValue<RR>& (IfMutLVal<OO, OD>::* mptr)() &)			: lFunRef { mptr },  wrapper { &OverloadResolver::CallCpyL }	{}
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(IfPRValue<RR>& (IfMutable<OO, OD>::* mptr)())				: uFunRef { mptr },  wrapper { &OverloadResolver::CallCpyU }	{}
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(IfPRValue<RR>&& (IfMutable<OO, OD>::* mptr)())				: uFunRRef { mptr }, wrapper { &OverloadResolver::CallMaterU }	{}
+
+		template <class OO = O, class RR = R> constexpr
+		OverloadResolver(IfPRValue<RR>&& (IfMutRVal<OO, OD>::* mptr)() &&)			: rFunRRef { mptr }, wrapper { &OverloadResolver::CallMaterR }	{}
+
+
+
+		// ---- Free function selection ----
+
+		constexpr OverloadResolver(R (*f)(T&&))				: tFreeFun { f }, wrapper { &OverloadResolver::CallFreeT }	{}
+		constexpr OverloadResolver(R (*f)(DT))				: vFreeFun { f }, wrapper { &OverloadResolver::CallFreeV }	{}
+
+		template <class TT = T, class RR = R> constexpr
+		OverloadResolver(IfNonvoid<RR> (*f)(const IfValueOrMutable<TT, DT>&))	: cFreeFun { f }, wrapper { &OverloadResolver::CallFreeC }	{}
+
+		// ----  Free function selection - materializing the result ----
+
+		template <class RR = R> constexpr
+		OverloadResolver(const IfPRValue<RR>& (*f)(const DT&))		: cFreeFunRef { f }, wrapper { &OverloadResolver::CallMaterFreeC }	{}
+	};
+
+
+
+	/// Potential type of a free Predicate function. Conventionally non-scalars are taken by const&.
+	/// @remarks
+	///		Used as the default type for the template argument of a parameter expecting a predicate lambda
+	///		provides a more limited, but overhead-free and syntactically light alternative to OverloadResolver.
+	///		Assumptions:
+	///		- Predicate member-functions are typically just const, and should not have an overload set.
+	///		- Free functions are often overloaded by type, but conventionally take either const& or decayed value depending on size.
+	///		This way the usual cases are covered for free.
+	template <class TDecayed>
+	using FreePredicatePtr = conditional_t< is_scalar<TDecayed>::value,
+											bool (*)(TDecayed),
+											bool (*)(const TDecayed&) >;
+
+	// CONSIDER: No overload resolution for binary ops yet.
 
 #pragma endregion
 
