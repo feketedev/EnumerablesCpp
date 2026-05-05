@@ -244,10 +244,10 @@ namespace Def {
 
 	// Build a Dictionary via 2 mapper functions, use Cache if available.
 	// (Core idea follows ObtainCachedResults.)
-	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
+	template <class K, class V, class Source, class KeyMapper, class ValMapper, class... Options>
 	enable_if_t<HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
-	BuildDictObtainCache(Source& etor, size_t /*hint*/, const KeyMap& toKey, const ValMap& toValue, const Options&... opts)
+	BuildDictObtainCache(Source& etor, size_t /*hint*/, const KeyMapper& toKey, const ValMapper& toValue, const Options&... opts)
 	{
 		auto cache = etor.CalcResults();
 
@@ -259,10 +259,10 @@ namespace Def {
 		return res;
 	}
 
-	template <class K, class V, class Source, class KeyMap, class ValMap, class... Options>
+	template <class K, class V, class Source, class KeyMapper, class ValMapper, class... Options>
 	enable_if_t<!HasConvertibleCache<Source, void, V>::byElement,
 				DictionaryType<K, V, Options...>>
-	BuildDictObtainCache(Source& etor, size_t hint, const KeyMap& toKey, const ValMap& toValue, const Options&... opts)
+	BuildDictObtainCache(Source& etor, size_t hint, const KeyMapper& toKey, const ValMapper& toValue, const Options&... opts)
 	{
 		SizeInfo si  = etor.Measure();
 		size_t   cap = (si.IsExact() && hint < si) ? si.value : hint;
@@ -279,10 +279,10 @@ namespace Def {
 
 #if ENUMERABLES_EMPLOY_DYNAMICCAST
 
-	template <class K, class V, class KeyMap, class ValMap, class T, class... Options>
+	template <class K, class V, class KeyMapper, class ValMapper, class T, class... Options>
 	DictionaryType<K, V, Options...>   BuildDictObtainCache(InterfacedEnumerator<T>& etor, size_t hint,
-															const KeyMap& toKey, const ValMap& toValue,
-															const Options&... opts					  )
+															const KeyMapper& toKey, const ValMapper& toValue,
+															const Options&...							opts)
 	{
 		// Only List-Cachings exist so far -- see ObtainCachedResults notes
 		using AimedCache = ListOperations::Container<StorableT<T>>;
@@ -712,32 +712,30 @@ namespace Def {
 
 
 	template<class TFactory>
-	template<class... Options, class KeyMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, size_t hint) const
-		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
+	template<class... Options, class TKeyMapper>
+	auto AutoEnumerable<TFactory>::ToDictionary(const TKeyMapper& toKey, size_t hint) const
+		-> DictionaryType<DecayedResultLV<TKeyMapper>, TElemDecayed, Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		const auto& toKeyLambda        = KeyMapper(toKey);
+		using Key = DecayedResultLV<TKeyMapper>;
+
 		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
 
-		using Key = DecayedResultLV<decltype(toKeyLambda)>;
-
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, toKeyLambda, fwdValue, Options {}...);
+		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, KeyMapper(toKey), fwdValue, Options {}...);
 	}
 
 	template<class TFactory>
-	template<class... Options, class KeyMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, size_t hint, const Options&... opts) const
-		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
+	template<class... Options, class TKeyMapper>
+	auto AutoEnumerable<TFactory>::ToDictionary(const TKeyMapper& toKey, size_t hint, const Options&... opts) const
+		-> DictionaryType<DecayedResultLV<TKeyMapper>, TElemDecayed, Options...>
 	{
-		const auto& toKeyLambda        = KeyMapper(toKey);
+		using Key = DecayedResultLV<TKeyMapper>;
+
 		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
 
-		using Key = DecayedResultLV<decltype(toKeyLambda)>;
-
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, toKeyLambda, fwdValue, opts...);
+		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, KeyMapper(toKey), fwdValue, opts...);
 	}
 
 
@@ -766,38 +764,32 @@ namespace Def {
 
 
 	template<class TFactory>
-	template<class... Options, class KeyMap, class ValMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, const ValMap& toValue, size_t hint) const
-		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
-						  DecayedResult<decltype(ValueMapper(toValue))>,
+	template<class... Options, class TKeyMapper, class TValueMapper, enable_if_t<!is_convertible<TValueMapper, size_t>::value, int>>
+	auto AutoEnumerable<TFactory>::ToDictionary(const TKeyMapper& toKey, const TValueMapper& toValue, size_t hint) const
+		-> DictionaryType<DecayedResultLV<TKeyMapper>,
+						  DecayedResult<TValueMapper>,
 						  Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		const auto& toKeyLambda   = KeyMapper(toKey);
-		const auto& toValueLambda = ValueMapper(toValue);
-
-		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
-		using Value = DecayedResult<decltype(toValueLambda)>;
+		using Key   = DecayedResultLV<TKeyMapper>;
+		using Value = DecayedResult<TValueMapper>;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return BuildDictObtainCache<Key, Value>(etor, hint, toKeyLambda, toValueLambda, Options {}...);
+		return BuildDictObtainCache<Key, Value>(etor, hint, KeyMapper(toKey), ValueMapper(toValue), Options {}...);
 	}
 
 	template<class TFactory>
-	template<class... Options, class KeyMap, class ValMap>
-	auto AutoEnumerable<TFactory>::ToDictionary(const KeyMap& toKey, const ValMap& toValue, size_t hint, const Options&... opts) const
-		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
-						  DecayedResult<decltype(ValueMapper(toValue))>,
+	template<class... Options, class TKeyMapper, class TValueMapper, enable_if_t<!is_convertible<TValueMapper, size_t>::value, int>>
+	auto AutoEnumerable<TFactory>::ToDictionary(const TKeyMapper& toKey, const TValueMapper& toValue, size_t hint, const Options&... opts) const
+		-> DictionaryType<DecayedResultLV<TKeyMapper>,
+						  DecayedResult<TValueMapper>,
 						  Options...>
 	{
-		const auto& toKeyLambda   = KeyMapper(toKey);
-		const auto& toValueLambda = ValueMapper(toValue);
-
-		using Key   = DecayedResultLV<decltype(toKeyLambda)>;
-		using Value = DecayedResult<decltype(toValueLambda)>;
+		using Key   = DecayedResultLV<TKeyMapper>;
+		using Value = DecayedResult<TValueMapper>;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
-		return BuildDictObtainCache<Key, Value>(etor, hint, toKeyLambda, toValueLambda, opts...);
+		return BuildDictObtainCache<Key, Value>(etor, hint, KeyMapper(toKey), ValueMapper(toValue), opts...);
 	}
 
 

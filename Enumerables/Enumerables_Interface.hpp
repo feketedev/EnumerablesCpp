@@ -341,15 +341,15 @@ namespace Def {
 		template <class Mapper, class ForcedRes = void>
 		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, ForcedRes>(forward<Mapper>(m)); }
 
-		// Forced l-value variant to extract a Key before potentially moving the rest as a Value (for ToDictionary, GroupBy etc.)
+		// Forced l-value mapper to extract a Key before potentially moving the rest as a Value (for ToDictionary, GroupBy etc.)
 		// No safe-result conversion: the result is emplaced decayed into Dictionary anyway.
 		template <class Mapper>
 		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::UniformMapper<TElem&>(forward<Mapper>(m)); }
 
-		// Special SFINAE variant for ToDictionary overloads - Not forcing Selector, as target is always decayed.
-		// No safe-result conversion: like for Keys.
-		template <class Mapper, class = enable_if_t<!is_convertible<Mapper, size_t>::value>>
-		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::UniformMapper<TElem>(forward<Mapper>(m)); }
+		// Mapper for transforming into some Value associated with a pre-extracted Key.
+		// No safe-result conversion: like for Keys, the target is always decayed.
+		template <class Mapper>
+		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::UniformMapper<TElem&&>(forward<Mapper>(m)); }
 
 
 		template <class Mapper, class ForcedRes = void>
@@ -418,8 +418,8 @@ namespace Def {
 
 	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
 
-		template <class Mapper>  using DecayedResult   = decay_t<MappedT<TElem, Mapper>>;
-		template <class Mapper>  using DecayedResultLV = decay_t<MappedT<TElem&, Mapper>>;
+		template <class Mapper>  using DecayedResult   = decay_t<LambdaCreators::LambdaResultT<Mapper, TElem>>;
+		template <class Mapper>  using DecayedResultLV = decay_t<LambdaCreators::LambdaResultT<Mapper, TElem&>>;
 
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
@@ -902,33 +902,31 @@ namespace Def {
 
 		/// Map sequence elements to unique keys, forwarding them as a whole into values of a Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @param  makeKey:  TElem& -> Key mapper function
-		template <class... Options, class KeyMap>
-		auto ToDictionary(const KeyMap& toKey, size_t sizeHint = 0)		 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
-																								 TElemDecayed,
-																								 Options...>;
+		/// @param  getKey:   TElem& -> Key mapper function
+		template <class... Options, class KeyMapper>
+		DictionaryType<DecayedResultLV<KeyMapper>, TElemDecayed, Options...>	ToDictionary  (const KeyMapper& getKey, size_t sizeHint = 0) const;
 
 		/// Map sequence elements to unique keys by a pointer to possibly const-overloaded getter.
 		/// @tparam  K:		  Explicit type of keys (required)
 		template <class K, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K> getKey, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+		DictionaryType<decay_t<K>, TElemDecayed, Options...>					ToDictionaryOf(LVOverloadTo<K> getKey,  size_t sizeHint = 0) const;
 
 
 		/// Form a custom Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @param  k:		  TElem& -> Key   mapper function
-		/// @param  v:		  TElem  -> Value mapper function
-		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(const KeyMap& k, const ValMap& v, size_t sizeHint = 0)				 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																														 DecayedResult<decltype(ValueMapper(v))>,
-																														 Options...>;
-	
+		/// @param  toKey:	  TElem& -> Key   mapper function
+		/// @param  toValue:  TElem  -> Value mapper function
+		template <class... Options, class KeyMapper, class ValueMapper,
+				  enable_if_t<!is_convertible<ValueMapper, size_t>::value, int> = 0>
+		DictionaryType<DecayedResultLV<KeyMapper>,
+					   DecayedResult<ValueMapper>, Options...>	ToDictionary  (const KeyMapper& toKey, const ValueMapper& toValue, size_t sizeHint = 0) const;
+
 		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @tparam  K:		  Explicit type of keys   (required)
-		/// @tparam  V:		  Explicit type of values (required)
+		/// @tparam K:		  Explicit type of keys   (required)
+		/// @tparam V:		  Explicit type of values (required)
 		template <class K, class V, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K> getKey, OverloadTo<V> getValue, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+		DictionaryType<decay_t<K>, decay_t<V>, Options...>		ToDictionaryOf(LVOverloadTo<K> toKey,  OverloadTo<V> toValue,      size_t sizeHint = 0) const;
 
 
 
@@ -944,21 +942,19 @@ namespace Def {
 		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint, const Options&...) const;
 
 
-		template <class... Options, class KeyMap>
-		auto ToDictionary(const KeyMap& k, size_t sizeHint, const Options&...)		const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																											TElemDecayed,
-																											Options...>;
+		template <class... Options, class KeyMapper>
+		DictionaryType<DecayedResultLV<KeyMapper>, TElemDecayed, Options...>	ToDictionary  (const KeyMapper&, size_t sizeHint, const Options&...) const;
+
 		template <class K, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K>, size_t sizeHint, const Options&...)	const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+		DictionaryType<decay_t<K>, TElemDecayed, Options...>					ToDictionaryOf(LVOverloadTo<K>,  size_t sizeHint, const Options&...) const;
 
 
-		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(const KeyMap& k, const ValMap& v, size_t sizeHint, const Options&...)	const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																														DecayedResult<decltype(ValueMapper(v))>,
-																														Options...>;
+		template <class... Options, class KeyMapper, class ValueMapper, enable_if_t<!is_convertible<ValueMapper, size_t>::value, int> = 0>
+		DictionaryType<DecayedResultLV<KeyMapper>,
+					   DecayedResult<ValueMapper>, Options...>	ToDictionary  (const KeyMapper&, const ValueMapper&, size_t sizeHint, const Options&...) const;
 
 		template <class K, class V, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K>, OverloadTo<V>, size_t sizeHint, const Options&...) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+		DictionaryType<decay_t<K>, decay_t<V>, Options...>		ToDictionaryOf(LVOverloadTo<K>,  OverloadTo<V>,      size_t sizeHint, const Options&...) const;
 
 
 

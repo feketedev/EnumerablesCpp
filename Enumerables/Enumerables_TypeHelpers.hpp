@@ -865,11 +865,22 @@ namespace TypeHelpers {
 
 		// ==== Uniform object / fptr / member-ptr calls ==============================================
 
+		/// Implementation of LambdaResultT -
+		/// probably just an old MSVC quirk that a direct alias fails for ToDictionary...
+		template <class L, class Arg>
+		struct LambdaResult {
+			using Callable = conditional_t<is_member_pointer<BaseT<L>>::value,
+											MemberCaller<BaseT<L>>,
+											ConstValueT<L>&					 >;
+
+			using type = decltype(declval<Callable>() (declval<Arg>()));
+		};
+
+
 		/// Result of a valid lambda [callable/mptr] as defined by UniformMapper below.
 		template <class L, class Arg>
-		using LambdaResultT = decltype(declval<conditional_t<is_member_pointer<BaseT<L>>::value,
-															 MemberCaller<BaseT<L>>,
-															 ConstValueT<L>&				   >>() (declval<Arg>()));
+		using LambdaResultT = typename LambdaResult<L, Arg>::type;
+
 
 
 		/// A LambdaCallable procection forwarded or wrapped as a standard callable,
