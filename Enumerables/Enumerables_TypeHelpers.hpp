@@ -367,12 +367,22 @@ namespace TypeHelpers {
 
 
 
-#pragma region General Lambda utils
+#pragma region Callable-adapters
 
+	// NOTE: These structs become part of enumerators' type signature when needed -
+	//		 unlike for some helper functions, better not nesting them into deeper namespaces.
+	//
+	//		 In contrast to wrapper lambdas, these preserve the original's id, should it be relevant.
+
+
+	// ==== Interim usage reference =================================================================
+
+	/// Proxy for a user-provided lambda object known to be used temporarily - avoiding copy/move.
 	template <class L>
 	struct LambdaRef {
 
 		// convention: Enumerators accept const-callables only
+		// Not for function-/member-pointers
 		const L& lambda;
 
 		template <class... Args>
@@ -383,21 +393,26 @@ namespace TypeHelpers {
 	};
 
 
-	// function / member pointers -> pass them unmodified
-	template <class F>
-	F*				RefLambda(F* fptr)		{ return fptr; }
-
-	// lambda object -> prevent copies by wrapping its reference
+	/// Mark lambda object for interim usage -> prevent copies by wrapping its reference
+	/// @remarks
+	///		Should precede the Lambda-Creator call if wrapping is expected (e.g. forced return type).
 	template <class O>
-	LambdaRef<O>	RefLambda(const O& obj)	{ return { obj }; }
+	LambdaRef<remove_const_t<O>>	RefLambda(O& objLval)	{ return { objLval }; }
+
+	// Function-/member-pointers -> pass them unmodified
+	template <class F>
+	F*								RefLambda(F* fptr)		{ return fptr; }
 
 
 
+	// ==== Parameter order change ==================================================================
 
+	/// Proxy swapping the (only) 2 parameters of a callable.
 	template <class F>
 	struct BinopSwapper {
 		F op;
 
+		// convention: Enumerators accept const-callables only
 		template <class L, class R>
 		decltype(auto)  operator ()(L&& lhs, R&& rhs) const
 		{
@@ -407,24 +422,71 @@ namespace TypeHelpers {
 
 
 	/// Forward binary operation with reversed operand order
+	/// @remarks  Expects a callable. Only apply after a lambda-creator (e.g. BinaryPredicate)!
 	template <class BinOp>
-	static BinopSwapper<decay_t<BinOp>>   SwappedBinop(BinOp&& callable)
+	static BinopSwapper<decay_t<BinOp>>		SwappedBinop(BinOp&& callable)
 	{
 		return { forward<BinOp>(callable) };
 	}
 
 
-	/// Refer to a binary operation with reversed operand order
+	// Overload to get a more concise type when combined with RefLambda.
 	template <class BinOp>
-	static BinopSwapper<const BinOp&>	SwappedBinopRef(const BinOp& callable)
+	static BinopSwapper<const BinOp&>		SwappedBinop(LambdaRef<BinOp> callable)
 	{
-		return { callable };
+		return { callable.lambda };
 	}
 
-	template <class BinOp>
-	static BinopSwapper<BinOp*>			SwappedBinopRef(BinOp* callable)
-	{
-		return { callable };
+
+
+	// ==== Return type conversion ==================================================================
+
+	/// Applies a specific return type - forcing conversion.
+	/// @remarks
+	///		This feature was part of multiple Enumerators (as they can define separate
+	///		return type anyway), but it's so common, that seemed better to extract.
+	template <class L, class R>
+	struct ReturnConverter {
+		L lambda;
+
+		// convention: Enumerators accept const-callables only
+		template <class... P>
+		R operator ()(P&&... in) const	{ return lambda(forward<P>(in)...); }
+	};
+
+
+	namespace LambdaCreators {
+
+		/// Add ReturnConverter to a callable if the requested result type differs
+		/// from the pre-determined original.  [LambdaCreators internal!]
+		template <class DeducedRes, class Trg, class L>
+		enable_if_t<is_same<DeducedRes, Trg>::value, L&&>
+		WrapIfConversionReqd(L&& callable)	{ return forward<L>(callable); }
+
+		// Function-pointers: nicer to just return their prvalue.
+		template <class DeducedRes, class Trg, class L>
+		enable_if_t<is_same<DeducedRes, Trg>::value, L*>
+		WrapIfConversionReqd(L* fptr)		{ return fptr; }
+
+
+		template <class DeducedRes, class Trg, class L>
+		enable_if_t<!is_same<DeducedRes, Trg>::value, ReturnConverter<decay_t<L>, Trg>>
+		WrapIfConversionReqd(L&& callable)
+		{
+			static_assert (!is_reference<Trg>::value || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
+						   "Requested result type loses const qualifier.");
+			static_assert (is_convertible<DeducedRes, Trg>::value,
+						   "Given lambda has incompatible return type.");
+			static_assert (!is_void<DeducedRes>::value,
+						   "HINT: Return type deduced to void. Can happen with unbound template-parameters for a function.");
+			static_assert (!is_reference<Trg>::value || is_lvalue_reference<DeducedRes>::value,
+						   "Function returns r-value, expected reference would become dangling!");
+			static_assert (!is_reference<Trg>::value || IsRefCompatible<Trg, DeducedRes>,
+						   "Requested type is not reference-compatible with the lambda's result - could return reference to a temporary.");
+
+			return ReturnConverter<decay_t<L>, Trg> { forward<L>(callable) };
+		}
+
 	}
 
 #pragma endregion
@@ -432,60 +494,7 @@ namespace TypeHelpers {
 
 
 
-#pragma region Unified Projection
-
-	/// Navigate to a field of an object (or get a derived value) via a member-pointer.
-	/// @remarks
-	///	  Supports:
-	///		* pointer to Data Member for direct access
-	///			-> preserving rvalueness of owner object
-	///		* pointer to Member Function of no parameters (for typical getter calls)
-	///			-> returning the exact type (!) defined by that function
-	namespace MemberPointerHelpers {
-
-		template <class Ptr>
-		using IfMemberObject = enable_if_t<is_member_object_pointer<remove_reference_t<Ptr>>::value>;
-
-		template <class Ptr>
-		using IfMemberFunction = enable_if_t<is_member_function_pointer<remove_reference_t<Ptr>>::value>;
-
-		// For references, need to enhance compiler behaviour (older clang does not propagate rvalueness at all!)
-		template <class T, class Selected>
-		decltype(auto) PropagateRval(Selected&& s)
-		{
-			using RvalPropagated = conditional_t<is_lvalue_reference<T>::value, Selected&, remove_reference_t<Selected>&&>;
-			return static_cast<RvalPropagated>(s);
-		}
-
-		template <class T, class Selector>
-		auto&		   Select(T*  obj, Selector p, IfMemberObject<Selector>* = nullptr)		{ return  obj->*p; }
-		template <class T, class Selector>
-		decltype(auto) Select(T&& obj, Selector p, IfMemberObject<Selector>* = nullptr)		{ return PropagateRval<T>(obj.*p); }
-
-		template <class T, class Selector>
-		decltype(auto) Select(T*  obj, Selector p, IfMemberFunction<Selector>* = nullptr)	{ return (obj->*p)(); }
-		template <class T, class Selector>
-		decltype(auto) Select(T&& obj, Selector p, IfMemberFunction<Selector>* = nullptr)	{ return (forward<T>(obj).*p)(); }
-
-
-		// Named lambda-object to select a member.
-		template <class Mptr>
-		struct MemberCaller {
-			const Mptr member;
-
-			template <class Obj>
-			decltype(auto)  operator ()(Obj&& obj) const
-			{
-				return Select(forward<Obj>(obj), member);
-			}
-		};
-	}
-
-	/// Result of applying a member pointer (either access or getter call) to an object of T.
-	template <class T, class Mptr>
-	using SelectedMemberT = decltype(MemberPointerHelpers::Select(declval<T>(), declval<Mptr>()));
-
-
+#pragma region Overload resolution
 
 	/// Helper to semi-implicitly select the applicable overload of a getter-like method given
 	/// by pointer-to-memberfunction syntax, when it designates an overload-set. Costs +1 ptr.
@@ -552,7 +561,7 @@ namespace TypeHelpers {
 		// basically the discriminator
 		R (OverloadResolver::* const wrapper)(T&&) const;
 
-		
+
 		// a referenceable substitute for when R = void
 		using SR = OverrideT<R, None>;
 
@@ -719,110 +728,198 @@ namespace TypeHelpers {
 											bool (*)(TDecayed),
 											bool (*)(const TDecayed&) >;
 
+	// CONSIDER: No overload resolution for binary ops yet.
 
+#pragma endregion
+
+
+
+
+#pragma region LambdaCreator type-utils
 
 	namespace LambdaCreators {
 
-		// ==== Parameter type helpers ========================================================
+	// ==== Parameter type adjustments ================================================================
 
-		// For Predicates: const access only - even to pointees
-		// (Conditional only against clang's "& const" warning.)
+		// For Predicates: const access only - even to pointees.
+		// NOTE: Currently forced only for algorithms revisiting elements.
+		//		 Conditional: avoids clang's "& const" warning.
 		template <class T>
 		using ConstParamT = conditional_t<is_reference<T>::value, DeepConstT<T>, const DeepConstT<T>&>;
 
 
-
-		// ==== Determine Safe return types ==================================================
+	// ==== Safe Return types =========================================================================
 
 		// Avoid returning xvalues with automatic deduction -> materialize them as prvalues.
 		// NOTE: && can be forced explicitly, but general behaviour of Enumerable<T&&> is currently unspecified.
 		template <class T>
 		using NonExpiringT = conditional_t<is_rvalue_reference<T>::value, remove_reference_t<T>, T>;
 
-		// correct targeted member type so that its lifetime is ensured after return
+		// Correct targeted member (subobject) type so that its lifetime is ensured after return.
 		template <class O, class M>
 		using NonExpiringMemberT = conditional_t< is_lvalue_reference<O>::value || is_pointer<O>::value,
 												  NonExpiringT<M>,
 												  BaseT<M> >;
 
 
+	// ==== Uniform calls [object / fptr / member-ptr] ================================================
 
-		// ==== SFINAE helpers ===============================================================
+		/// L is usable in a standard way as a lambda for (A1, Args...) via LambdaCreators.
+		template <class L, class A1, class... Args>
+		constexpr bool IsLambdaCallable = is_member_pointer<BaseT<L>>::value
+											? IsCallableMember<A1, BaseT<L>, Args...>::value
+											: IsConstCallable<L, A1, Args...>::value;
 
-		// M is a member object or function pointer
+		// NOTE: LambdaResultT is implemented by terms of MemberCaller lower. Will refactor.
+
+
+	// ==== SFINAE helpers ============================================================================
+
+		// M is a member-object or -function pointer
 		template <class M>
-		using IfMemberPointer = enable_if_t<is_member_pointer<M>::value, int>;
+		using IfMemberPointer = enable_if_t<is_member_pointer<remove_reference_t<M>>::value, int>;
 
 		// F is potentially a lambda object or free function pointer
 		template <class F>
-		using IfNotMemberPointer = enable_if_t<!is_member_pointer<F>::value, int>;
+		using IfNotMemberPointer = enable_if_t<!is_member_pointer<remove_reference_t<F>>::value, int>;
+
+	}
+
+
+	namespace MemberPointerHelpers {
+
+		template <class Ptr>
+		using IfMemberObject = enable_if_t<is_member_object_pointer<remove_reference_t<Ptr>>::value, int>;
+
+		template <class Ptr>
+		using IfMemberFunction = enable_if_t<is_member_function_pointer<remove_reference_t<Ptr>>::value, int>;
+
+	}
+
+#pragma endregion
 
 
 
-		// ==== Return type conversion helper ================================================
 
-		// NOTE: This feature was part of multiple Enumerators (as they can define separate
-		//		 return type anyway), but it's so common, that seemed better to extract.
+#pragma region Unified Projection
 
-		// In contrast to another lambda, this may preserve the original's id, in case it's relevant
-		template <class L, class R>
-		struct ReturnConverter {
-			L lambda;
+	namespace MemberPointerHelpers {
 
-			// variadic: extended for binary ops (or anything more)
-			// const:	 convention of Enumerators to accept const-callables only
-			template <class... P>
-			R operator ()(P&&... in) const	{ return lambda(forward<P>(in)...); }
-		};
-
-
-		template <class DeducedRes, class Trg, class L>
-		auto&&	WrapIfConversionReqd(L&& lambda, enable_if_t<is_same<DeducedRes, Trg>::value>* = nullptr)
+		// For references, need to enhance compiler behaviour (older clang does not propagate rvalueness at all!)
+		template <class T, class Selected>
+		decltype(auto) PropagateRval(Selected&& s)
 		{
-			return forward<L>(lambda);
+			using RvalPropagated = conditional_t<is_lvalue_reference<T>::value, Selected&, remove_reference_t<Selected>&&>;
+			return static_cast<RvalPropagated>(s);
 		}
 
+		/// Navigate to a field of an object (or get a derived value) via a member-pointer.
+		/// @remarks
+		///	  Supports:
+		///		* pointer to Data Member for direct access
+		///			-> preserving rvalueness of owner object
+		///		* pointer to Member Function of no parameters (for typical getter calls)
+		///			-> returning the exact type (!) defined by that function
+		template <class T, class Selector, IfMemberObject<Selector> = 0>
+		auto&		   Select(T*  obj, Selector p)   { return  obj->*p; }
 
-		template <class DeducedRes, class Trg, class L>
-		auto	WrapIfConversionReqd(L&& lambda, enable_if_t<!is_same<DeducedRes, Trg>::value>* = nullptr)
+		template <class T, class Selector, IfMemberObject<Selector> = 0>
+		decltype(auto) Select(T&& obj, Selector p)   { return PropagateRval<T>(obj.*p); }
+
+
+		template <class T, class Selector, IfMemberFunction<Selector> = 0>
+		decltype(auto) Select(T*  obj, Selector p)   { return (obj->*p)(); }
+
+		template <class T, class Selector, IfMemberFunction<Selector> = 0>
+		decltype(auto) Select(T&& obj, Selector p)   { return (forward<T>(obj).*p)(); }
+
+	}
+
+	/// Result of applying a member pointer (field access or getter call) to an object of T.
+	/// [pointers supported; Not SFINAE friendly!]
+	template <class T, class Mptr>
+	using SelectedMemberT = decltype(MemberPointerHelpers::Select(declval<T>(), declval<Mptr>()));
+
+
+
+	/// Transparent member-pointer wrapper that navigates to a field or calls a getter on an object.
+	/// [pointers supported; SFINAE friendly]
+	/// @remarks
+	///		* with member-object pointer:	preserves rvalueness of owner object (enforced)
+	///		* with member-function pointer:	returns the exact type (!) defined by that function
+	///		* only supports methods with no parameters (typical getter calls)
+	template <class Mptr>
+	struct MemberCaller {
+		const Mptr member;
+
+		template <class Obj, class = enable_if_t<IsCallableMember<Obj, Mptr>::value>>
+		decltype(auto)  operator ()(Obj&& obj) const
 		{
-			static_assert (!is_reference<Trg>::value || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
-						   "Requested result type loses const qualifier.");
-			static_assert (is_convertible<DeducedRes, Trg>::value,
-						   "Given lambda has incompatible return type.");
-			static_assert (!is_void<DeducedRes>::value,
-						   "HINT: Return type deduced to void. Can happen with unbound template-parameters for a function.");
-			static_assert (!is_reference<Trg>::value || is_lvalue_reference<DeducedRes>::value,
-						   "Function returns r-value, expected reference would become dangling!");
-			static_assert (!is_reference<Trg>::value || IsRefCompatible<Trg, DeducedRes>,
-						   "Requested type is not reference-compatible with the lambda's result - could return reference to a temporary.");
-
-			return ReturnConverter<decay_t<L>, Trg> { forward<L>(lambda) };
+			return MemberPointerHelpers::Select(forward<Obj>(obj), member);
 		}
+	};
 
 
 
-		// ==== Map via arbitrary function ===================================================
+	namespace LambdaCreators {
 
-		template <class T, class R = void, class L>
-		decltype(auto) CustomMapper(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		// ==== Uniform object / fptr / member-ptr calls ==============================================
+
+		/// Result of a valid lambda [callable/mptr] as defined by UniformMapper below.
+		template <class L, class Arg>
+		using LambdaResultT = decltype(declval<conditional_t<is_member_pointer<BaseT<L>>::value,
+															 MemberCaller<BaseT<L>>,
+															 ConstValueT<L>&				   >>() (declval<Arg>()));
+
+
+		/// A LambdaCallable procection forwarded or wrapped as a standard callable,
+		/// with manually overridable return type. [Const-callability is checked, but not enforced!]
+		template <class T, class R = void, class L, IfNotMemberPointer<L> = 0>
+		decltype(auto) UniformMapper(L&& lambda)
 		{
 			// will be stored inside Enumerable ==> should not find && overload; constness required!
-			using AppliedL = ConstValueT<L>&;
-			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary mapper function or selector for: TElem -> TMapped."
-														   " Check lambda's parameter type including constness!"						   );
+			static_assert (IsConstCallable<L, T>::value,
+						   "The lambda is not const-callable with the expected argument."
+						   " Check the parameter type including qualifiers!"			 );
 
-			using DeducedRes = decltype(declval<AppliedL>()(declval<T>()));
-			using TargetRes	 = OverrideT<R, NonExpiringT<DeducedRes>>;
+			using OrigR = InvokeResultT<ConstValueT<L>&, T>;
+			using Trg   = OverrideT<R, OrigR>;
 
-			return WrapIfConversionReqd<DeducedRes, TargetRes>(forward<L>(lambda));
+			return WrapIfConversionReqd<OrigR, Trg>(forward<L>(lambda));
 		}
 
 
-		template <class T, class R = void, class Mptr>
-		auto CustomMapper(Mptr p, IfMemberPointer<Mptr> = 0)
+		template <class T, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
+		auto UniformMapper(Mptr p)
 		{
-			return CustomMapper<T, R>(MemberPointerHelpers::MemberCaller<Mptr> { p });
+			static_assert (IsCallableMember<T, Mptr>::value,
+						   "Cannot use this member-pointer to project the given object. "
+						   "Pointers to fields or parameterless methods (getters) are accepted."
+						   " Check the pointed member and its owner type, including qualifiers!");
+
+			using OrigR = SelectedMemberT<T, Mptr>;
+			using Trg   = OverrideT<R, OrigR>;
+
+			return WrapIfConversionReqd<OrigR, Trg>(MemberCaller<Mptr> { p });
+		}
+
+		// CONSIDER: Nicer would be to have a single UniformLambda<L, Args..> creator function
+		//			 - that change would cascade a bit more
+		//			 - currently we have max 2 args anyway
+
+
+		// ==== Map via arbitrary function ============================================================
+
+		template <class T, class R = void, class L>
+		decltype(auto) CustomMapper(L&& lambda)
+		{
+			static_assert (IsLambdaCallable<L, T>,
+						   "This method expects a unary mapper function/selector: TElem -> TMapped.");
+
+			using DeducedRes = LambdaResultT<L, T>;
+			using TargetRes  = OverrideT<R, NonExpiringT<DeducedRes>>;
+
+			return UniformMapper<T, TargetRes>(forward<L>(lambda));
 		}
 
 
@@ -832,32 +929,22 @@ namespace TypeHelpers {
 
 
 
-		// ==== Map as Projection - ensuring member lifetime =================================
+		// ==== Map as Projection - ensuring member lifetime ==========================================
 
 		template <class T, class R = void, class L>
-		decltype(auto) Selector(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		decltype(auto) Selector(L&& lambda)
 		{
-			using AppliedL = ConstValueT<L>&;
-			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary projection function or selector for: TElem -> TSubobj."
-														   " Check lambda's parameter type including constness!"							   );
+			static_assert (IsLambdaCallable<L, T>,
+						   "This method expects a unary projection function/selector: TElem -> TSubobject.");
 
-			using DeducedRes	= decltype(declval<AppliedL>()(declval<T>()));
-			using CorrectedRes	= NonExpiringMemberT<T, DeducedRes>;
-			using TargetRes		= OverrideT<R, CorrectedRes>;
+			using DeducedRes = LambdaResultT<L, T>;
+			using TargetRes  = OverrideT<R, NonExpiringMemberT<T, DeducedRes>>;
 
 			static_assert (is_lvalue_reference<T>::value || is_pointer<T>::value || !is_reference<TargetRes>::value,
-						   "Selected member cannot be a reference if input object is an r-value!");
+						   "The selected subobject cannot be a reference if the input object is an r-value!"	   );
 
-			return WrapIfConversionReqd<DeducedRes, TargetRes>(forward<L>(lambda));
+			return UniformMapper<T, TargetRes>(forward<L>(lambda));
 		}
-
-
-		template <class T, class R = void, class Mptr>
-		auto Selector(Mptr p, IfMemberPointer<Mptr> = 0)
-		{
-			return Selector<T, R>(MemberPointerHelpers::MemberCaller<Mptr> { p });
-		}
-
 
 		// Storable result of Selector<T, R>(L)
 		template <class T, class L, class R = void>
@@ -865,39 +952,23 @@ namespace TypeHelpers {
 
 
 
-		// ==== Map to bool (Predicate) ======================================================
+		// ==== Map to bool (Predicate) ===============================================================
 
 		template <class T, class L>
-		L&& Predicate(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		decltype(auto)  Predicate(L&& lambda)
 		{
-			using AppliedL = ConstValueT<L>&;
-
 			// CONSIDER: Enforce constness of T? Currently idempotence of lambda objects is completely user responsibility.
 			//			 Maybe .NonPure could alleviate a restriction - still, set-ops would need some patches. Tests show examples.
-			static_assert (IsCallable<AppliedL, T>::value, "This method expects a unary predicate function or selector for: TElem -> bool."
-														   " Check lambda's parameter type including constness!"						   );
-
-			using DeducedRes = decltype(declval<AppliedL>()(declval<T>()));
+			static_assert (IsLambdaCallable<L, T>,
+						   "This method expects a unary predicate function or selector: TElem -> bool.");
 
 			// No need to actually force the bool result by wrapping here, just a guarantee of
 			// implicit bool-convertibility [contextual is insufficient, to avoid ambiguities].
-			static_assert (is_convertible<DeducedRes, bool>::value, "The predicate function must evaluate to bool!");
+			static_assert (is_convertible<LambdaResultT<L, T>, bool>::value,
+						   "The predicate function must evaluate to bool (or a convertible)!");
 
-			return forward<L>(lambda);
+			return UniformMapper<T>(forward<L>(lambda));
 		}
-
-
-		template <class T, class Mptr>
-		auto Predicate(Mptr p, IfMemberPointer<Mptr> = 0)
-		{
-			return Predicate<T>(MemberPointerHelpers::MemberCaller<Mptr> { p });
-		}
-
-		
-		// Storable result of Predicate<T>(L)
-		template <class T, class L>
-		using PredicateT = BaseT<decltype(Predicate<T>(declval<L>()))>;
-
 
 	}	// namespace LambdaCreators
 
@@ -910,97 +981,116 @@ namespace TypeHelpers {
 
 	namespace MemberPointerHelpers {
 
-		template <class T, class BinOp, class R>
-		decltype(auto) ApplyBinop(T*  obj, BinOp op, R&& r, IfMemberFunction<BinOp>* = nullptr)	{ return (obj->*op)(forward<R>(r)); }
+		template <class T, class BinOp, class R, IfMemberFunction<BinOp> = 0>
+		decltype(auto) ApplyBinop(T*  obj, BinOp op, R&& r)   { return (obj->*op)(forward<R>(r)); }
 
-		template <class T, class BinOp, class R>
-		decltype(auto) ApplyBinop(T&& obj, BinOp op, R&& r, IfMemberFunction<BinOp>* = nullptr)	{ return (forward<T>(obj).*op)(forward<R>(r)); }
+		template <class T, class BinOp, class R, IfMemberFunction<BinOp> = 0>
+		decltype(auto) ApplyBinop(T&& obj, BinOp op, R&& r)   { return (forward<T>(obj).*op)(forward<R>(r)); }
 
-
-		// Named lambda-object to apply a member binary operation.
-		template <class Mptr>
-		struct MemberBinopCaller {
-			const Mptr member;
-
-			template <class Obj, class Rh>
-			decltype(auto)  operator ()(Obj&& obj, Rh&& rhs) const
-			{
-				return ApplyBinop(forward<Obj>(obj), member, forward<Rh>(rhs));
-			}
-		};
 	}
 
-	/// Result of applying a member pointer to an object of T with a single parameter of Rh.
-	template <class T, class Mptr, class Rh>
-	using AppliedMemberT = decltype(MemberPointerHelpers::ApplyBinop(declval<T>(), declval<Mptr>(), declval<Rh>()));
+	/// Result of applying a member pointer to an object of T with a single parameter of Rhs.
+	/// [pointers supported; Not SFINAE friendly!]
+	template <class T, class Mptr, class Rhs>
+	using AppliedMemberT = decltype(MemberPointerHelpers::ApplyBinop(declval<T>(), declval<Mptr>(), declval<Rhs>()));
 
+
+	/// Transparent member-pointer wrapper that applies a member binary operation.
+	/// [pointers supported; SFINAE friendly]
+	template <class Mptr>
+	struct MemberBinopCaller {
+		const Mptr member;
+
+		template <class Obj, class Rh, class = enable_if_t<IsCallableMember<Obj, Mptr, Rh>::value>>
+		decltype(auto)  operator ()(Obj&& obj, Rh&& rhs) const
+		{
+			return MemberPointerHelpers::ApplyBinop(forward<Obj>(obj), member, forward<Rh>(rhs));
+		}
+	};
 
 
 	namespace LambdaCreators {
 
-		// ==== Map via binary function ======================================================
+		// ==== Uniform object / fptr / member-ptr calls ==============================================
+
+		/// Result of a valid lambda [callable/mptr] as defined by UniformBinop below.
+		template <class L, class A1, class A2>
+		using LambdaBinopResultT = decltype(declval<conditional_t<is_member_pointer<BaseT<L>>::value,
+													MemberBinopCaller<BaseT<L>>,
+													ConstValueT<L>&									>>() (declval<A1>(), declval<A2>()));
+
+
+		/// A LambdaCallable binary operation forwarded or wrapped as a standard callable,
+		/// with manually overridable return type. [Const-callability is checked, but not enforced!]
+		template <class T1, class T2, class R = void, class L, IfNotMemberPointer<L> = 0>
+		decltype(auto) UniformBinop(L&& lambda)
+		{
+			// will be stored inside Enumerable ==> should not find && overload; constness required!
+			static_assert (IsConstCallable<L, T1, T2>::value,
+						   "The lambda is not const-callable with the expected arguments."
+						   " Check the parameter types including qualifiers!"			  );
+
+			using OrigR = InvokeResultT<ConstValueT<L>&, T1, T2>;
+			using Trg   = OverrideT<R, OrigR>;
+
+			return WrapIfConversionReqd<OrigR, Trg>(forward<L>(lambda));
+		}
+
+
+		template <class T1, class T2, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
+		auto UniformBinop(Mptr p)
+		{
+			static_assert (IsCallableMember<T1, Mptr, T2>::value,
+						   "Cannot call this method with the expected argument. "
+						   "Check the owner type and the parameter, including qualifiers!");
+
+			using OrigR = AppliedMemberT<T1, Mptr, T2>;
+			using Trg   = OverrideT<R, OrigR>;
+
+			return WrapIfConversionReqd<OrigR, Trg>(MemberBinopCaller<Mptr> { p });
+		}
+
+
+
+		// ==== Map via binary function ===============================================================
 
 		template <class T1, class T2, class R = void, class L>
-		decltype(auto) BinaryMapper(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		decltype(auto) BinaryMapper(L&& lambda)
 		{
-			using AppliedL = ConstValueT<L>&;
-			static_assert (IsCallable<AppliedL, T1, T2>::value, "This method expects a binary operation: (TValue1, TValue2) -> TMapped."
-																" Check lambda's parameter type including constness!"					);
+			static_assert (IsLambdaCallable<L, T1, T2>,
+						   "This method expects a binary operation: (TElem1, TElem2) -> TMapped."
+						   " Check the lambda's parameter types including qualifiers!"			 );
 
-			using DeducedRes = decltype(declval<AppliedL>()(declval<T1>(), declval<T2>()));
-			using TargetRes	 = OverrideT<R, NonExpiringT<DeducedRes>>;
+			using DeducedRes = LambdaBinopResultT<L, T1, T2>;
+			using TargetRes  = OverrideT<R, NonExpiringT<DeducedRes>>;
 
-			return WrapIfConversionReqd<DeducedRes, TargetRes>(forward<L>(lambda));
+			return UniformBinop<T1, T2, TargetRes>(forward<L>(lambda));
 		}
 
 
-		template <class T1, class T2, class R = void, class Mptr>
-		auto BinaryMapper(Mptr p, IfMemberPointer<Mptr> = 0)
-		{
-			return BinaryMapper<T1, T2, R>(MemberPointerHelpers::MemberBinopCaller<Mptr> { p });
-		}
-
-		
 		// Storable result of BinaryMapper<Lhs, Rhs, R>(L)
 		template <class Lhs, class Rhs, class L, class R = void>
 		using BinaryMapperT = BaseT<decltype(BinaryMapper<Lhs, Rhs, R>(declval<L>()))>;
 
 
 
-		// ==== Binary predicate =============================================================
+		// ==== Binary predicate ======================================================================
 
 		template <class T, class L>
-		decltype(auto) BinaryPredicate(L&& lambda, IfNotMemberPointer<remove_reference_t<L>> = 0)
+		decltype(auto) BinaryPredicate(L&& lambda)
 		{
-			using AppliedL = ConstValueT<L>&;
-			static_assert (IsCallable<AppliedL, T, T>::value, "This method expects a binary predicate: (const TElem&, const TElem&) -> bool."
-															  " Check lambda's parameter type including constness!"							 );
-
-			using DeducedRes = decltype(declval<AppliedL>()(declval<T>(), declval<T>()));
+			static_assert (IsLambdaCallable<L, T, T>,
+						   "This method expects a binary predicate function or method: (const TElem&, const TElem&) -> bool.");
 
 			// No need to actually force the bool result by wrapping here, just a guarantee of
 			// implicit bool-convertibility [contextual is insufficient, to avoid ambiguities].
-			static_assert (is_convertible<DeducedRes, bool>::value, "The predicate function must evaluate to bool!");
+			static_assert (is_convertible<LambdaBinopResultT<L, T, T>, bool>::value,
+						   "The predicate function must evaluate to bool (or a convertible)!");
 
-			return forward<L>(lambda);
+			return UniformBinop<T, T>(forward<L>(lambda));
 		}
-
-
-		template <class T, class Mptr>
-		auto BinaryPredicate(Mptr p, IfMemberPointer<Mptr> = 0)
-		{
-			return BinaryPredicate<T>(MemberPointerHelpers::MemberBinopCaller<Mptr> { p });
-		}
-
-
-		// Storable result of BinaryPredicate<T>(L)
-		template <class T, class L>
-		using BinaryPredicateT = BaseT<decltype(BinaryPredicate<T>(declval<L>()))>;
 
 	}
-
-
-	// CONSIDER: No overload resolution for binary ops yet.
 
 #pragma endregion
 
@@ -1057,7 +1147,7 @@ namespace TypeHelpers {
 		using Storage::PassValue;
 		using Storage::operator *;
 		using Storage::operator ->;
-		
+
 
 		// Avoid where possible, but useful to make simple calls/returns uniform in generic code
 		// No && overload, many conversions (incl. return) wouldn't trigger it.

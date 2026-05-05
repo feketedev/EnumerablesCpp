@@ -603,7 +603,7 @@ namespace Def {
 	template<class Comp>
 	auto AutoEnumerable<TFactory>::Min(const Comp& isLess) const -> Optional<TElemDecayed>
 	{
-		const auto& isLessFun = BinPred(isLess);
+		const auto& isLessLambda = BinPred(isLess);
 
 		auto et = GetEnumerator();
 		if (!et.FetchNext())
@@ -613,10 +613,20 @@ namespace Def {
 
 		while (et.FetchNext()) {
 			TElem curr = et.Current();
-			if (isLessFun(curr, *min))
+			if (isLessLambda(curr, *min))
 				min.AssignHeadMoved(curr);
 		}
 		return min.PassValue();
+	}
+
+
+	template<class TFactory>
+	template<class Comp>
+	auto AutoEnumerable<TFactory>::Max(const Comp& isLess) const -> Optional<TElemDecayed>
+	{
+		auto isLessRef = RefLambda(isLess);
+
+		return Min(SwappedBinop(BinPred(isLessRef)));
 	}
 
 
@@ -707,7 +717,7 @@ namespace Def {
 		-> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>, TElemDecayed, Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		const auto& toKeyLambda        = KeyMapper(toKey);		// TODO: These should avoid wrapping!
+		const auto& toKeyLambda        = KeyMapper(toKey);
 		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
 
 		using Key = DecayedResultLV<decltype(toKeyLambda)>;

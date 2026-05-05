@@ -22,6 +22,7 @@ namespace TypeHelpers {
 	using std::decay_t;
 	using std::enable_if_t;
 	using std::conditional_t;
+	using std::remove_const_t;
 	using std::remove_pointer_t;
 	using std::remove_reference_t;
 	using std::is_abstract;
@@ -319,7 +320,7 @@ namespace TypeHelpers {
 	}
 
 
-	
+
 	// ===== Conversion tools =========================================================================================
 
 	/// Graceful variant of std::commontype: falling back to void instead of substitution failure.
@@ -503,7 +504,7 @@ namespace TypeHelpers {
 
 	/// Check for a callable member-function or addressable subobject.
 	/// @tparam Obj:	The owner type.
-	/// @tparam Mptr:	A pointer-to-member type. 
+	/// @tparam Mptr:	A pointer-to-member type.
 	/// @tparam Args:	Argumentent types [in case of a member-function].
 	template <class Obj, class Mptr, class... Args>
 	struct IsCallableMember {

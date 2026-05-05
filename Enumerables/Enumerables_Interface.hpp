@@ -330,31 +330,33 @@ namespace Def {
 	// ----- Unified mapper utils ----------------------------------------------------------------------------------------------------
 
 		// Shorthands to accept any kind of mapper argument (lambda / free function pointer / member pointer) taking TElem.
-		// CAUTION: interface convention is to omit std::forward at call-sites. For that always specify type argument explicitly!
+		// CAUTION: interface convention is to omit std::forward at call-sites. Instead specify the mapper type explicitly!
 		//			Note the &'s here to accept the callers universal reference w/o copy - pass their deduced type to forward!
 		// NOTE:	decltype(auto): if no adjustment needed, the provided lambda gets forwarded as is.
-		//			[member-] function pointers always generate a prvalue wrapper.
+		//			Member-pointers always generate a prvalue wrapper, callables only when a mismatching result type is set.
 
-		template <class Mapper, class VForced = void>
-		static decltype(auto) Selector(Mapper& m)		{ return LambdaCreators::Selector<TElem, VForced>(forward<Mapper>(m)); }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) Selector(Mapper& m)		{ return LambdaCreators::Selector<TElem, ForcedRes>(forward<Mapper>(m)); }
 
-		template <class Mapper, class VForced = void>
-		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m)); }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, ForcedRes>(forward<Mapper>(m)); }
 
 		// Forced l-value variant to extract a Key before potentially moving the rest as a Value (for ToDictionary, GroupBy etc.)
+		// No safe-result conversion: the result is emplaced decayed into Dictionary anyway.
 		template <class Mapper>
-		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem&>(forward<Mapper>(m)); }
+		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::UniformMapper<TElem&>(forward<Mapper>(m)); }
 
 		// Special SFINAE variant for ToDictionary overloads - Not forcing Selector, as target is always decayed.
+		// No safe-result conversion: like for Keys.
 		template <class Mapper, class = enable_if_t<!is_convertible<Mapper, size_t>::value>>
-		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::CustomMapper<TElem>(forward<Mapper>(m)); }
+		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::UniformMapper<TElem>(forward<Mapper>(m)); }
 
 
-		template <class Mapper, class VForced = void>
+		template <class Mapper, class ForcedRes = void>
 		static decltype(auto) IndepMapper(Mapper& m)
 		{
 			static_assert (!is_member_object_pointer<Mapper>::value, "Use projection (.Select) to access a member with related lifetime!");
-			return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m));
+			return LambdaCreators::CustomMapper<TElem, ForcedRes>(forward<Mapper>(m));
 		}
 
 		template <class Pred>
@@ -402,16 +404,16 @@ namespace Def {
 
 
 		// Custom binary operation over TElem
-		template <class Mapper, class VForced = void>
-		static decltype(auto) Combiner(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TElem, VForced>(forward<Mapper>(m));  }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) Combiner(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TElem, ForcedRes>(forward<Mapper>(m));  }
 
-		// Custom binary operation: (TLeft, TElem) -> VForced / auto
-		template <class TLeft,  class Mapper, class VForced = void>
-		static decltype(auto) CombinerL(Mapper& m)		{ return LambdaCreators::BinaryMapper<TLeft, TElem, VForced>(forward<Mapper>(m));  }
+		// Custom binary operation: (TLeft, TElem) -> ForcedRes / auto
+		template <class TLeft,  class Mapper, class ForcedRes = void>
+		static decltype(auto) CombinerL(Mapper& m)		{ return LambdaCreators::BinaryMapper<TLeft, TElem, ForcedRes>(forward<Mapper>(m));  }
 
-		// Custom binary operation: (TElem, TRight) -> VForced / auto
-		template <class TRight, class Mapper, class VForced = void>
-		static decltype(auto) CombinerR(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TRight, VForced>(forward<Mapper>(m)); }
+		// Custom binary operation: (TElem, TRight) -> ForcedRes / auto
+		template <class TRight, class Mapper, class ForcedRes = void>
+		static decltype(auto) CombinerR(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TRight, ForcedRes>(forward<Mapper>(m)); }
 
 
 	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
@@ -752,8 +754,8 @@ namespace Def {
 		Optional<TElem>		ElementAt(size_t i) const						{ return ToReferenced().Skip(i).FirstIfAny(); }
 
 		/// Apply binary predicate to each pair of consequtive elements.
-		template <class BinPred>  bool AllNeighbors(const BinPred& p) const		{ return !ToReferenced().template MapNeighbors<bool>(RefLambda(p)).Contains(false); }
-		template <class BinPred>  bool AnyNeighbors(const BinPred& p) const		{ return ToReferenced() .template MapNeighbors<bool>(RefLambda(p)).Contains(true);  }
+		template <class BinPred>	bool AllNeighbors(const BinPred& p) const	{ return !ToReferenced().template MapNeighbors<bool>(RefLambda(p)).Contains(false); }
+		template <class BinPred>	bool AnyNeighbors(const BinPred& p) const	{ return ToReferenced() .template MapNeighbors<bool>(RefLambda(p)).Contains(true);  }
 
 
 	// ----- Shorthands taking a predicate -------------------------------------------------------------------------------------------
@@ -855,7 +857,7 @@ namespace Def {
 
 		/// Find extreme value, if not Empty.
 		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(const Comp& isLess = {}) const;
-		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(const Comp& isLess = {}) const   { return Min(SwappedBinopRef(BinPred(isLess))); }
+		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(const Comp& isLess = {}) const;
 
 		template <class S = TElemDecayed>		Optional<S>				Avg() const;
 		template <class S = TElemDecayed>		S						Sum() const;
@@ -920,7 +922,7 @@ namespace Def {
 		auto ToDictionary(const KeyMap& k, const ValMap& v, size_t sizeHint = 0)				 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
 																														 DecayedResult<decltype(ValueMapper(v))>,
 																														 Options...>;
-		
+	
 		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
 		/// @tparam Options:  Additional arguments for DictionaryType
 		/// @tparam  K:		  Explicit type of keys   (required)
