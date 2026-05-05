@@ -399,10 +399,6 @@ namespace Def {
 		using PF = TypeHelpers::FreePredicatePtr<TElemDecayed>;
 
 
-		template <class Res>
-		static auto			  SelectorOverload(const OverloadResolver<TElem, Res>& s)   { return LambdaCreators::Selector<TElem, Res>(s);  }
-
-
 		// Custom binary operation over TElem
 		template <class Mapper, class ForcedRes = void>
 		static decltype(auto) Combiner(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TElem, ForcedRes>(forward<Mapper>(m));  }
@@ -569,8 +565,8 @@ namespace Def {
 		/// @tparam TSelected: explicitly specified result type - usage optional
 		template <class TSelected = void, class S>	auto Select(S&& selector)				  const &	{ return   Chain<MapperEnumerator>(Selector<S, TSelected>(selector)); }
 		template <class TSelected = void, class S>	auto Select(S&& selector)				  &&		{ return MvChain<MapperEnumerator>(Selector<S, TSelected>(selector)); }
-		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) const &	{ return   Chain<MapperEnumerator>(SelectorOverload<TSelected>(getter)); }
-		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) &&		{ return MvChain<MapperEnumerator>(SelectorOverload<TSelected>(getter)); }
+		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) const &	{ return   Chain<MapperEnumerator>(Selector(getter)); }
+		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) &&		{ return MvChain<MapperEnumerator>(Selector(getter)); }
 
 
 		// --- Shorthands for convenience ---
