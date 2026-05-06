@@ -719,7 +719,7 @@ namespace Def {
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
 		using Key = DecayedResultLV<TKeyMapper>;
 
-		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
+		Forwarder<TElem> fwdValue;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, KeyMapper(toKey), fwdValue, Options {}...);
@@ -732,7 +732,7 @@ namespace Def {
 	{
 		using Key = DecayedResultLV<TKeyMapper>;
 
-		TElem&&  (& fwdValue)(TElem&&) = &std::forward<TElem>;
+		Forwarder<TElem> fwdValue;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<Key, TElemDecayed>(etor, hint, KeyMapper(toKey), fwdValue, opts...);
@@ -745,7 +745,7 @@ namespace Def {
 		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
 	{
 		// copy-pasted "stateful-options" overload to avoid recursion without more enable_if!
-		TElem&& (&fwdValue)(TElem&&) = &std::forward<TElem>;
+		Forwarder<TElem> fwdValue;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, Options {}...);
@@ -756,7 +756,7 @@ namespace Def {
 	auto AutoEnumerable<TFactory>::ToDictionaryOf(LVOverloadTo<K> getKey, size_t hint, const Options&... opts) const
 		-> DictionaryType<decay_t<K>, TElemDecayed, Options...>
 	{
-		TElem&& (&fwdValue)(TElem&&) = &std::forward<TElem>;
+		Forwarder<TElem> fwdValue;
 
 		TEnumerator etor = GetEnumeratorNoDebug();
 		return BuildDictObtainCache<decay_t<K>, TElemDecayed>(etor, hint, getKey, fwdValue, opts...);

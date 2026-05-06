@@ -243,6 +243,20 @@ namespace TypeHelpers {
 
 
 
+	/// Reusable lambda-object to forward a known type.
+	template <class T>
+	struct Forwarder {
+		T&&  operator ()(T&& obj) const noexcept   { return move(obj); }
+		T&&  operator ()(T&  obj) const noexcept   { return move(obj); }
+	};
+	template <class T>
+	struct Forwarder<T&> {
+		T&   operator ()(T&&)     const noexcept   = delete;
+		T&   operator ()(T&  obj) const noexcept   { return obj; }
+	};
+
+
+
 	/// Implementation of DeepConstT.
 	template <class T>
 	struct DeepConst {

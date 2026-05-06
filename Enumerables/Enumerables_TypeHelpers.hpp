@@ -424,7 +424,7 @@ namespace TypeHelpers {
 	/// Forward binary operation with reversed operand order
 	/// @remarks  Expects a callable. Only apply after a lambda-creator (e.g. BinaryPredicate)!
 	template <class BinOp>
-	static BinopSwapper<decay_t<BinOp>>		SwappedBinop(BinOp&& callable)
+	BinopSwapper<decay_t<BinOp>>	SwappedBinop(BinOp&& callable)
 	{
 		return { forward<BinOp>(callable) };
 	}
@@ -432,7 +432,7 @@ namespace TypeHelpers {
 
 	// Overload to get a more concise type when combined with RefLambda.
 	template <class BinOp>
-	static BinopSwapper<const BinOp&>		SwappedBinop(LambdaRef<BinOp> callable)
+	BinopSwapper<const BinOp&>		SwappedBinop(LambdaRef<BinOp> callable)
 	{
 		return { callable.lambda };
 	}
