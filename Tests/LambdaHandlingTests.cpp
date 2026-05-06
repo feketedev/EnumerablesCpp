@@ -153,7 +153,7 @@ namespace EnumerableTests {
 			auto gotConstDatas	= holderCopies.Select(&IntHolder::GetConstData);
 			auto passedDatas	= holderCopies.Select(&IntHolder::PassData);
 		 //	auto gotDatas	= holderCopies.Select(&IntHolder::GetData);			// Overload-set! Still needs explicit type (even if const)
-			auto gotDatas		= holderCopies.Select(constGetter);				// const& overload is applicable as a language rule!
+			auto gotDatas		= holderCopies.Select(constGetter);				// const& overload is applicable as a language rule (standard from C++20)!
 			auto extDatas		= holderCopies.Select(constExtractor);
 			auto gotRvalDatas	= holderCopies.Select(rvalGetter);				// && applicable naturally
 			auto extRvalDatas	= holderCopies.Select(rvalExtractor);

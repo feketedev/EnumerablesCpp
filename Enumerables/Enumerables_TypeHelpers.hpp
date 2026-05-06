@@ -521,17 +521,6 @@ namespace TypeHelpers {
 												  BaseT<M> >;
 
 
-	// ==== Uniform calls [object / fptr / member-ptr] ================================================
-
-		/// L is usable in a standard way as a lambda for (A1, Args...) via LambdaCreators.
-		template <class L, class A1, class... Args>
-		constexpr bool IsLambdaCallable = is_member_pointer<BaseT<L>>::value
-											? IsCallableMember<A1, BaseT<L>, Args...>::value
-											: IsConstCallable<L, A1, Args...>::value;
-
-		// NOTE: LambdaResultT is implemented by terms of MemberCaller lower. Will refactor.
-
-
 	// ==== SFINAE helpers ============================================================================
 
 		// M is a member-object or -function pointer
@@ -547,11 +536,58 @@ namespace TypeHelpers {
 
 	namespace MemberPointerHelpers {
 
-		template <class Ptr>
-		using IfMemberObject = enable_if_t<is_member_object_pointer<remove_reference_t<Ptr>>::value, int>;
+		template <class M>
+		struct IsConstLvalMethod {
+			constexpr static bool value = false;
+		};
+		template <class R, class T, class... Args>
+		struct IsConstLvalMethod<R (T::*)(Args...) const &> {
+			constexpr static bool value = true;
+		};
+
+
 
 		template <class Ptr>
-		using IfMemberFunction = enable_if_t<is_member_function_pointer<remove_reference_t<Ptr>>::value, int>;
+		using IfMemberObject   = enable_if_t<is_member_object_pointer<Ptr>::value, int>;
+
+		template <class Ptr>
+		using IfMemberFunction = enable_if_t<is_member_function_pointer<Ptr>::value, int>;
+
+
+		/// Methods qualified "const &":  need a special workaround when called on rvalues, until C++20.
+		/// @remarks
+		///		Clang allows calling them with an extension (aside issuing a warning), but
+		///		generates substitution failure when the same call is checked by templates!
+		///		Workarounds symmetrize object/parameter binding to const &, consistently among compilers.
+		template <class Ptr>
+		using IfConstLvalMethod  = enable_if_t<IsConstLvalMethod<Ptr>::value, int>;
+
+		/// Qualifier-seqs other than "const &":  apply standard compiler behavior.
+		template <class Ptr>
+		using IfNonPatchedMethod = enable_if_t<is_member_function_pointer<Ptr>::value && !IsConstLvalMethod<Ptr>::value, int>;
+
+
+
+		/// The member is callable on the given object type by extended rules taken from C++20 - as if Obj were an ordinary argument.
+		template <class Obj, class Mptr, class... Args>
+		constexpr bool IsCallableMemberExt = IsCallableMember<conditional_t<IsConstLvalMethod<Mptr>::value, Obj&, Obj>,
+															  Mptr,
+															  Args...>::value;
+
+	}
+
+
+	// ==== Uniform calls [object / fptr / member-ptr] ================================================
+
+	namespace LambdaCreators {
+
+		/// L is usable in a standard way as a lambda for (A1, Args...) via LambdaCreators.
+		template <class L, class A1, class... Args>
+		constexpr bool IsLambdaCallable = is_member_pointer<BaseT<L>>::value
+											? MemberPointerHelpers::IsCallableMemberExt<A1, BaseT<L>, Args...>
+											: IsConstCallable<L, A1, Args...>::value;
+
+		// NOTE: LambdaResultT is implemented by terms of MemberCaller lower. Will refactor.
 
 	}
 
@@ -589,8 +625,11 @@ namespace TypeHelpers {
 		template <class T, class Selector, IfMemberFunction<Selector> = 0>
 		decltype(auto) Select(T*  obj, Selector p)   { return (obj->*p)(); }
 
-		template <class T, class Selector, IfMemberFunction<Selector> = 0>
+		template <class T, class Selector, IfNonPatchedMethod<Selector> = 0>
 		decltype(auto) Select(T&& obj, Selector p)   { return (forward<T>(obj).*p)(); }
+
+		template <class T, class Selector, IfConstLvalMethod<Selector> = 0>
+		decltype(auto) Select(T&& obj, Selector p)   { return (obj.*p)(); }
 
 	}
 
@@ -611,7 +650,7 @@ namespace TypeHelpers {
 	struct MemberCaller {
 		const Mptr member;
 
-		template <class Obj, class = enable_if_t<IsCallableMember<Obj, Mptr>::value>>
+		template <class Obj, class = enable_if_t<MemberPointerHelpers::IsCallableMemberExt<Obj, Mptr>>>
 		decltype(auto)  operator ()(Obj&& obj) const
 		{
 			return MemberPointerHelpers::Select(forward<Obj>(obj), member);
@@ -662,7 +701,7 @@ namespace TypeHelpers {
 		template <class T, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
 		auto UniformMapper(Mptr p)
 		{
-			static_assert (IsCallableMember<T, Mptr>::value,
+			static_assert (MemberPointerHelpers::IsCallableMemberExt<T, Mptr>,
 						   "Cannot use this member-pointer to project the given object. "
 						   "Pointers to fields or parameterless methods (getters) are accepted."
 						   " Check the pointed member and its owner type, including qualifiers!");
@@ -754,8 +793,11 @@ namespace TypeHelpers {
 		template <class T, class BinOp, class R, IfMemberFunction<BinOp> = 0>
 		decltype(auto) ApplyBinop(T*  obj, BinOp op, R&& r)   { return (obj->*op)(forward<R>(r)); }
 
-		template <class T, class BinOp, class R, IfMemberFunction<BinOp> = 0>
+		template <class T, class BinOp, class R, IfNonPatchedMethod<BinOp> = 0>
 		decltype(auto) ApplyBinop(T&& obj, BinOp op, R&& r)   { return (forward<T>(obj).*op)(forward<R>(r)); }
+
+		template <class T, class BinOp, class R, IfConstLvalMethod<BinOp> = 0>
+		decltype(auto) ApplyBinop(T&& obj, BinOp op, R&& r)   { return (obj.*op)(forward<R>(r)); }
 
 	}
 
@@ -771,7 +813,7 @@ namespace TypeHelpers {
 	struct MemberBinopCaller {
 		const Mptr member;
 
-		template <class Obj, class Rh, class = enable_if_t<IsCallableMember<Obj, Mptr, Rh>::value>>
+		template <class Obj, class Rh, class = enable_if_t<MemberPointerHelpers::IsCallableMemberExt<Obj, Mptr, Rh>>>
 		decltype(auto)  operator ()(Obj&& obj, Rh&& rhs) const
 		{
 			return MemberPointerHelpers::ApplyBinop(forward<Obj>(obj), member, forward<Rh>(rhs));
@@ -810,7 +852,7 @@ namespace TypeHelpers {
 		template <class T1, class T2, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
 		auto UniformBinop(Mptr p)
 		{
-			static_assert (IsCallableMember<T1, Mptr, T2>::value,
+			static_assert (MemberPointerHelpers::IsCallableMemberExt<T1, Mptr, T2>,
 						   "Cannot call this method with the expected argument. "
 						   "Check the owner type and the parameter, including qualifiers!");
 
