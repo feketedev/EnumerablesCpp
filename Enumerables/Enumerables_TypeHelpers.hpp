@@ -25,7 +25,7 @@ namespace TypeHelpers {
 
 	/// Enumerated type of an Enumerator
 	template <class Et>
-	using EnumeratedT = decltype(declval<Et>().Current());
+	using EnumeratedT = typename Et::TElem;
 
 
 

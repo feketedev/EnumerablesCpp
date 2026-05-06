@@ -29,11 +29,11 @@ namespace Def {
 
 	/// Result of Mapper function supplied with a V input.
 	template <class V, class Mapper>
-	using MappedT	= decltype(declval<Mapper>() (declval<V>()));
+	using MappedT	= decltype(declval<const Mapper&>() (declval<V>()));
 
 	/// Result of 2 param Mapper function supplied with a (V1, V2) input.
 	template <class V1, class V2, class Combiner>
-	using CombinedT	= decltype(declval<Combiner>() (declval<V1>(), declval<V2>()));
+	using CombinedT	= decltype(declval<const Combiner&>() (declval<V1>(), declval<V2>()));
 
 
 	/// Helper for aligned placement-move operations, for when sufficient space is ensured.
@@ -612,7 +612,7 @@ namespace Def {
 		static_assert (IsConstCallable<Stepper, Acc&>::value,
 					   "Supplied step function is not callable on the Accumulator type.");
 
-		static constexpr bool StepByMutate = is_void<MappedT<Acc&, const Stepper&>>::value;
+		static constexpr bool StepByMutate = is_void<MappedT<Acc&, Stepper>>::value;
 
 		using AccStore = conditional_t<StepByMutate, Acc, Reassignable<Acc>>;
 
