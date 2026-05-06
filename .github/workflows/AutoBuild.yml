@@ -46,10 +46,10 @@ jobs:
         ${{matrix.testResultsView && ',TestResultsView=' || ''}}${{matrix.testResultsView}}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -92,10 +92,10 @@ jobs:
       EXTRA_PROPS: *extraProperties
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
