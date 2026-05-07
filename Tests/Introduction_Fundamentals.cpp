@@ -275,10 +275,10 @@ namespace EnumerableTests {
 			// If however .Map is called, the programmer takes full responsibility for whatever the lambda returns.
 			// FUN prefers & whenever possible [decltype(auto)], specificly to help dealing with subobjects -
 			// that's why .Select can decide to "rematerialize" or not.
-			auto danglingHeights = pointsR.Map   (FUN(v, v.y));
+		//	auto danglingHeights = pointsR.Map   (FUN(v, v.y));		// compiles, but invalid to iterate
 			auto copiedHeights   = pointsR.Select(FUN(v, v.y));
 
-			ASSERT_TYPE (double &,	danglingHeights.First());	// valid for lambda, not during iteration
+		//	ASSERT_TYPE (double &,	danglingHeights.First());		// may trigger warning if ResultsView is enabled
 			ASSERT_TYPE (double,	copiedHeights.First());
 
 			// An example for FUN being in control:
