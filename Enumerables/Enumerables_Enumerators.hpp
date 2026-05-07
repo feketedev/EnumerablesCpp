@@ -258,11 +258,6 @@ namespace Def {
 				? (sizeof(fixBuffer) >= sizeof(Et))
 				: (alignof(Et) - buffAlign + sizeof(Et) <= sizeof(fixBuffer));
 		}
-#	else
-		bool					IsOnHeap() const	{ return true; }
-
-		template <class Nested>
-		static constexpr bool	SureFitsInline()	{ return false; }
 #	endif
 
 	public:
@@ -275,6 +270,7 @@ namespace Def {
 		IEnumerator<T>&			WrappedInterface()		{ return *ptr; }
 
 
+#	if ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE > 0
 		~InterfacedEnumerator() override
 		{
 			if (IsOnHeap())
@@ -309,12 +305,34 @@ namespace Def {
 		{
 		}
 
+
 		InterfacedEnumerator(InterfacedEnumerator&& src)
 			: ptr { src.IsOnHeap() ? src.ptr : src.ptr->MoveTo(fixBuffer) }
 		{
 			if (src.IsOnHeap())
 				src.ptr = nullptr;
 		}
+
+#	else
+
+		~InterfacedEnumerator() override
+		{
+			delete ptr;
+			ptr = nullptr;
+		}
+
+
+		template <class NestedFactory>
+		InterfacedEnumerator(NestedFactory&& fact) : ptr { new InvokeResultT<NestedFactory> { fact() } }
+		{
+		}
+
+
+		InterfacedEnumerator(InterfacedEnumerator&& src) : ptr { src.ptr }
+		{
+			src.ptr = nullptr;
+		}
+#	endif
 	};
 
 }	// namespace Def
