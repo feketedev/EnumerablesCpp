@@ -38,6 +38,10 @@ jobs:
           config: Debug
           testResultsView: "2"    # evaluate all on creation - compiles an extra code path,
                                   # while cancels forcing the emission of Test/Print functions
+        - platform: x64
+          config: Release
+          testResultsView: "2"
+
     env:
       # ideally, config and ResultsView level should be irrelevant
       WARNINGS_LOG: Warnings_Clang_${{matrix.platform}}_${{matrix.config}}${{matrix.testResultsView}}.txt
