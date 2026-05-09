@@ -913,8 +913,8 @@ namespace TypeHelpers {
 
 	/// Helper to semi-implicitly select the applicable overload of a getter-like method given
 	/// by pointer-to-memberfunction syntax, when it designates an overload-set. Costs +1 ptr.
-	/// Added support for void mutators too.
-	/// @tparam T:	Qualified owner of getter method / param of free fun (i.e. AutoEnumerable<F>::TElem).
+	/// Added support for void mutators, and to pass resolved subobject-pointers too.
+	/// @tparam T:	Qualified owner of getter method / param of free fun (i.e. AutoEnumerable::TElem).
 	/// @tparam R:	Expected result of projection: Exact or Decayed return type of the getter. (!)
 	/// @remarks
 	///		Consider use-cases like:	intervals.Select<int&>(&Interval::GetStart)
@@ -923,40 +923,42 @@ namespace TypeHelpers {
 	///			need to materialize:	data.Map(&ToInterval)
 	///										.Select<int>(&Interval::GetStart)
 	///
-	///		Note that if the pointer to member function is exactly specified (either casted
+	///		Note that if the pointer to member-function is exactly specified (either casted
 	///		or not having an overload-set) then there's no need for this helper, nor for an
 	///		explicitly specified return type (if no conversion needed for the projection):
 	///									intervals.Map(&Interval::CalcLength)
 	///
 	///		In these exact (non-overloadset ptr) cases the compiler will prefer a templated
-	///		overload (providing exact match of parameter type) against an extra conversion,
+	///		overload (that provides exact parameter type match) against an extra conversion,
 	///		so there should be no adverse effect of providing method overloads that receive
-	///		an OverloadResolver to solve the nonexact cases.
+	///		OverloadResolvers to solve the nonexact cases.
 	///
-	///		The helper narrows the acceptable overloads to those properly qualified based on
-	///		T's &-ness and constness. Even then, the return type can't be deduced as a language
-	///		limitation (nor even if it would be exact), hence it must be exactly known.
-	///		However, working with rvalue sequences often necessitate the materialization of
-	///		the results from a getter - leading to a target element type differring from the
-	///		getter's type!
+	///		The helper narrows the possible signatures to those having a viable qualifier-seq
+	///		according to T's known refness and constness. Within those, the non-const (& / &&)
+	///		enjoy preference, when T allows them. But even then, the return type can't be
+	///		inferred as a language limitation (not even if the method is exact), hence it must
+	///		be exactly known - i.e. specified by the user as R.
+	///		However, working with r-value sequences often necessitate the materialization of
+	///		the received results - leading to a target element type which differs from the
+	///		getter's original return type!
 	///
-	///		To stay consistent, in methods like Select<R>(...), MapTo<R>(...) the user shall
-	///		specify the targeted element type after the projection, not the ref-qualified
-	///		return type of the getter. This is supported up to the materialization of typical
-	///		getter results. (This is minimal requirement, but can't introduce ambiguity.)
+	///		In methods like Select<R>(...), MapTo<R>(...) the user specifies the desired
+	///		element type after the projection, not the lambda's return-type.
+	///		To stay consistent, R in this class presents the desired result too. Conversions
+	///		are supported up to the possible materialization of the typical getter results.
+	///		Thus, either the exact return type, or its decayed version must be specified!
+	///		(This is minimal requirement, but can't introduce ambiguity.)
 	///
 	///			E.g. the getter			int&	Interval::GetStart();
 	///			can be used either as	intervals.Select<int&>(&Interval.GetStart)
 	///			or						intervals.Select<int>(&Interval.GetStart)
 	///			but no other way.
-	///			[ Workaround is to convert in a next step:
+	///			[ Workaround is to convert in a succeeding step:
 	///									intervals.Select<int&>(&Interval.GetStart).AsConst()
 	///									intervals.Select<int>(&Interval.GetStart).As<long>() ]
 	///
-	///		This quadruplication here seems manageable.
-	///
-	///		To support unconstrained .MapTo<R>, no lifetime checks are in place here
-	///		- .Select checks that separately.
+	///		To support unconstrained .MapTo<R> and similar, no lifetime checks are in place
+	///		- .Select checks that externally.
 	///
 	///		NOTE: const && / volatile support is out of scope!
 	///
@@ -979,6 +981,9 @@ namespace TypeHelpers {
 
 		// a referenceable substitute for when R = void
 		using SR = OverrideT<R, None>;
+
+		// decayed result, safe to assume as subobject type
+		using DR = decay_t<SR>;
 
 		union {
 			// ---- Acceptable Method pointers ----
@@ -1016,6 +1021,14 @@ namespace TypeHelpers {
 			R	(*cFreeFun)(const DT&);	// if T is nonconst
 
 			const SR&	(*cFreeFunRef)(const DT&);	// prob. the only important materializing free-fun. case
+
+
+			// ---- Acceptable subobject pointers ----
+
+			DR			OD::* uSubobj;
+			const DR	OD::* cSubobj;
+
+			// Always exact - only to enable mixing member arguments universally (e.g. ToDictionaryOf(field, method))
 		};
 
 
@@ -1038,14 +1051,19 @@ namespace TypeHelpers {
 		R	CallFreeC(T&& p)		const	{ return cFreeFun(p);	 }
 		R	CallMaterFreeC(T&& p)	const	{ return cFreeFunRef(p); }
 
+		R	GetSubobj(T&& p)	const	{ return MemberPointerHelpers::Select(forward<T>(p), uSubobj); }
+		R	GetSubobjC(T&& p)	const	{ return MemberPointerHelpers::Select(p,			 cSubobj); }
+
 
 		// internal helper ctors for when mptr's type has already been decided
-		OverloadResolver(R (OD::* mptr)(),			void*)	: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
-		OverloadResolver(R (OD::* mptr)() const,	void*)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
+		enum InternalMarker { InternalCall };
 
-		OverloadResolver(R (OD::* mptr)() &,		void*)	: lFun  { mptr }, wrapper { &OverloadResolver::CallL }	{}
-		OverloadResolver(R (OD::* mptr)() &&,		void*)	: rFun  { mptr }, wrapper { &OverloadResolver::CallR }	{}
-		OverloadResolver(R (OD::* mptr)() const &,	void*)	: clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
+		OverloadResolver(R (OD::* mptr)(),			InternalMarker) : uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
+		OverloadResolver(R (OD::* mptr)() const,	InternalMarker) : cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
+
+		OverloadResolver(R (OD::* mptr)() &,		InternalMarker) : lFun  { mptr }, wrapper { &OverloadResolver::CallL }	{}
+		OverloadResolver(R (OD::* mptr)() &&,		InternalMarker) : rFun  { mptr }, wrapper { &OverloadResolver::CallR }	{}
+		OverloadResolver(R (OD::* mptr)() const &,	InternalMarker) : clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
 
 
 	public:
@@ -1063,13 +1081,11 @@ namespace TypeHelpers {
 											   R (OD::*)() const,
 											   R (OD::*)()		 >;
 		constexpr
-		OverloadResolver(PreferredGetter mptr)					: OverloadResolver { mptr, nullptr } {}
+		OverloadResolver(PreferredGetter mptr)					: OverloadResolver { mptr, InternalCall }			  {}
 
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)())		: uFun { mptr }, wrapper { &OverloadResolver::CallU }	{}
 
 		template <class OO = O> constexpr						// template only to be unpreferred
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const)	: cFun { mptr }, wrapper { &OverloadResolver::CallC }	{}
+		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const)	: cFun { mptr }, wrapper { &OverloadResolver::CallC } {}
 
 
 
@@ -1079,16 +1095,11 @@ namespace TypeHelpers {
 									   conditional_t<is_lvalue_reference<O>::value,			 R (OD::*)() &,
 									   														 R (OD::*)() &&		>>;
 		constexpr
-		OverloadResolver(PreferredRefQualGetter mptr)			  : OverloadResolver { mptr, nullptr } {}
+		OverloadResolver(PreferredRefQualGetter mptr)			  : OverloadResolver { mptr, InternalCall }				  {}
 
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutLVal<OO, OD>::* mptr)() &)		  : lFun { mptr }, wrapper { &OverloadResolver::CallL }		{}
 
 		template <class OO = O> constexpr						  // template only to be unpreferred
-		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const &) : clFun { mptr }, wrapper { &OverloadResolver::CallCL }	{}
-
-		template <class OO = O> constexpr
-		OverloadResolver(R (IfMutRVal<OO, OD>::* mptr)() &&)	  : rFun { mptr }, wrapper { &OverloadResolver::CallR }		{}
+		OverloadResolver(R (IfMutable<OO, OD>::* mptr)() const &) : clFun { mptr }, wrapper { &OverloadResolver::CallCL } {}
 
 
 
@@ -1126,6 +1137,12 @@ namespace TypeHelpers {
 
 		template <class RR = R> constexpr
 		OverloadResolver(const IfPRValue<RR>& (*f)(const DT&))		: cFreeFunRef { f }, wrapper { &OverloadResolver::CallMaterFreeC }	{}
+
+
+		// ----  Extra: accept subobject pointers [no resolution needed / safety is external resp.] ----
+
+		constexpr OverloadResolver(DR		 OD::* so) : uSubobj { so }, wrapper { &OverloadResolver::GetSubobj }	{}
+		constexpr OverloadResolver(const DR  OD::* so) : cSubobj { so }, wrapper { &OverloadResolver::GetSubobjC }	{}
 	};
 
 

@@ -198,8 +198,8 @@ namespace EnumerableTests {
 			ASSERT_EQ (dict1, dictS1);
 			ASSERT_EQ (dict2, dictS2);
 
-			// To follow .Map/.Select convention, overload-resolution of qualified getters can be enabled by specifying "-Of<K, V>" types
-			// explicitly when convenient (although with the caveat that method-pointers cannot be mixed with anything else at the moment).
+			// To follow .Map/.Select convention, overload-resolution of qualified getters can be enabled by specifying <K, V> types
+			// explicitly when convenient (although with the caveat that member-pointers cannot be mixed with lambdas at the moment).
 			std::unordered_map<unsigned, Person>	  dictO1 = persons.ToDictionaryOf<unsigned>(&Person::GetId);
 			std::unordered_map<unsigned, std::string> dictO2 = persons.ToDictionaryOf<unsigned, std::string>(&Person::GetId, &Person::GetName);
 			std::unordered_map<unsigned, std::string> dictO2C = persons.AsConst()

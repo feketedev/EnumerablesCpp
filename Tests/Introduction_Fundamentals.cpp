@@ -856,17 +856,17 @@ namespace EnumerableTests {
 			auto hs1 = rectangles.Select([](Rectangle& r) -> unsigned& { return r.Height(); });
 			auto hs2 = rectangles.Select(FUN(r, r.Height()));
 
-			// Resolving a function-pointer's overload-set is supported only if the result type is specified.
-			// This case no arbitrary conversions supported, only decaying the result at most.
+			// Resolving a function-pointer's overload-set is supported only by explicitly specifying its result type.
+			// In this case, arbitrary conversions aren't supported, only decaying the result at most.
 
 			auto hs3	 = rectangles.Select<unsigned&>(&Rectangle::Height);
 			auto hCopies = rectangles.Select<unsigned>(&Rectangle::Height);
 
 			// The library is prepared to resolve the usual overload-sets (const/mutable, &/&&/const&)
-			// at the cost of storing 1 extra pointer. [Same applies to overloaded free-functions!]
+			// at the cost of storing 1 extra pointer. Same applies to overloaded free-functions!
 
 			// Alternative is to resolve the pointer beforehand -
-			// probably being worst then lambdas readability-wise:
+			// probably being worse than lambdas readability-wise:
 
 			unsigned& (Rectangle::* accessHeight)() = &Rectangle::Height;
 			auto hs4    = rectangles.Select(accessHeight);
@@ -914,8 +914,8 @@ namespace EnumerableTests {
 			// Also note that only certain transformation methods offer using
 			// the OverloadResolver - for which it's a reasonably common need.
 
-			// Predicates expect const member-functions to be exact,
-			// and support a limited (but free) resolution for free-functions.
+			// Predicates expect const member-functions to be exact, and
+			// support a limited (but costless) resolution for free-functions.
 			// -> see IsSquare(Rectangle&)
 
 			bool (*shouldntCall)(Rectangle&) = &IsSquare;

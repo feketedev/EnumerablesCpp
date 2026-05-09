@@ -903,7 +903,8 @@ namespace Def {
 		DictionaryType<DecayedResultLV<KeyMapper>, TElemDecayed, Options...>	ToDictionary  (const KeyMapper& getKey, size_t sizeHint = 0) const;
 
 		/// Map sequence elements to unique keys by a pointer to possibly const-overloaded getter.
-		/// @tparam  K:		  Explicit type of keys (required)
+		/// Explicit type can be ref-qualified to resolve edge-cases, will be decayed for Dictionary.
+		/// @tparam  K:		  Explicit type of keys to extract (required, auto-decayed)
 		template <class K, class... Options>
 		DictionaryType<decay_t<K>, TElemDecayed, Options...>					ToDictionaryOf(LVOverloadTo<K> getKey,  size_t sizeHint = 0) const;
 
@@ -918,9 +919,10 @@ namespace Def {
 					   DecayedResult<ValueMapper>, Options...>	ToDictionary  (const KeyMapper& toKey, const ValueMapper& toValue, size_t sizeHint = 0) const;
 
 		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
+		/// Explicit types can be ref-qualified to resolve edge-cases, will be decayed for Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @tparam K:		  Explicit type of keys   (required)
-		/// @tparam V:		  Explicit type of values (required)
+		/// @tparam K:		  Explicit type of keys to extract   (required, auto-decayed)
+		/// @tparam V:		  Explicit type of values to extract (required, auto-decayed)
 		template <class K, class V, class... Options>
 		DictionaryType<decay_t<K>, decay_t<V>, Options...>		ToDictionaryOf(LVOverloadTo<K> toKey,  OverloadTo<V> toValue,      size_t sizeHint = 0) const;
 

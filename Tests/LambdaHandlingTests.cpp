@@ -448,6 +448,35 @@ namespace EnumerableTests {
 			//auto tmp = holders.MaximumsBy<const std::unique_ptr<int>&>(&IntHeapHolder::GetData);		// define an op< to test
 			//ASSERT_ELEM_TYPE (IntHeapHolder, tmp);
 		}
+
+		// Mixing various member-pointer kinds
+		{
+			auto holders = Enumerables::Range(1, 3).Map(FUN(x, (IntHeapHolder { std::make_unique<int>(x), 10 * x })));
+
+			ASSERT_ELEM_TYPE (IntHeapHolder, holders);
+
+			// Exact + overload-set
+			// Limitation: materializing resolution is currently strict, not having an allowed "secondary" const overload
+			//			   => need to specify const int& result exactly, even if the member is exact
+			auto byCData1 = holders.ToDictionaryOf<const int&, std::unique_ptr<int>>(&IntHeapHolder::GetConstData, &IntHeapHolder::GetData);
+
+			// member-object + overload-set
+			// The former is always unambiguous, but needs to be able to pass through OverloadResolver!
+			auto byCData2 = holders.ToDictionaryOf<int, std::unique_ptr<int>>(&IntHeapHolder::constData, &IntHeapHolder::GetData);
+
+			// Notice the extracted keys/values get decayed forcefully, to allow overcoming the above limitation.
+			ASSERT_TYPE (std::unordered_map<int COMMA std::unique_ptr<int>>, byCData1);
+			ASSERT_TYPE (std::unordered_map<int COMMA std::unique_ptr<int>>, byCData2);
+
+			ASSERT_EQ (3, byCData1.size());
+			ASSERT_EQ (3, byCData2.size());
+			ASSERT_EQ (1, *byCData1[10]);
+			ASSERT_EQ (1, *byCData2[10]);
+			ASSERT_EQ (2, *byCData1[20]);
+			ASSERT_EQ (2, *byCData2[20]);
+			ASSERT_EQ (3, *byCData1[30]);
+			ASSERT_EQ (3, *byCData2[30]);
+		}
 	}
 
 

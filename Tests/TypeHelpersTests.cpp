@@ -24,6 +24,8 @@ namespace EnumerableTests {
 			char cConst		= 'c';
 			char cLeftConst = 'k';
 
+			const char cSubobj = 's';
+
 			const char&	GetCharConst()	const	{ return cConst; }
 
 			char&&		PassChar()				{ return std::move(c); }
@@ -114,6 +116,49 @@ namespace EnumerableTests {
 				ASSERT(&obj.c == &cPassed3);
 			}
 
+			// --- Subobjects (no resolution needed) ---
+			{
+				// Just pass them to enable mixing with overloaded arguments, e.g. in ToDictionary).
+
+				OverloadResolver<const GetterTester&,	const char&>	c1 { &GetterTester::c };
+				OverloadResolver<GetterTester&,			const char&>	c2 { &GetterTester::c };
+				OverloadResolver<GetterTester,			const char&>	c3 { &GetterTester::c };
+				OverloadResolver<GetterTester&&,		const char&>	c4 { &GetterTester::c };
+				OverloadResolver<const GetterTester,	const char&>	c5 { &GetterTester::c };
+				OverloadResolver<const GetterTester&,	const char&>	k1 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&,			const char&>	k2 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester,			const char&>	k3 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&&,		const char&>	k4 { &GetterTester::cSubobj };
+				OverloadResolver<const GetterTester,	const char&>	k5 { &GetterTester::cSubobj };
+
+				// lifetime checks are out of scope here
+				ASSERT(&obj.c == &c1(obj));
+				ASSERT(&obj.c == &c2(obj));
+				ASSERT(&obj.c == &c3(std::move(obj)));
+				ASSERT(&obj.c == &c4(std::move(obj)));
+				ASSERT(&obj.c == &c5(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k1(obj));
+				ASSERT(&obj.cSubobj == &k2(obj));
+				ASSERT(&obj.cSubobj == &k3(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k4(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k5(std::move(obj)));
+
+				OverloadResolver<GetterTester&,  char&>			m1 { &GetterTester::c };
+				OverloadResolver<GetterTester,   char&&>		m2 { &GetterTester::c };
+				OverloadResolver<GetterTester&&, char&&>		m3 { &GetterTester::c };
+			//	OverloadResolver<GetterTester,   char&&>	   km2 { &GetterTester::cSubobj };		//
+			//	OverloadResolver<GetterTester&&, char&&>	   km3 { &GetterTester::cSubobj };		// CTE,
+			//	OverloadResolver<const GetterTester, char&>		m4 { &GetterTester::c };			// dropping const
+			//	OverloadResolver<const GetterTester&, char&>	m5 { &GetterTester::c };			//
+
+				ASSERT(&obj.c == &m1(obj));
+				char&& cPassed2 = m2(std::move(obj));
+				char&& cPassed3 = m3(std::move(obj));
+				ASSERT(&obj.c == &cPassed2);
+				ASSERT(&obj.c == &cPassed3);
+			}
+
+
 			// --- Triple-qualified overload ---
 			{
 				OverloadResolver<const GetterTester&,	const char&>	cl1 { &GetterTester::GetChar3 };
@@ -175,6 +220,31 @@ namespace EnumerableTests {
 
 				ASSERT(obj.cConst == c1(obj));
 				ASSERT(obj.cConst == c5(std::move(obj)));
+			}
+
+			// --- Subobjects (no resolution needed) ---
+			{
+				OverloadResolver<const GetterTester&,	char>	p1 { &GetterTester::c };
+				OverloadResolver<GetterTester&,			char>	p2 { &GetterTester::c };
+				OverloadResolver<GetterTester,			char>	p3 { &GetterTester::c };
+				OverloadResolver<GetterTester&&,		char>	p4 { &GetterTester::c };
+				OverloadResolver<const GetterTester,	char>	p5 { &GetterTester::c };
+				OverloadResolver<const GetterTester&,	char>  kp1 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&,			char>  kp2 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester,			char>  kp3 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&&,		char>  kp4 { &GetterTester::cSubobj };
+				OverloadResolver<const GetterTester,	char>  kp5 { &GetterTester::cSubobj };
+
+				ASSERT_EQ('u', p1(obj));
+				ASSERT_EQ('u', p2(obj));
+				ASSERT_EQ('u', p3(std::move(obj)));
+				ASSERT_EQ('u', p4(std::move(obj)));
+				ASSERT_EQ('u', p5(std::move(obj)));
+				ASSERT_EQ('s', kp1(obj));
+				ASSERT_EQ('s', kp2(obj));
+				ASSERT_EQ('s', kp3(std::move(obj)));
+				ASSERT_EQ('s', kp4(std::move(obj)));
+				ASSERT_EQ('s', kp5(std::move(obj)));
 			}
 
 			// --- Triple-qualified overload ---
