@@ -362,7 +362,7 @@ namespace Def {
 		decltype(auto)	operator  *()	{ return enumerator.Current(); }
 		void			operator ++()	{ hasCurrent = enumerator.FetchNext(); }
 
-		/// Hack, as value of 'end' is don't care.
+		/// Kind of a hack, as value of 'end' is don't care.
 		/// Assuming end != beg won't get called (in line with the standard), end() returns a Null-Object.
 		bool operator !=(const EnumeratorAdapter<TEnumerator>& end)
 		{
