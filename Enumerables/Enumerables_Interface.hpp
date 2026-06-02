@@ -818,19 +818,23 @@ namespace Def {
 	#pragma endregion
 
 
-	// =========== Arithmetics (chaining & terminal) =================================================================================
+	// =========== Arithmetics (chaining + terminal) =================================================================================
 	#pragma region
 
 		// CONSIDER: This form of min/max search is the most powerful, but uses more memory for a non-uniqie sequence.
 		//			 A more performant 'SingleMinimum()' or 'MinimalFirst()' could be added.
 		//			 Alternatively: Enumerators could provide some internal trick (FetchFirstOnly?) as an optional feature.
 
+		/// Find extreme elements according to a comparison function.
+		/// [The order of equals is preserved.]
 		template <class Comp = std::less<>>		auto Minimums(Comp&& isLess = {}) const &	{ return   Chain<MinSeekEnumerator>(BinPred<Comp>(isLess)); }
 		template <class Comp = std::less<>>		auto Minimums(Comp&& isLess = {}) &&		{ return MvChain<MinSeekEnumerator>(BinPred<Comp>(isLess)); }
 
 		template <class Comp = std::less<>>		auto Maximums(Comp&& isLess = {}) const &	{ return		Minimums(SwappedBinop(BinPred<Comp>(isLess))); }
 		template <class Comp = std::less<>>		auto Maximums(Comp&& isLess = {}) &&		{ return Move().Minimums(SwappedBinop(BinPred<Comp>(isLess))); }
 
+		/// Find extreme points of some property or any function of elements.
+		/// [The order of equals is preserved.]
 		template <class TProp = void, class P>	auto MinimumsBy(P&& toMinimize)				  const &	{ return		Minimums(ComparatorForProperty<P, TProp>(toMinimize)); }
 		template <class TProp = void, class P>	auto MinimumsBy(P&& toMinimize)				  &&		{ return Move().Minimums(ComparatorForProperty<P, TProp>(toMinimize)); }
 		template <class TProp>					auto MinimumsBy(ConstOverloadTo<TProp> toMin) const &	{ return				 MinimumsBy<TProp, ConstOverloadTo<TProp>>(move(toMin)); }
@@ -841,15 +845,27 @@ namespace Def {
 		template <class TProp>					auto MaximumsBy(ConstOverloadTo<TProp> toMax) const &	{ return				 MaximumsBy<TProp, ConstOverloadTo<TProp>>(move(toMax)); }
 		template <class TProp>					auto MaximumsBy(ConstOverloadTo<TProp> toMax) &&		{ return Move().template MaximumsBy<TProp, ConstOverloadTo<TProp>>(move(toMax)); }
 
-		/// Sort elements in order defined by comparison function
+		/// Sort elements in order defined by a comparison function
+		/// [Uses std::sort - No guarantee to preserve order of equal elements!]
 		template <class Comp = std::less<>> 	auto Order(Comp&& isLess = {})				const & { return   Chain<SorterEnumerator>(forward<Comp>(isLess)); }
 		template <class Comp = std::less<>> 	auto Order(Comp&& isLess = {})				&&		{ return MvChain<SorterEnumerator>(forward<Comp>(isLess)); }
 
-		/// In order by the value of a selected property
+		template <class Comp = std::less<>> 	auto OrderDescending(Comp&& isLess = {})	const & { return   Chain<SorterEnumerator>(SwappedBinop(BinPred<Comp>(isLess))); }
+		template <class Comp = std::less<>> 	auto OrderDescending(Comp&& isLess = {})	&&		{ return MvChain<SorterEnumerator>(SwappedBinop(BinPred<Comp>(isLess))); }
+
+
+		/// Sort elements in order by a selected property, or any inferred value.
+		/// [Uses std::sort - No guarantee to preserve order of equals!]
 		template <class TProp = void, class P>	auto OrderBy(P&& getProperty)				const &	{ return		Order(ComparatorForProperty<P, TProp>(getProperty)); }
 		template <class TProp = void, class P>	auto OrderBy(P&& getProperty)				&&		{ return Move().Order(ComparatorForProperty<P, TProp>(getProperty)); }
 		template <class TProp>					auto OrderBy(ConstOverloadTo<TProp> getter)	const &	{ return				 OrderBy<TProp, ConstOverloadTo<TProp>>(move(getter)); }
 		template <class TProp>					auto OrderBy(ConstOverloadTo<TProp> getter)	&&		{ return Move().template OrderBy<TProp, ConstOverloadTo<TProp>>(move(getter)); }
+
+		template <class TProp = void, class P>	auto OrderByDescending(P&& getProperty)					const &	{ return		OrderDescending(ComparatorForProperty<P, TProp>(getProperty)); }
+		template <class TProp = void, class P>	auto OrderByDescending(P&& getProperty)					&&		{ return Move().OrderDescending(ComparatorForProperty<P, TProp>(getProperty)); }
+		template <class TProp>					auto OrderByDescending(ConstOverloadTo<TProp> getter)	const &	{ return				 OrderByDescending<TProp, ConstOverloadTo<TProp>>(move(getter)); }
+		template <class TProp>					auto OrderByDescending(ConstOverloadTo<TProp> getter)	&&		{ return Move().template OrderByDescending<TProp, ConstOverloadTo<TProp>>(move(getter)); }
+
 
 		/// Find extreme value, if not Empty.
 		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(const Comp& isLess = {}) const;

@@ -18,7 +18,7 @@ namespace EnumerableTests {
 	using Enumerables::LogicException;
 
 
-	static void Orderings()
+	static void Extremes()
 	{
 		// scalars
 		{
@@ -60,6 +60,8 @@ namespace EnumerableTests {
 
 			ASSERT_ELEM_TYPE (float,  minFltCos);
 			ASSERT_ELEM_TYPE (double, minDblCos);
+			ASSERT_EQ (3.0f, minFltCos.Single());
+			ASSERT_EQ (3.0,  minDblCos.Single());
 
 			// using binary comparison function - useful with complex types, here it isn't
 			using IntBits = std::bitset<8 * sizeof(int)>;
@@ -128,6 +130,61 @@ namespace EnumerableTests {
 			// Rerunning query should provide up-to-date results
 			recvec.push_back({ 6, 1.2 });
 			ASSERT_EQ (3, posMinPlaces.Count());
+		}
+	}
+
+
+
+	static void Orderings()
+	{
+		// scalars
+		{
+			int numsArr[] = { 5, -5, 7, 8, 7, -1 };
+
+			auto nums = Enumerate(numsArr);
+
+			auto ascending = nums.Order();
+			ASSERT_ELEM_TYPE (int&, ascending);
+			
+			ASSERT_EQ (numsArr + 1, &ascending.First());
+			ASSERT_EQ (numsArr + 0, &*ascending.ElementAt(2));
+			ASSERT_EQ (numsArr + 3, &ascending.Last());
+
+			auto descending1 = nums.OrderDescending();
+			auto descending2 = nums.Order(std::greater<>());
+			ASSERT_ELEM_TYPE (int&, descending1);
+			ASSERT_ELEM_TYPE (int&, descending2);
+
+			const std::vector<int> ascVec = ascending.ToList();
+			ASSERT (AreEqual(Enumerate(ascVec.rbegin(), ascVec.rend()), descending2));
+			ASSERT (AreEqual(descending1.Addresses(), descending2.Addresses()));
+		}
+
+		// records
+		{
+			Vector2D<int> pointArr[] = { { 1, 3 }, { 2, 4 }, { 0, 3 }, { -2, 1 } };
+
+			auto points = Enumerate(pointArr);
+
+			auto heightsFwd = points.OrderBy(&Vector2D<int>::x).Select(&Vector2D<int>::y);
+			auto heightsBck = points.OrderByDescending(&Vector2D<int>::x).Select(&Vector2D<int>::y);
+			
+			ASSERT_ELEM_TYPE (int&, heightsFwd);
+			ASSERT_ELEM_TYPE (int&, heightsBck);
+			
+			ASSERT_EQ (&pointArr[3].y, &heightsFwd.First());
+			ASSERT_EQ (&pointArr[2].y, &*heightsFwd.ElementAt(1));
+			ASSERT_EQ (&pointArr[1].y, &heightsFwd.Last());
+
+			ASSERT_EQ (&pointArr[1].y, &heightsBck.First());
+			ASSERT_EQ (&pointArr[0].y, &*heightsBck.ElementAt(1));
+			ASSERT_EQ (&pointArr[3].y, &heightsBck.Last());
+
+			// check lazy-eval:
+			pointArr[0].x = -10;
+			ASSERT_EQ (&pointArr[0].y, &heightsFwd.First());
+			pointArr[0].x = 10;
+			ASSERT_EQ (&pointArr[0].y, &heightsBck.First());
 		}
 	}
 
@@ -597,6 +654,7 @@ namespace EnumerableTests {
 	{
 		Greet("Arithmetics");
 
+		Extremes();
 		Orderings();
 		Summation();
 		CopyAvoidance();
