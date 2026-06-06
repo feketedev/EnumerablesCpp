@@ -41,6 +41,15 @@ namespace Enumerables
 
 
 
+// For auto-testing this project: allow force-enabling ResultsView from command-line
+#ifdef TEST_RESULTSVIEW_LVL
+	#pragma warning (disable : 4005)			// redefined macros
+	#define ENUMERABLES_USE_RESULTSVIEW			true
+	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	TEST_RESULTSVIEW_LVL
+#endif
+
+
+
 // -- Instantiate the library after all config. --
 #include "Enumerables_Implementation.hpp"
 

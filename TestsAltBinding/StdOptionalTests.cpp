@@ -44,7 +44,7 @@ namespace EnumerableTests::AltBinding {
 			ASSERT_EQ (6,	max);
 			ASSERT_EQ (5.0,	avg);
 
-			std::optional<int>    max2 = evens.Min([](int& a, int& b) { return b < a; });
+			std::optional<int>    max2 = evens.Min([](int a, int b) { return b < a; });
 			std::optional<int>    noMax = Enumerables::Empty<int>().Max();
 			std::optional<double> noAvg = Enumerables::Empty<int>().Avg<double>();
 
@@ -52,7 +52,7 @@ namespace EnumerableTests::AltBinding {
 			ASSERT    (!noMax.has_value());
 			ASSERT    (!noAvg.has_value());
 		}
-			
+
 		// move
 		{
 			auto moNums = Enumerables::Range<int>(5).As<MoveOnly<int>>();

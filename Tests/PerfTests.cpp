@@ -73,7 +73,7 @@ namespace EnumerableTests {
 	};
 
 
-	
+
 	template <bool PosFiltered = false>
 	struct PairMinimumsTestBase : PairTestBase {
 
@@ -368,7 +368,7 @@ namespace EnumerableTests {
 
 	template <>		const char NeighborDiffs<int>::Name[]	 = "Pairwise diffs int";
 	template <>		const char NeighborDiffs<double>::Name[] = "Pairwise diffs double";
-	
+
 
 
 	struct OrderByOtherField : PairTestBase {
@@ -1306,7 +1306,7 @@ namespace EnumerableTests {
 	{
 		auto& [sumTimes, timesPath]     = summarizeTimes;
 		auto& [sumOverheads, ovrhdPath] = summarizeOverheads;
-		
+
 		bool printTimes = sumTimes && timesPath.empty();
 		bool printOvrhd = sumOverheads && ovrhdPath.empty() && !printTimes;
 
@@ -1318,7 +1318,7 @@ namespace EnumerableTests {
 		SectionBreak("  Short sequences...", 90);
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
-		
+
 		SectionBreak("  Long sequences summary:", printTimes || printOvrhd ? 104 : 90, '=');
 		SummarizeOnScreen(printTimes, printOvrhd, results1);
 		std::cout << std::endl;

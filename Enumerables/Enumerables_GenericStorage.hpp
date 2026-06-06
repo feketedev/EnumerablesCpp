@@ -172,13 +172,13 @@ namespace Enumerables::TypeHelpers {
 		}
 
 		template <class... Args>
-		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(noexcept(T { forward<Args>(args)... }))
+		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 			: obj { forward<Args>(args)... }
 		{
 		}
 
 		template <class... Args>
-		Emplacer(Args&&... args)  noexcept(noexcept(T (forward<Args>(args)...)))
+		Emplacer(Args&&... args)  noexcept(is_nothrow_constructible_v<T, Args...>)
 			: obj(forward<Args>(args)...)
 		{
 		}
@@ -248,7 +248,7 @@ namespace Enumerables::TypeHelpers {
 		GenericStorage()	{}
 		~GenericStorage()	{}
 
-		void Destroy()  noexcept(std::is_nothrow_destructible_v<T>)
+		void Destroy()  noexcept(is_nothrow_destructible_v<T>)
 		{
 			Storage().~Emp();
 		}
@@ -273,14 +273,14 @@ namespace Enumerables::TypeHelpers {
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		enable_if_t<!is_reference_v<AsDependentT<T, Args...>>>		// guard needed for RefHolder
-		ConstructBraced(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
+		enable_if_t<!is_reference_v<AsDependentT<T, Args...>>>		// guard needed against RefHolder
+		ConstructBraced(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			new (&val) Emp { TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)... };
 		}
 
 		template <class Trg>
-		enable_if_t<is_reference_v<AsDependentT<T, Trg>>>			// RefHolder
+		enable_if_t<is_reference_v<AsDependentT<T, Trg>>>			// if RefHolder
 		ConstructBraced(Trg&& referred)  noexcept
 		{
 			new (&val) Emp { forward<Trg>(referred) };
@@ -288,7 +288,7 @@ namespace Enumerables::TypeHelpers {
 
 
 		template <class... Args>
-		void ConstructParens(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
+		void ConstructParens(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
 			new (&val) Emp { forward<Args>(ctorArgs)... };
 		}
@@ -296,14 +296,14 @@ namespace Enumerables::TypeHelpers {
 
 		template <class... Args>
 		enable_if_t<is_constructible_v<T, Args...>>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T (forward<Args>(ctorArgs)...)))
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
 			new (&val) Emp { forward<Args>(ctorArgs)... };
 		}
 
 		template <class... Args>
 		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible_v<T, Args...>>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(noexcept(T { forward<Args>(ctorArgs)... }))
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			new (&val) Emp { TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)... };
 		}
@@ -311,14 +311,17 @@ namespace Enumerables::TypeHelpers {
 
 		// Note: When expecting conversions, use Construct! That will need a temporary anyway.
 		template <class Factory>
-		void InvokeFactory(Factory&& create)  noexcept(noexcept(create()) && (is_same_v<T, decltype(create())> || is_nothrow_constructible_v<T, decltype(create())> && is_nothrow_destructible_v<T>))
+		void InvokeFactory(Factory&& create)  noexcept(noexcept(create()))
 		{
+			static_assert (is_same<T, decltype(create())>(), "To allow conversions, use Construct*() directly");
+
 			if constexpr (is_same_v<Emp, Emplacer<decltype(create())>>) {
 				new (&val) Emp { TypeHelpers::InvokeFactory, create };
 			}
 			else {
-				// for RefHolder<T> or any mismatching prvalue that needs conversion
 				new (&val) Emp { create() };
+
+				static_assert (is_reference<T>());		// currently expecting RefHolder only
 			}
 		}
 
@@ -333,7 +336,7 @@ namespace Enumerables::TypeHelpers {
 		/// Only if already initialized!
 		template <class Src>
 		T& Reassign(Src&& src)
-		noexcept(IsHeadAssignable<T, Src> ? is_nothrow_assignable_v<T&, Src> : is_nothrow_constructible_v<T, Src> && is_nothrow_destructible_v<T>)
+		noexcept(IsHeadAssignable<T, Src> ? is_nothrow_assignable_v<T&, Src> : IsNothrowReconstructible<T, Src>)
 		{
 			if constexpr (IsHeadAssignable<T, Src>) {
 				static_assert (!is_reference<T>(), "GenericStorage Internal error.");

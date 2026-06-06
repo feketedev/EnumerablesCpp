@@ -866,12 +866,17 @@ namespace Legacy {
 
 
 	struct OutRedirector {
+		std::ostream&			trg;
 		std::streambuf* const	original;
 
-		OutRedirector(std::ostream& os, std::ostream& file) : original { os.rdbuf(file.rdbuf()) }
+		OutRedirector(std::ostream& trg, std::ostream& file) : trg { trg }, original { trg.rdbuf(file.rdbuf()) }
 		{
 		}
-		~OutRedirector()	{ std::cout.set_rdbuf(original); }
+
+		~OutRedirector() noexcept(false)	// impl./mask dependent
+		{
+			trg.rdbuf(original);
+		}
 	};
 
 

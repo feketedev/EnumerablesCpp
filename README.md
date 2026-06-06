@@ -7,41 +7,84 @@ to enable a more declarative / functional coding style.
 > &emsp;&ensp;&thinsp;This is the **currently recommended** branch unless you are limited to using an older compiler!*
 
 
-The library follows a pragmatic approach with the core objectives of:
+### Key sections:
+- [Principles](#principles)
+    - [Limitations](#limitations)
+- [Features](#features)
+    - [Type-erased sequences &ndash; Enumerable\<T\>](#type-erased-sequences--enumerablet)
+    - [Fully templated sequences](#fully-templated-sequences)
+    - [Capture rules](#capture-rules)
+    - [Chainable operations](#chainable-operations)
+        - [Cached-result optimization](#cached-result-optimization)
+        - [Semi-automatic lifetime protection](#semi-automatic-lifetime-protection)
+    - [Type argument conventions](#type-argument-conventions)
+    - [Overload resolution](#overload-resolution)
+    - [Lifetime dependencies](#lifetime-dependencies)
+- [Performance](#performance)
+- [Setup](#setup)
+
+---
+&nbsp;
+
+## Principles
+
+Enumerables provide a common abstraction for various iterable sequences, with an interface that offers fundamental algorithms in a composable form, to manipulate those sequences in a declarative manner. The source of elements can either be a conventional container or some (possibly infinite) generator.
+The aim is to follow the original *Linq* conceptually, so that it reads familiar, but also adapt to the peculiarities of C++ programming to stay reasonably efficient.
+
+> &#8505;&ensp;Employing Enumerables offers two main advantages:
+>  * declarative style implementation is usually more concise, less error-prone
+>  * used on interfaces: it can help to decouple clients from internal structures,\
+>    enables functions to consume arbitrary iterable arguments\
+>    (albeit this comes with an overhead, see [Type-erased sequences &ndash; Enumerable\<T\>](#type-erased-sequences--enumerablet) vs. [Fully templated sequences](#fully-templated-sequences))
+
+&nbsp;\
+This library follows a pragmatic approach with the core objectives of:
  * provide as concise and **fluently readable** syntax as possible
- * by automatically deducing **convenient defaults** (for type parameters) wherever possible
- * still, have the ability to override those manually
- * **prioritize convenience**, but try to minimize overhead too (often by providing a way to opt out)
- * depend solely on STL &ndash; but **allow configuration** to use custom container types in algorithms
+ * have **convenient defaults, deduce types** automatically wherever possible
+ * preserve the ability to override those manually
+ * **prioritize convenience**, but try to minimize overhead too\
+   (keep performance-impacting features optional)
+ * depend solely on STL
+ * support custom container/exception types in algorithms via **configuration** 
 
-The pragmatism should take form in *sensible limitations* of the scope, not in a low level of attention to details.
-Particularly:
- * **volatile** elements are currently **not supported** \
-   (forming queries over them is quite questionable; much of the internal machinery lacks volatile specializations)
- * behaviour with explicit **&& (r-value reference)** elements is **unspecified**
-	* very basic operations might work as expected, possibly with unnecessary materialization (move/copy) of items
-	* but in general, **expiring** elements should be represented as **pr-values**\
-	  (which might not even lead to unnecessary moves in those simple cases due to RVO)
- * behaviour with **const pr-value** elements is **unspecified**\
-   (however, it is probably similar to using immutable types)
-	* *no sense* to qualify freshly created objects directly (the receiver can *const the target variable* anytime)
- * **immutable types** should work properly
-	* except with multipass operations manipulating containers\
-	  (unless the container itself handles them specially)
-		> This could be improved in the future.
- * automatic deductions and optimizations are often best-effort only
+### Limitations
+The pragmatism should take form in *sensible limitations* of the scope, not in a low level of attention to details.\
+Particularly, the behavior is **unspecified** in the following cases:
+ * **volatile** elements
+    * forming queries over them is quite questionable
+    * much of the internal machinery lacks volatile specializations
+* explicit **&& (r-value reference)** elements
+    * time of expiry is undetectable (on fetching next item? / after the query ends?)
+    * expiring elements should be represented as **pr-values**!\
+      (which might not even lead to unnecessary moves in simple cases due to RVO)
+ * **const pr-value** elements\
+   (although, probably being similar to immutable types)
+    * no sense to qualify freshly created objects directly &ndash; the receiver can **const the target variable** at will
 
-> &#9989; In general, the considered element types are:\
-> non-exotic **object types** (exclude arrays and member-pointers), and possibly const-qualified **l-value references** to them.
+(Some basic operations might work over such types as expected, possibly invoking unintended materializations [move/copy] of && elements &ndash; no tests provided.)
 
-On top of this, operations may pose additional requirements only as conceptually necessary to carry them out. (Starting with C++17 even unmovable types are a thing.)
+> &#9989;&ensp;**In general, the considered element types are:**
+> * non-exotic **object types**\
+>   (exclude arrays and member-pointers)
+> * possibly const-qualified **l-value references** to them.
 
-> &#8505; Known limitation: some complex operations might require copy-constructability in cases when *move* should be sufficient &ndash; there are plans to avoid this.
+&nbsp;\
+Algorithms might set **additional requirements**\
+(these result in clean compile-time errors if not met):
+ * **immutable object types** can't participate in **multipass operations**, buffering elements
+    * [unless the configured container handles them itself]
+    * lvalue-references are supported though, by wrapping them in an *std::ref* fashion internally
+    * immutables should work fine in other operations
+    > This could be improved in the future.
+
+
+* On top of this, operations may pose additional requirements only as conceptually necessary to carry them out. (Starting with C++17 even unmovable types are a thing.)
+    > &#8505;&ensp;There's a known exception: some complex operations might require copy-constructability in cases when *move* should be sufficient &ndash; there are plans to avoid this.
  
 
+&nbsp;
 
-
-## Key Features
+## Features
 
 ### Type-erased sequences &ndash; Enumerable\<T\>
 
@@ -50,9 +93,9 @@ our *Enumerable\<T\>* is a wrapper, able to hide anything iterable. Automatic co
 
 ```cpp
 class Registry {
-	std::list<Person>          persons;
+    std::list<Person>          persons;
 public:
-	Enumerable<const Person&>  Persons() const  { return persons; }
+    Enumerable<const Person&>  Persons() const  { return persons; }
 //...
 ```
 
@@ -64,32 +107,85 @@ Querying the **size** is implemented in an **optional-feature** pattern. In such
 constant time &ndash; but for a filtered sequence it requires an exhaustive iteration.
 
 ```cpp
-	Registry  reg;
-	/* ... */
-	size_t population = reg.Persons().Count();   // O(1)
+    Registry  reg;
+    /* ... */
+    size_t population = reg.Persons().Count();                  // O(1)
+    size_t voters     = reg.Persons().Where(isAdult).Count();   // O(n)
 ```
+
+Behind the scenes, every *Enumerable* is a factory of some *IEnumerator\<T\>* implementor &ndash; which is
+a light interface mostly analogous to an input-iterator, just with slightly different requirements.
+A type-erased *Enumerable\<T\>* produces a known holder type hiding that concrete implementation.
+
+> &#128712;&ensp;These internals are accessible:
+>```cpp
+>    Enumerable<const Person&>           query = reg.Persons().Where(isAdult);
+>    InterfacedEnumerator<const Person&> etor  = query.GetEnumerator();
+>
+>    IEnumerator<const Person&>&  iface = etor;  // naturally, an implementor itself
+>    while (iface.FetchNext()) {
+>        const Person& elem = iface.Current();
+>        // ...
+>    }
+>```
+
 
 ### Fully templated sequences 
 
-The convenience of *Enumerable\<T\>* comes with an overhead, so it is opt-in. Algorithms that stay within function scope can (and should)
-stay in "template-land", working with implicitly typed sequences (some *AutoEnumerable\<Factory\>* type, staying hidden behind *"auto"*).
-For this the main **entry-point** is the ***Enumerate*** function:
+The convenience of *Enumerable\<T\>* comes at a cost &ndash; namely virtual calls, and possible allocations in complex cases &ndash;, so it is opt-in. Algorithms that stay within function scope can (and **should**)
+stay in "template-land", working with implicitly typed sequences &ndash; some *AutoEnumerable\<Factory\>* type, staying hidden behind *"auto"*.\
+To construct these, the main **entry-point** is the ***Enumerate*** function:
 ```cpp
-	std::vector<int>  vec;
-	auto numbers   = Enumerate(vec);             // or:
-	auto constNums = Enumerate<const int&>(vec);
+    std::vector<int>  vec;
+    auto numbers   = Enumerate(vec);               // or:
+    auto constNums = Enumerate<const int&>(vec);   // forcing conversion to elements
 
-	for (int& x : numbers) { /*...*/ }
+    for (int& x : numbers) { /*...*/ }
 
-	for (const int& c : constNums) { /*...*/ }
+    for (const int& c : constNums) { /*...*/ }
+```
+Other entry points exist as well, even infinite generators:
+```cpp
+    auto step7 = Enumerables::Sequence(3u, [](unsigned& a){ a += 7; });
+
+    for (int n : step7) { /*...*/ }    // 3u, 10u, 17u, ... till' break!
 ```
 
+This way, the *IEnumerator\<T\>* interface is not physically used, merely serves as a *concept* for every implementation. These concrete *Enumerators* get nested directly into each other as templates, no intermediary &ndash; this allows quite some compiler optimizations to happen.
+
+> &#128712;&ensp;The concrete *Enumerator* type of an *AutoEnumerable\<Factory\>* is\
+> &emsp;&thinsp;&thinsp;*result_of\<Factory()\>::type*.
+
+
+### Capture rules
+
+The capture kind of sequence **sources / seeds**, as a general rule, depend on the argument's value category:
+ * l-value: **reference capture** => lifetime tied, changes reflected
+    * e.g.&nbsp; `Enumerate(vec)` &nbsp;/&nbsp; `Enumerables::Once<int>(x)`
+ * r-value: **value capture** => the Enumerable is self-contained
+    * e.g.&nbsp; `Enumerate({ 1, 2, 3 })` &nbsp;/&nbsp; `Enumerables::Once<int>(5)`
+    * output options are limited: mutable T& is forbidden, as the Enumerable itself is logically immutable\
+   e.g.&nbsp; `Enumerables::Once<const int&>(5)` &nbsp;is possible, although has caveats
+
+> &#8505;&ensp;Notable exception is the *Enumerables::Range** family of constructors: those resort to plain value parameters anyway, which feels to be the more natural (expected) behavior for those basic functions.
+
+\
+**Ordinary numbers** affecting algorithms are simply copied.
+ * e.g.&nbsp; `Enumerables::Repeat(x, 6)` or `Enumerables::Repeat(x, count)`\
+   Note however, that the seed *x* is taken by a universal reference, and is ref-captured being an l-value!\
+   Either *6* or *count* goes to an ordinary size_t parameter, saved by value.
+
+\
+**Lambdas** have fine control over captures within themselves, so they are always stored by value.\
+(Naturally, this applies to named callables as well.)
+
+&nbsp;
 
 ### Chainable operations
 
-Like in .Net, transformation steps can be layered on top of sequences in a builder style (utilizing move-semantics wherever possible).\
-For that to be readable it is fortunate to have a concise lambda syntax (like C#'s `x => f(x)`), but C++ lambdas do not excel in that.
-The closest thing I could come up with is a pair of macros abbreviating the most generic lambdas available in C++:
+Like in .Net, transformation steps can be layered on top of each other in a builder style (utilizing move-semantics wherever possible).\
+For that to be readable, it is fortunate to have a concise lambda syntax (like C#'s `x => f(x)`), but C++ lambdas do not excel in that.
+The closest thing I could come up with is a pair of macros, abbreviating the most generic lambdas available in C++:
  * one for value-, one for ref-capture (***FUNV*** and ***FUN*** respectively)
  * forwarding-reference parameters
  * decltype(auto) result
@@ -105,16 +201,16 @@ Enumerable<std::string&> adultNames2 = Enumerate(persons).Where ([](const Person
                                                          .Select(&Person::GetName);
 ```
 
-As shown above, member-pointers in C++ can also give some remedy against long lambdas (imagine the trailing return type for refs!), but
+As illustrated above, member-pointers in C++ can also give some remedy against long lambdas (imagine the trailing return type for refs!), but
 having FUN can provide a uniform look and logic-focused code even when some steps require more complex expressions.
 
 Member-pointers play nice in simple tasks:
 ```cpp
 struct Measurement {
-	unsigned    sensorId;
-	short       value;
-	bool        isOfficial;
-	long long   time;
+    unsigned    sensorId;
+    short       value;
+    bool        isOfficial;
+    long long   time;
 };
 
 std::vector<Measurement> measurements = /*...*/;
@@ -127,7 +223,7 @@ std::vector<Measurement*> recordsByTime = Enumerate(measurements)
                                             .ToList    ();
 ```
 
-### Cached-result optimization
+#### Cached-result optimization
 
 The previous example also demonstrates an optimization feature: since *MinimumsBy* and *OrderBy* need a result cache (a vector) to work with,
 of the exact same type as what's requested by ToList in the end, that cache can be passed down as a whole to ultimately become the
@@ -139,7 +235,7 @@ elements can pass down the pipeline not only one-by-one, but also at once, as th
 (Of course, any subchain of operations can share a cache this way, this is not specific to closing with *ToList*.)
 
 
-### Semi-automatic lifetime protection
+#### Semi-automatic lifetime protection
 
 During transformation steps the goal is to use references whenever possible (to avoid copies + preserve object identity). The *FUN* macros are defined in that mindset:
 accessing a field in their body makes the compiler deduce a reference return type. Member-pointers behave the same way by standard. In most cases this is desired &ndash; except when the parameter is an expiring object,
@@ -147,24 +243,26 @@ and its subobject is to be selected to continue down the pipeline. This case a p
 
 
 This can be automated only partially: the parameter's value-category is well known, as well as the result's ref-ness &ndash; but how could the compiler know whether the resulting reference points to something
-tied to the input object, or living somewhere outside of it? (Even a getter can return a reference to something in a parent object, or even in a static table!)
+tied to the input object, or living somewhere outside of it? (A getter may return a reference to something in a parent object, or even in a static table!)
 
-For this, the fundamental transformation has 2 forms. The programmer should express intent by choosing:
+For this reason, the fundamental elem-transformation has 2 forms. The programmer should express intent by choosing:
  * ***.Select*** to expand a subobject
- * ***.Map*** / ***.MapTo*** to apply a general transformation with freely deduced / specified result type
+ * ***.Map*** / ***.MapTo*** to apply a general transformation with freely deduced / specified result type\
+  (*MapTo\<T\>* got a separate name merely for grammatical clarity.)
 
  ```cpp
 class Pet {
 public:
-	const Person&       Owner() const;
-	const std::string&  Name()  const;
-	// ...
+    const Person&       Owner() const;
+    const std::string&  Name()  const;
+    // ...
 };
 
 Enumerable<Pet&>  pets   = /*...*/;
 Enumerable<Pet>   copies = pets.Copy();
 
-// Declaring Enumerable<T>-s on lhs only to visualize deduced element types - could use just "auto"!
+// Declaring Enumerable<T>-s on lhs only to visualize deduced element types
+// - should just use "auto"!
 
 Enumerable<const std::string&>  names1 = pets.Select(&Pet::Name);     // subobject addressable
 Enumerable<std::string>         names2 = copies.Select(&Pet::Name);   // must materialize!
@@ -181,7 +279,159 @@ An explicit result type can be specified in both cases &ndash; which acts as a r
  Enumerable<std::string>  dangling = copies.Select<std::string&>(&Pet::Name);  // Compile Error
 ```
 
-Fortunately, the intention of lambdas in more complex operations tends to be more obvious, so this duality hasn't arisen elsewhere yet.
+Fortunately, the intention of lambdas in more complex operations tends to be more obvious, so this duality has not arisen elsewhere yet.
+
+
+### Type argument conventions
+
+#### Explicit element types
+
+Since accessing the current item is done via a method call (*.Current()* ) in every Enumerator, a return conversion, like in *.MapTo\<R\> / .Select\<R\>*, can be added to any of them as a "free" operation (in contrast to using a separate conversion step, like *.As\<R\>()* ).
+
+In C++ this is especially useful for adjusting just the qualifications of the resultant element type (add const before ref, or materialize elements by removing ref).
+
+Typically, constructor functions and transformational steps dedicate their **first type-parameter** to this explicit output type, which is optional. (It defaults to *void*, which implies using the deduced output type.)
+
+>&#8505;&ensp;In a few cases, like *Map* vs. *MapTo\<R\>*, the explicitly typed version has a modified name for readability, instead of using an optional parameter.
+
+```cpp
+ int arr[] = { 1, 2, 3 };
+
+ auto  asConst1 = Enumerate<const int&>(arr);
+ auto  asConst2 = Enumerate(arr).AsConst();   // yields equivalent, but 2 nested steps
+ 
+ auto  prvalues1 = Enumerate<int>(arr);
+ auto  prvalues2 = Enumerate(arr).Decay();    // again
+```
+ In some cases, this explicit element type can be necessary to resolve ambiguities (particularly for heterogeneous *Concat* or initializer-list usage):
+
+```cpp
+ short last = 5;
+ auto snums = Enumerate<short>({ 3, 4, last });  // int literals
+
+ Derived1 objArr1[] = { /*...*/ };
+ Derived2 objArr2[] = { /*...*/ };
+ auto catObjects = Enumerables::Concat<Base&>(objArr1, objArr2);
+```
+
+
+Filtration steps, on the other hand, lack such option for output conversion out of conceptual reasons &ndash; and often they utilize type arguments for other purposes instead.
+
+#### Container options
+
+Preconfigured container types may be instantiated in various contexts:
+ * as a **direct materialization** of the query results:
+   * *.ToList\<ListOptions...\>()*
+   * *.ToList\<N, SmallListOptions...\>()*\
+     [ requires a configured *SmallList\<size_t, class\>* type ]
+   * *.ToSet\<SetOptions...\>()*
+   * *.ToDictionary\<DictOptions...\>()*
+   * [and further variants]
+
+ * internally, as an **integral part of some algorithm**:
+   * *.Except\<SetOptions...\>(exclusions)*
+   * *.Intersect\<SetOptions...\>(allowed)*
+   * etc.
+   
+   In these methods the options influence the results directly!\
+   (Typically hashers and comparers.)
+
+ * internally, as a **general buffer** [List] for an algorithm 
+   * *.Maximums\<Comparator\>()*
+   * *.Order\<Comparator\>()*
+   * etc.
+
+In the first 2 kinds, the optional type arguments of the containers (those usually follow the element type) are exposed directly to the Enumerable's method, as a variadic type parameter. This way the library can be employed flexibly with many kinds of containers &ndash; as a prime example, one can configure it to use tree-sets, others to use hash-sets:
+```cpp
+    std::unordered_set<Person, PersonHasher, std::equal_to<Person>> distincts = personsQuery.ToSet<PersonHasher>();
+```
+&emsp; or
+```cpp
+    // having a non-default config
+    std::set<Person, NameThenIdOrder> orderedDistincts = personsQuery.ToSet<NameThenIdOrder>();
+```
+
+Such type-arguments are default-constructed, and passed to the container as configured.
+
+Alternatively, all of these methods are callable with instances of these arguments &ndash; should they include some stateful container option. (However, the two styles can't be mixed within a call.)
+```cpp
+    auto distincts = personsQuery.ToSet(0, [](const Person& p) { return p.GetHash(); });
+    //                                  ^--- sizeHint argument preceeds the container options
+    // auto == std::unordered_set<Person, <lambda-type>>
+```
+
+&nbsp;\
+In contrast, methods of the last kind only provide fixed arguments, specific to the given algorithm (e.g. a comparator; independent from the container type). They instantiate their buffer (a *ListType*) in default configuration.
+
+### Overload resolution
+
+As shown already, member-pointers can present a convenient, *C++*\-native way to express simple lambdas &ndash; as long as the identifier denotes an exact member, not an overload-set. At the same time, in C++ it is extremely common to overload getters by different qualifiers (most often *const*). The default solution of the language requires the definition of a variable of the exact type of the expected method-pointer to select the correct overload &ndash; which is even more cumbersome than using a standard lambda.
+
+Fortunately, an *Enumerable* knows the exact type of its elements, including their qualifiers. Based on this, the accepted set of signatures can be narrowed, and the one having exact match in qualifiers can be preferred.
+Unfortunately though, the return type can't be deduced on its own, even if it would be exact after these restrictions. 
+
+The library solution is to ask the user for **explicit return type**, just like if a return-conversion were wanted. That, together with the element type is usually enough to resolve the overload of a getter-like method &ndash; yet, expressing the full method-pointer type can be avoided.
+```cpp
+    std::string names[] = { "Aldo", "Bruno", "Chiara" };
+
+    auto initials = Enumerate(names).Select<char>(&std::string::front);
+    auto initRefs = Enumerate(names).Select<char&>(&std::string::front);
+
+  // compile-time error:
+  // auto initials = Enumerate(names).Select(&std::string::front);
+```
+The caveat is that the resolution requires the exactly qualified return type, which might not meet the desired output element type.
+As a bit of help, the library supports specifying either the **exact**, or the **decayed** return type as output. In the latter case, the qualifiers of the input element are implicitly added for the resolution, solving the selection of typical getters.
+
+### Lifetime dependencies
+
+Naturally, the lifetime of input objects must be considered when using Enumerables. The query object becomes invalid if any of its dependencies get destroyed, or left in a moved-out state.
+Used within function scope, this typically poses no risk. However, one should pay attention returning *Enumerables* as function results!
+
+The dependency-set of an *Enumerable* consists of:
+ * Ref-captured initial arguments (l-value *seeds / sources*)
+ * Ref-captured variables of any lambda used in the chain of operations\
+   (typically variables named in FUN)
+ * Dependencies of joined secondary sequences\
+    e.g.&ensp;*.Zip(other)*, *.Concat(other)*, *.Except(other)*:
+    * if the operand is another Enumerable -> its whole dependency-set\
+     (but not that Enumerable object itself)
+    * if the operand is any other iterable l-value (a container reference) -> the iterable itself
+
+*Enumerables* never refer each other. They serve as a builder interface to compose the wrapped Enumerator-factories &ndash; which are always moved or copied as a whole.
+
+```cpp
+std::vector<Person> vec;
+const minAge = 20;
+
+auto olders1 = Enumerate(vec).Where(FUN(p,  p.GetAge() >= minAge));
+auto olders2 = olders1;
+
+auto acceptedNames = olders2.Select(&Person::GetName);
+// still depends on: vec, minAge
+```
+
+When returned by class methods, it's rather natural that a query can depend on fields &ndash; i.e. on the issuer object itself. However, take care if criteria or a transformation uses locals. FUNV can help in simple cases.
+
+```cpp
+class Registry {
+    std::list<Person>          persons;
+public:
+    Enumerable<const std::string&>  YoungestAbove(unsigned minAge) const
+    {
+        // FUNV or [=] capture to avoid dangling parameter!
+        // => result depends solely on "this"
+        return Enumerate(persons).Where     (FUNV(p,  p.GetAge() >= minAge))
+                                 .MinimumsBy(&Person::GetAge)
+                                 .Select    (&Person::GetName);
+    }
+
+//...
+```
+
+> &#128712;&ensp;Interacting with *Enumerators* directly:\
+A constructed Enumerator is always tied to its creator (the Enumerable). It's only valid until the creator is moved/destroyed. (The Enumerable is logically immutable, posesses any constant resources, while the Enumerator allocates running variables for the algorithms.)
+
 
 
 ### Further info
@@ -189,15 +439,17 @@ Fortunately, the intention of lambdas in more complex operations tends to be mor
 The implemented operations are found on the public interface of the *AutoEnumerable* class,\
 located in [Enumerables_Interface.hpp](/Enumerables/Enumerables_Interface.hpp)
 
-To have a detailed overview of the library's features, look at:
+To have a more detailed overview of the library's features, look at:
  * [Introduction_Fundamentals.cpp](/Tests/Introduction_Fundamentals.cpp)
  * [Introduction_Operations.cpp](/Tests/Introduction_Operations.cpp)
  * [Introduction_Examples.cpp](/Tests/Introduction_Examples.cpp)
 
-> &#128712;&ensp;Some complex operations, like Join, have not been implemented yet.\
+ or consult the Tests covering the feature of interest.
+> &#128712;&ensp;Some complex operations of .Net, like Join, have not been implemented yet.\
 > &emsp;&thinsp;&thinsp;Scan/Aggregate is in an experimental-ish state.
 
 
+&nbsp;
 
 ## Performance
 
@@ -227,16 +479,16 @@ The following charts show these results measured with [v2.0.3-PerfCheck](https:/
 
 Some *ranges* implementations have some caveats though, for not having fully equivalent operations in every case:
  * Minimum/Maximum place searches:\
-	The canonical way would have to loop over iterators, repeatedly calling *min_element* &ndash; which I considered too close to the handwritten style, so I used a 2-pass method,
-	using *min* and *views::filter*, as a way to avoid manual loops. \
-	(Favors *Ranges* for short, *Enumerables* for long sequences)
+   The canonical way would have to loop over iterators, repeatedly calling *min_element* &ndash; which I considered too close to the handwritten style, so I used a 2-pass method,
+   using *min* and *views::filter*, as a way to avoid manual loops. \
+   (Favors *Ranges* for short, *Enumerables* for long sequences)
  * Integer summation\
-	Uses fold, whereas *Enumerables*' *.Sum* has a loop.\
-	(Favors *Enumerables*) \
-	[*"Naive-sum doubles"* is valid, as the *Enumerables* version also uses *.Aggregate*!]
+   Uses fold, whereas *Enumerables*' *.Sum* has a loop.\
+   (Favors *Enumerables*) \
+   [*"Naive-sum doubles"* is valid, as the *Enumerables* version also uses *.Aggregate*!]
  * Sorted results\
-	*ranges::sort* modifies a *vector* copy, whereas *.Order / .OrderBy* provides a lazy, updatable view \
-	(Favors *Ranges*)
+   *ranges::sort* modifies a *vector* copy, whereas *.Order / .OrderBy* provides a lazy, updatable view \
+   (Favors *Ranges*)
 
 *It might be worth mentioning too that the whole solution is Visual Studio based, so the Clang version compiles with MS STL as well.*
 
@@ -288,26 +540,30 @@ With the problematic or unsupported testcases excluded, *Ranges* performs undeni
 
 Some observations:
  * *"Subrange of filtered int"* always performs worst in handwritten version.\
-	This is because I missed the early-exit opportunity for having 1 branch only.\
-	(At least both libraries do it right.)
+   This is because I missed the early-exit opportunity for having 1 branch only.\
+   (At least both libraries do it right.)
  * *"Naive-sum doubles"* aka. *fold* vs. *Aggregate* is interesting, the compilers optimize it differently with drastically opposite results.
  * *"Hashmap iteration"* shows no problem under MSVC, yet significant handicap under Clang.
 
 
-
+&nbsp;
 
 ## Setup
 
 * **Copy** the *Enumerables* folder as a whole to your project
 * Based on [Enumerables.hpp](/Tests/Enumerables.hpp) create **your own config file** (of the same name),\
   which will ultimately include *Enumerables_Implementation.hpp* to instantiate the library
-	* Internal usage of non-standard container types can be configured there via some macros and simple binding classes
-	* Find available options in [Enumerables_ConfigDefaults.hpp](/Enumerables/Enumerables_ConfigDefaults.hpp)
+    * Internal usage of non-standard container types can be configured there via some macros and simple binding classes
+    * Performance and Debug features can be tweaked via some macros
+    * Find available options in [Enumerables_ConfigDefaults.hpp](/Enumerables/Enumerables_ConfigDefaults.hpp)
 * **Include** that *Enumerables.hpp* in client code
-* As an optimization extension-point *GetSize(container)* function overloads for arbitrary (input) containers can be added to the *Enumerables* namespace.
-	>&#128712;&ensp;From C++17: The default template calls ***std::size(container) / size(container)***\
-	> in the standard way. If a container supports it, no need to define *GetSize*.\
-	> [Having either of the 2 available is mandatory for custom internal containers.]
+* Ensure ***GetSize*** support for encountered containers:
+    * &#9989; From C++17: if the container supports ***std::size(container)***,\
+      &emsp;&ensp;&thinsp;it will be called automatically with ADL.
+  * Otherwise: **Enumerables::GetSize(container)** overloads can be introduced (see [Extensibility/Input containers](#input-containers))\
+    &nbsp;
+  > &#128712;&ensp;Providing either one is mandatory for custom internal containers!\
+  > &emsp;&thinsp;&thinsp;For other, input container types, it can increase efficiency.
 * Loading [Enumerables.natvis](/Enumerables/Enumerables.natvis) to Visual Studio can help debugging.
 
 ## Extensibility
@@ -326,16 +582,17 @@ The theoretical benefit is that a good intellisense can provide method completio
 
 Naturally, any range-iterable type can serve as the source of a sequence.\
 Querying their size however did not have a standard way before C++17,\
-and optionals still don't, except the somewhat uncertain conversion to bool.
+and optionals still don't (except the somewhat uncertain conversion to bool).
 
 The client is allowed to overload 2 functions in the library's namespace:
-* size_t *Enumerables::GetSize*(const Container&)
-	* If no better overload found, *std::size(container)* / *size(container)* gets called with ADL as per standard.
+* ```size_t Enumerables::GetSize(const Container&)```
+	* If no better overload exists, the default calls ```std::size(container)``` / ```size(container)``` with ADL as per standard
 	* To achieve the best possible performance, it is advised to have either one defined for all encountered containers!
-* bool *Enumerables::HasValue(const Optional&)*	
+* ```bool Enumerables::HasValue(const Optional&)```
 	* Required for a custom optional type if set by binding
 	* Enables convenience methods *(.ValuesOnly)* over other optional-like types
 
+These overloads can also be provided via ADL, without touching *Enumerables*.
 
 ### Created Containers
 
@@ -350,33 +607,33 @@ For example, to use *std\::set* instead of the default *std::unordered_set*, one
 #define ENUMERABLES_SET_BINDING  MyConfig::TreeSetOperations
 
 namespace MyConfig {
-	struct TreeSetOperations {
+    struct TreeSetOperations {
 
-		template <class V, class... Options>
-		using Container = std::set<V, Options...>;
+        template <class V, class... Options>
+        using Container = std::set<V, Options...>;
 
-		static constexpr unsigned AllocatorOptionIdx = 1;
-
-
-		template <class TContainer, class... Opts>
-		static TContainer	Init(size_t /*capacity*/, const Opts&... options)
-		{
-			return TContainer (options...);    // no option to .reserve(capacity)
-		}
+        static constexpr unsigned AllocatorOptionIdx = 1;
 
 
-		template <class V, class... Opts>
-		static bool	Contains(const Container<V, Opts...>& s, const V& elem)
-		{ 
-			return s.find(elem) != s.end();
-		}
+        template <class TContainer, class... Opts>
+        static TContainer    Init(size_t /*capacity*/, const Opts&... options)
+        {
+            return TContainer (options...);    // no option to .reserve(capacity)
+        }
 
-		template <class V, class... Opts, class Vin>
-		static void	Add(Container<V, Opts...>& s, Vin&& elem)
-		{
-			s.insert(std::forward<Vin>(elem));
-		}
-	};
+
+        template <class V, class... Opts>
+        static bool    Contains(const Container<V, Opts...>& s, const V& elem)
+        { 
+            return s.find(elem) != s.end();
+        }
+
+        template <class V, class... Opts, class Vin>
+        static void    Add(Container<V, Opts...>& s, Vin&& elem)
+        {
+            s.insert(std::forward<Vin>(elem));
+        }
+    };
 }
 
 // -- Instantiate the library after all config. --
@@ -385,30 +642,31 @@ namespace MyConfig {
 
 Of course, in this case, any set-using operations (e.g. *.Except / .Intersect*) will expect a Comparator, instead of the Hasher and EqualityComparer of the default *std::unordered_set*.
 
-
-> &#8505; Currently this is a config-level customization only. Due to ODR this means that &ndash; while the library can be tailored for usage with any project's ecosystem &ndash;, each module (.exe or .dll) can only have 1 such configuration in effect!
+> &#8505;&ensp;Currently this is a config-level customization only. Due to ODR this means that &ndash; while the library can be tailored for usage with any project's ecosystem &ndash; each module (.exe or .dll) can only have 1 such configuration in effect!
 
 For a small demo, the tests under [TestsAltBinding](./TestsAltBinding) employ an alternative configuration set up in [EnumerablesAlt.hpp](./TestsAltBinding/EnumerablesAlt.hpp),
 which for example binds C++17's *std\::optional* as the result type of concerned terminal operations in place of the default *Enumerables::OptResult*.
 (These tests must be instantiated in separated DLLs to avoid theoretical link-time collision with the default *Enumerable* types laid out for the base tests.)
 
-> The alternative could be to use additional template parameters for those binding (or strategy) classes.
-> This idea is yet unexplored.
+> The alternative could be the introduction of additional template parameters for those binding (or strategy) classes.
+> This idea is yet to be explored.
 
+&nbsp;
 
 ## Maturity status
 
 The original (let's say 1.0, but rather 0.9) version was utilized in an old project (requiring C++14), where it was part of production code. Therefore, the core concepts are battle-proven.
 
 However, that version relied heavily on the usage of *std\:\:function*, which really added overhead in exchange for simplifying the code. I collected many improvement ideas during that time (including fully templating the code to avoid *std\:\:function*).\
-Lately, I had time to polish them, add new ones, and reorganize the interface to make it mostly consistent.
+Lately, I had time to polish them, find new ones, and reorganize the interface to make it consistent.
 
 Hence this is version 2.0 (with one sole usage of *std\:\:function*, for type-erasure).
-Keep in mind that this version has much greater complexity, yet is not actively used at the moment, the only coverage is provided by the uploaded tests &ndash; many of them became quite comprehensive though!\
-(Fortunately, most errors manifest in compilation errors, so large surprises should be unexpected. \:\) )
+Keep in mind that this version has much greater complexity, yet is not actively used at the moment. The only coverage is provided by the uploaded tests &ndash; many of them became quite comprehensive though!
+
+(Fortunately, errors usually manifest in compilation errors, so large surprises should be unexpected \:\) )
 
 
 ## Copyrights
 
 This code is released under MIT license. See [LICENSE.txt](LICENSE.txt).\
-Copyright 2024-2025 Norbert Fekete.
+Copyright 2024-2026 Norbert Fekete.

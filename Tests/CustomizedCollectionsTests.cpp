@@ -85,7 +85,7 @@ namespace EnumerableTests {
 			}
 		};
 
-		
+
 		// ----
 
 		struct VecYHasher {
@@ -117,7 +117,7 @@ namespace EnumerableTests {
 		auto hashLambda		= [](const Person& p) { return p.Hash(); };
 		auto dataHashLambda	= [](const Person& p) { return p.HashData(); };
 		auto idHashLambda	= [](const Person& p) { return std::hash<unsigned>{}(p.id); };
-		
+
 		auto idsEqualLambda = [](const Person& l, const Person& r)
 		{
 			return l.id == r.id;
@@ -171,9 +171,9 @@ namespace EnumerableTests {
 
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasher COMMA IdComparer>,		   uniqueIdd1);
 				ASSERT_TYPE (std::unordered_set<Person COMMA IdHasherLambda COMMA EqualIdsLambda>, uniqueIdd2);
-			
+
 				auto idsAsc = Enumerate(uniqueIdd1).Select(&Person::id).Order();
-			
+
 				ASSERT (AreEqual({ 1, 2, 3, 5 }, idsAsc));
 				ASSERT (EqualSets(uniqueIdd1, uniqueIdd2));
 			}
@@ -254,7 +254,7 @@ namespace EnumerableTests {
 
 				ASSERT (AreEqual(idDiff1.Addresses(), idDiff2.Addresses()));
 				ASSERT (AreEqual(idIsec1.Addresses(), idIsec2.Addresses()));
-				
+
 				// only Charlie has unused id
 				ASSERT_EQ (&groupA[1], &idDiff1.Single());
 				ASSERT    (AreEqual({ &groupA[0], &groupA[2], &groupA[3] }, idIsec1.Addresses()));
@@ -266,10 +266,10 @@ namespace EnumerableTests {
 				auto dataIsec1 = Enumerate(groupA).Intersect<DataHasher, DataComparer>(groupB);
 				auto dataDiff2 = Enumerate(groupA).Except(groupB, dataHashLambda, dataEqualLambda);
 				auto dataIsec2 = Enumerate(groupA).Intersect(groupB, dataHashLambda, dataEqualLambda);
-				
+
 				ASSERT (AreEqual(dataDiff1.Addresses(), dataDiff2.Addresses()));
 				ASSERT (AreEqual(dataIsec1.Addresses(), dataIsec2.Addresses()));
-				
+
 				// only Dave has unique data
 				ASSERT_EQ (&groupA[2], &dataDiff1.Single());
 				ASSERT    (AreEqual({ &groupA[0], &groupA[1], &groupA[3] }, dataIsec1.Addresses()));
@@ -355,14 +355,14 @@ namespace EnumerableTests {
 		};
 
 		auto uniqueIndices = Enumerate<unsigned>({ 0, 1, 2, 4 });
-		
+
 		// Basic usage
 		std::unordered_map<unsigned, Person> byId;
 		{
 			auto byId0	   = Enumerate(persons).ToDictionary(&Person::id);
 			auto namesById = Enumerate(persons).ToDictionary(&Person::id, &Person::name);
 			auto ptrsById  = Enumerate(persons).Addresses().ToDictionary(&Person::id);
-			
+
 			ASSERT_TYPE (std::unordered_map<unsigned COMMA Person>,			byId0);
 			ASSERT_TYPE (std::unordered_map<unsigned COMMA const Person*>,	ptrsById);
 			ASSERT_TYPE (std::unordered_map<unsigned COMMA std::string>,	namesById);
@@ -372,7 +372,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (4u, byId.size());		// Aldo was duplicated
 			ASSERT_EQ (4u, namesById.size());
 			ASSERT_EQ (4u, ptrsById.size());
-		
+
 			ASSERT_EQ (persons[0],  byId[1]);
 			ASSERT_EQ (persons + 0, ptrsById[1]);
 			ASSERT_EQ ("Aldo",		namesById[1]);
@@ -514,10 +514,10 @@ namespace EnumerableTests {
 			static_assert (sizeof(decltype(vectorsAsc)::TEnumerator) <= ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE, "Invalid test setup.");
 
 			AllocationCounter allocations;
-		
+
 			size_t dictAssembly;
 			{
-				std::vector<std::vector<int>> ascList = ifacedAsc.ToList();	
+				std::vector<std::vector<int>> ascList = ifacedAsc.ToList();
 				allocations.AssertFreshCount(N + 1);							// 1 cont.buffer + 4 vectors
 
 				std::unordered_map<int, std::vector<int>> exRes;
@@ -541,7 +541,7 @@ namespace EnumerableTests {
 
 			std::unordered_map<int, std::vector<int>> fromInterfaced = ifacedAsc.ToDictionaryOf<int>(&std::vector<int>::front);
 			allocations.AssertFreshCount(N + 1 + dictAssembly + dbgExtra);
-			
+
 			// would be N more if cache were not obtainable to move contents e.g:
 			std::unordered_map<int, std::vector<int>> disrupted = vectorsAsc.Select(FUN(v, move(v)))
 																			.ToDictionaryOf<int>(&std::vector<int>::front);

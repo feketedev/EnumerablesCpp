@@ -95,7 +95,12 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\TestsClang\</OutDir>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ItemDefinitionGroup>
+        <ClCompile>
+            <PreprocessorDefinitions Condition="'$(TestResultsView)'!=''">TEST_RESULTSVIEW_LVL=$(TestResultsView);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+        </ClCompile>
+    </ItemDefinitionGroup>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;TESTSALTCLANG_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>

@@ -80,16 +80,16 @@ namespace EnumerableTests {
 
 	public:
 		static bool					EnableAsserts;		// global masking for ResultsView
-		
+
 		AllocationCounter();
 
 		size_t Count() const		{ return globalCount - myStart; }
 		void   Reset()				{ myStart = globalCount;		}
-		
+
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
 							  long			line   = 0			  );
-		
+
 		void AssertMaxFreshCount(size_t		 maxExpected,
 							     const char* file   = "unspecified",
 							     long		 line   = 0			   );
@@ -139,7 +139,7 @@ namespace EnumerableTests {
 		{
 		}
 	};
-	
+
 
 	template <class T>
 	struct CountedCopy final {

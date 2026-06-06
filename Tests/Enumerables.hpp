@@ -18,8 +18,9 @@
 	// Implementation for tests: can bypass bypassing assertions for exception-tests.
 	#define ENUMERABLES_CLIENT_BREAK(txt)		EnumerableTests::MaskableClientBreak(txt)
 
-	// Automatically fill 'ResultsView' debug buffer for supported types (2 = at non-trivial creation;  1 = on lvalue usage)
-	// - now disabled for sake of allocation tests
+	// Set the level of 'ResultsView' auto-evaluation for debugging (affects bounded, pure enumerations)
+	// [2 = at non-trivial creation; 1 = on first lvalue usage; 3 = (1 & 2);  5 = on every lvalue usage]
+	// - now disabled for sake of allocation tests:
 	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	0
 
 	#define ENUMERABLES_RESULTSVIEW_MAX_ELEMS	20
@@ -32,6 +33,15 @@
 
 // Custom container bindings can be defined and set here.
 // #define ENUMERABLES_SMALLLIST_BINDING			MyBindings::SomeLibrarySmallListBinding
+
+
+
+// For auto-testing this project: allow force-enabling ResultsView from command-line
+#ifdef TEST_RESULTSVIEW_LVL
+	#pragma warning (disable : 4005)			// redefined macros
+	#define ENUMERABLES_USE_RESULTSVIEW			true
+	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	TEST_RESULTSVIEW_LVL
+#endif
 
 
 
