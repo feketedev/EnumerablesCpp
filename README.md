@@ -560,7 +560,6 @@ Some observations:
 * Provide ***GetSize(container)*** function overloads (see [Extensibility/Input containers](#input-containers))
     * for any utilized input container type &ndash; to ensure efficiency
     * for configured custom internal containers &ndash; as a requirement!
-    
 * Loading [Enumerables.natvis](/Enumerables/Enumerables.natvis) to Visual Studio can help debugging.
 
 ## Extensibility
@@ -581,9 +580,9 @@ Naturally, any range-iterable type can serve as the source of a sequence.\
 Querying their size however does not have a standard way before C++17.
 
 The client is allowed to overload 2 functions in the library's namespace:
-* size_t *Enumerables::GetSize*(const Container&)
+* ```size_t Enumerables::GetSize*(const Container&)```
     * To achieve the best possible performance, in C++14 it is advised to overload for all encountered containers!
-* bool *Enumerables::HasValue(const Optional&)*    
+* ```bool Enumerables::HasValue(const Optional&)```
     * Required for a custom optional type if set by binding
     * Enables convenience methods *(.ValuesOnly)* over other optional-like types
 

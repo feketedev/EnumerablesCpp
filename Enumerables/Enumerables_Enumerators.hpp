@@ -1916,7 +1916,7 @@ namespace Def {
 	};
 
 	template <class SeedStorage, class StepFunction>
-	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<enable_if_t<!DeclaredResult<StepFunction>::isFound>>> {
+	struct SeqAccuDeducer<void, SeedStorage, StepFunction, enable_if_t<!DeclaredResult<StepFunction>::isFound>> {
 
 		// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
 		using ProbingArg = SeedStorage&;

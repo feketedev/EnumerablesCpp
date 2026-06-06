@@ -32,7 +32,7 @@ jobs:
       matrix:
         platform: [x64, Win32]
         config: [Debug, Release]
-        testResultsView: [null]   # default set by Tests/Enumerables.cpp
+        testResultsView: [null]   # default, set by Tests/Enumerables.cpp
         include:
         - platform: x64
           config: Debug

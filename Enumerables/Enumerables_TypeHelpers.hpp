@@ -1409,7 +1409,7 @@ namespace TypeHelpers {
 
 
 		template <class S>
-		T& operator =(S&& src)  noexcept(IsNothrowReassignable<T, S>)
+		T& operator =(S&& src)  noexcept(is_nothrow_constructible<T, S>::value && IsNothrowReassignable<T, S>)
 		{
 			static_assert (is_constructible<T, S>::value, "Can't construct from this parameter!");
 
