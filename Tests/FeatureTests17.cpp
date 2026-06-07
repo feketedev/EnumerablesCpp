@@ -35,10 +35,10 @@ namespace {
 			creationOccurred = true;
 		}
 
-		void operator ++() 
-		{ 
+		void operator ++()
+		{
 			++x;
-			incrementOccurred = true; 
+			incrementOccurred = true;
 		}
 
 		int	 operator *()								const	{ return x; }
@@ -62,8 +62,8 @@ namespace {
 
 	// follow std::size
 	template <bool D>
-	size_t	size(const MyStrangeRange<D, true>& r)	
-	{ 
+	size_t	size(const MyStrangeRange<D, true>& r)
+	{
 		return static_cast<size_t>(1 + r.endNum - 5);
 	}
 
@@ -99,7 +99,7 @@ namespace EnumerableTests {
 		// -- Direct iterator capture --
 
 		auto numRange = Enumerate(range.begin(), range.end());
-		
+
 		ASSERT_EQ (false, NumIterator::incrementOccurred);
 		ASSERT_EQ (expected.size(), numRange.Count());
 		ASSERT_EQ (!HasDiff, NumIterator::incrementOccurred);
@@ -115,7 +115,7 @@ namespace EnumerableTests {
 
 		ASSERT_EQ (HasSize || HasDiff, wholeSize.IsExact());
 		ASSERT_EQ (HasDiff,			   iterSize.IsExact());
-		
+
 		if (wholeSize.IsExact())	ASSERT_EQ (expected.size(), wholeSize.value);
 		if (iterSize.IsExact())		ASSERT_EQ (expected.size(), iterSize.value);
 
@@ -138,7 +138,7 @@ namespace EnumerableTests {
 
 		// Iterators have diff
 		AssertSizeBehaviour({ 5, 6, 7, 8 }, MyStrangeRange<true,  false> { 8 });
-	
+
 		// Collection has queriable size
 		AssertSizeBehaviour({ 5, 6, 7, 8 }, MyStrangeRange<false, true> { 8 });
 
@@ -158,11 +158,11 @@ namespace EnumerableTests {
 		auto numbers = Enumerate(numList);
 
 		ASSERT_EQ (numList.size(), numbers.Count());	// O(1)
-		
+
 		allocations.AssertFreshCount(0);
 
 		std::vector<int> numVec = numbers.ToList();		// ignore names being messed up a bit vs. STL...
-		
+
 		allocations.AssertFreshCount(1);				// 1 reserve
 
 		ASSERT (Enumerables::AreEqual(numList, numVec));
@@ -201,7 +201,7 @@ namespace EnumerableTests {
 
 			ASSERT_EQ (passed, index);
 			ASSERT_EQ (10 - passed, value);
-			
+
 			++passed;
 		}
 	}

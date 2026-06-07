@@ -41,13 +41,13 @@ jobs:
         - config: Debug
           testResultsView: "2"    # evaluate all on creation - compiles an extra code path,
           platform:               # while cancels forcing the emission of Test/Print functions
-          - sln: x64
-          - proj: x64
+            sln: x64
+            proj: x64
         - config: Release
           testResultsView: "2"
           platform:
-          - sln: x64
-          - proj: x64
+            sln: x64
+            proj: x64
 
     env:
       # ideally, config and ResultsView level should be irrelevant

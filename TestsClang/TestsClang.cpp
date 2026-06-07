@@ -16,13 +16,13 @@ int main(int argc, const char* argv[])
 	std::cout << "Running tests compiled by Clang." << std::endl;
 	EnumerableTests::SetupCommonEnv(argc, argv);
 	EnumerableTests::RunAll(execPath, argc, argv);
-	
+
 	const bool mainOk = !EnumerableTests::FailureDetected;
 	if (altOk && mainOk) {
 		std::cout << "Finished." << std::endl;
 		return 0;
 	}
-	std::cout << (mainOk ? "Finished with errors in alternate binding tests." 
+	std::cout << (mainOk ? "Finished with errors in alternate binding tests."
 						 : "Finished with errors."							 )
 			  << std::endl;
 	return 1;

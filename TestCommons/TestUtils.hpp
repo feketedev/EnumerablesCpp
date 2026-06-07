@@ -7,7 +7,7 @@
 
 
 // Workaround for <T1, T2> or { a, b } in macro calls
-#define COMMA , 
+#define COMMA ,
 
 #define ASSERT_TYPE(T, expr)		static_assert (std::is_same<T, decltype(expr)>(), "Type assertion failed.")
 
