@@ -130,91 +130,18 @@ namespace Enumerables::TypeHelpers {
 
 
 
-#pragma region Emplacer
-
-	// Constructor selectors
-	enum FactoryInvokeSelector { InvokeFactory };
-	enum ForcedBracesSelector  { ConstructBraced };
-
-
-	// Optimization to accept function results - potentially avoid requiring move ctor from C++17
-	template <class Factory>
-	struct RvoEmplacer {
-		using R = InvokeResultT<Factory>;
-
-		static_assert (!is_reference<R>(), "Expecting a prvalue from factory.");
-
-		R	obj;
-		R*	GetPtr() noexcept	{ return &obj; }
-
-		RvoEmplacer(Factory& fact) noexcept(noexcept(fact())) : obj { fact() }
-		{
-			static_assert (sizeof(RvoEmplacer) == sizeof(R),   "Size mismatch??");
-			static_assert (alignof(RvoEmplacer) == alignof(R), "Alignment mismatch??");
-		}
-	};
-
-
-
-	/// Helper to constract T in-place in the selected manner, including accepting function results
-	/// with possible RVO - potentially avoid requiring move ctor from C++17
-	template <class T>
-	struct Emplacer {
-		static_assert (!is_reference<T>(), "Only for prvalues.");
-
-		T	obj;
-
-		template <class Factory>
-		Emplacer(FactoryInvokeSelector, Factory&& create)  noexcept(noexcept(create()))
-			: obj { create() }
-		{
-			static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
-		}
-
-		template <class... Args>
-		Emplacer(ForcedBracesSelector, Args&&... args)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
-			: obj { forward<Args>(args)... }
-		{
-		}
-
-		template <class... Args>
-		Emplacer(Args&&... args)  noexcept(is_nothrow_constructible_v<T, Args...>)
-			: obj(forward<Args>(args)...)
-		{
-		}
-	};
-
-	template <class T>
-	using EmplacableT = conditional_t< is_lvalue_reference_v<T>,	RefHolder<remove_reference_t<T>>,
-																	Emplacer<remove_reference_t<T>>	 >;
-
-	// Provide access homologous to RefHolder:
-
-	template <class V>	const V&	Revive(const Emplacer<V>& stored)		noexcept  { return stored.obj; }
-	template <class V>	V&			Revive(Emplacer<V>& stored)				noexcept  { return stored.obj; }
-
-	template <class V>	const V&	ReviveConst(const Emplacer<V>& stored)	noexcept  { return stored.obj; }
-	template <class V>	const V&	ReviveConst(Emplacer<V>& stored)		noexcept  { return stored.obj; }
-
-	template <class V>	V&&			PassRevived(Emplacer<V>& stored)		noexcept  { return move(stored.obj); }
-
-#pragma endregion
-
-
-
-
 #pragma region GenericStorage
 
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
 	/// Defines all supposable operations, but leaves their management (even lifetime handling!) to the user/inheritor.
 	template <class T>
 	class GenericStorage {
-		using Emp = EmplacableT<T>;
+		using S = StorableT<T>;
 
-		union { Emp val; };
+		union { S val; };
 
-		Emp&		Storage()				{ return *std::launder(&val); }
-		const Emp&	Storage()		const	{ return *std::launder(&val); }
+		S&			Storage()				{ return *std::launder(&val); }
+		const S&	Storage()		const	{ return *std::launder(&val); }
 
 	public:
 		// NOTE: Old clang crashes on auto&/auto* return types, hence need to augment it.
@@ -250,7 +177,7 @@ namespace Enumerables::TypeHelpers {
 
 		void Destroy()  noexcept(is_nothrow_destructible_v<T>)
 		{
-			Storage().~Emp();
+			Storage().~S();
 		}
 
 
@@ -260,37 +187,29 @@ namespace Enumerables::TypeHelpers {
 		/// if only @p src is initialized!
 		void MoveFrom(GenericStorage& src)		  noexcept(is_nothrow_move_constructible_v<T>)
 		{
-			new (&val) Emp { src.PassValue() };
+			new (&val) S { src.PassValue() };
 		}
 
 		/// if only @p src is initialized!
 		void CopyFrom(const GenericStorage& src)  noexcept(is_nothrow_copy_constructible_v<T>)
 		{
-			new (&val) Emp { src.Value() };
+			new (&val) S { src.Value() };
 		}
 
 
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		enable_if_t<!is_reference_v<AsDependentT<T, Args...>>>		// guard needed against RefHolder
-		ConstructBraced(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
+		void ConstructBraced(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
-			new (&val) Emp { TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)... };
-		}
-
-		template <class Trg>
-		enable_if_t<is_reference_v<AsDependentT<T, Trg>>>			// if RefHolder
-		ConstructBraced(Trg&& referred)  noexcept
-		{
-			new (&val) Emp { forward<Trg>(referred) };
+			new (&val) S { forward<Args>(ctorArgs)... };
 		}
 
 
 		template <class... Args>
 		void ConstructParens(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
-			new (&val) Emp { forward<Args>(ctorArgs)... };
+			new (&val) S (forward<Args>(ctorArgs)...);
 		}
 
 
@@ -298,14 +217,14 @@ namespace Enumerables::TypeHelpers {
 		enable_if_t<is_constructible_v<T, Args...>>
 		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
-			new (&val) Emp { forward<Args>(ctorArgs)... };
+			new (&val) S (forward<Args>(ctorArgs)...);
 		}
 
 		template <class... Args>
 		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible_v<T, Args...>>
 		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
-			new (&val) Emp { TypeHelpers::ConstructBraced, forward<Args>(ctorArgs)... };
+			new (&val) S { forward<Args>(ctorArgs)... };
 		}
 
 
@@ -315,14 +234,7 @@ namespace Enumerables::TypeHelpers {
 		{
 			static_assert (is_same<T, decltype(create())>(), "To allow conversions, use Construct*() directly");
 
-			if constexpr (is_same_v<Emp, Emplacer<decltype(create())>>) {
-				new (&val) Emp { TypeHelpers::InvokeFactory, create };
-			}
-			else {
-				new (&val) Emp { create() };
-
-				static_assert (is_reference<T>());		// currently expecting RefHolder only
-			}
+			new (&val) S { create() };
 		}
 
 

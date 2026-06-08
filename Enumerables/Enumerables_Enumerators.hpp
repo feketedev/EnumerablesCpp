@@ -208,12 +208,11 @@ namespace Enumerables::Def {
 		}
 
 
-		template <class Factory>
-		void* InlineTarget()
+		template <class Et>
+		void* InlineTargetFor()
 		{
-			using Etor = InvokeResultT<Factory>;
-			void* aligned = AlignFor<Etor>(fixBuffer);
-			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Etor));
+			void* aligned = AlignFor<Et>(fixBuffer);
+			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Et));
 			return aligned;
 		}
 
@@ -253,20 +252,14 @@ namespace Enumerables::Def {
 		template <class NestedFactory>
 		InterfacedEnumerator(NestedFactory&& fact)
 		{
-			// TODO: This placement construct - more precisely the later call to ~IEnumerator instead of ~RvoEmplacer - is probably UB!!
-			//		 I see low danger, since the ~IEnumerator virtual call releases all resources of the Enumerator, what remains is the
-			//		 RvoEmplacer skeleton, having its only subobject destroyed, residing within fixBuffer.
-			//		 -> The placement itself:		OK, ptr is valid.
-			//		 -> Omitted ~RvoEmplacer call:	more or less allowed by the standard, provided that nothing relies on its side-effects.
-			//		 -> Possible problem:			it's not a "complete object" that gets destroyed manually, but a subobject of it.
-			//
-			//		 This construct allowed the omission of [virtual] move ctors, so it is useful.
-			//		 If want to stay on the safe side, disable inline buffer in config or bring back move ctors from master.
+			using Etor = InvokeResultT<NestedFactory>;
 
-			if constexpr (SureFitsInline<InvokeResultT<NestedFactory>>())
-				ptr = (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr();
+			// c++17 provides move-elision even with new-expressions!
+			// (still no need for move ctors)
+			if constexpr (SureFitsInline<Etor>())
+				ptr = new (InlineTargetFor<Etor>()) Etor { fact() };
 			else
-				ptr = new InvokeResultT<NestedFactory> { fact() };   // c++17 move-elision!
+				ptr = new Etor { fact() };
 		}
 
 #	else
@@ -280,7 +273,7 @@ namespace Enumerables::Def {
 
 		template <class NestedFactory>
 		InterfacedEnumerator(NestedFactory&& fact) : ptr { new InvokeResultT<NestedFactory> { fact() } }
-		{												   //  ^---- c++17 move-elision! -----^
+		{
 		}
 #	endif
 	};

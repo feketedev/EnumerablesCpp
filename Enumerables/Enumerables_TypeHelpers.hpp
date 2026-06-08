@@ -1168,6 +1168,12 @@ namespace Enumerables::TypeHelpers {
 
 #pragma region Generalized Storage
 
+	// Constructor selectors
+	enum FactoryInvokeSelector { InvokeFactory };
+	enum ForcedBracesSelector  { ConstructBraced };
+
+
+
 	/// Ensure assignment capability - even for an immutable class.
 	template <class T>
 	class Reassignable final : private GenericStorage<T> {
