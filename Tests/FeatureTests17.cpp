@@ -6,6 +6,11 @@
 #include <map>
 
 
+// Some assertions can be misled by automatic evaluations, when enabled.
+#define EVAL_ON_CREATION	 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2)
+#define EVAL_ON_FIRSTCALL	 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1)
+#define EVAL_ON_LCALLS		 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 4)
+
 
 namespace {
 
@@ -82,11 +87,12 @@ namespace EnumerableTests {
 
 		ASSERT_EQ (false, NumIterator::creationOccurred);
 		ASSERT_EQ (false, NumIterator::incrementOccurred);
-
 		ASSERT_EQ (expected.size(), numbers.Count());
 
-		ASSERT_EQ (!HasSize ||  HasDiff, NumIterator::creationOccurred);		// IteratorEnumerator is preferred for being simpler!
+#if !EVAL_ON_FIRSTCALL														// Else ResultsView iterates on .Count().
+		ASSERT_EQ (!HasSize ||  HasDiff, NumIterator::creationOccurred);	// IteratorEnumerator is preferred for being simpler!
 		ASSERT_EQ (!HasSize && !HasDiff, NumIterator::incrementOccurred);
+#endif
 
 		ASSERT (Enumerables::AreEqual(expected, numbers));
 
@@ -100,10 +106,15 @@ namespace EnumerableTests {
 
 		auto numRange = Enumerate(range.begin(), range.end());
 
+#if EVAL_ON_CREATION
+		NumIterator::incrementOccurred = false;				// ResultsView iterates automatically
+#endif
 		ASSERT_EQ (false, NumIterator::incrementOccurred);
 		ASSERT_EQ (expected.size(), numRange.Count());
-		ASSERT_EQ (!HasDiff, NumIterator::incrementOccurred);
 
+		constexpr bool debugEval = EVAL_ON_CREATION ? EVAL_ON_LCALLS : EVAL_ON_FIRSTCALL;
+
+		ASSERT_EQ (debugEval || !HasDiff, NumIterator::incrementOccurred);
 		ASSERT (Enumerables::AreEqual(expected, numbers));
 		ASSERT_EQ (true, NumIterator::incrementOccurred);
 
