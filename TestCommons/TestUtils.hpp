@@ -9,7 +9,7 @@
 #define CPP23_ENABLED (__cplusplus >= 202300L)
 
 // Workaround for <T1, T2> or { a, b } in macro calls
-#define COMMA , 
+#define COMMA ,
 
 #define ASSERT_TYPE(T, expr)		static_assert (std::is_same<T, decltype(expr)>(), "Type assertion failed.")
 
@@ -82,16 +82,16 @@ namespace EnumerableTests {
 
 	public:
 		static bool					EnableAsserts;		// global masking for ResultsView
-		
+
 		AllocationCounter();
 
 		size_t Count() const		{ return globalCount - myStart; }
 		void   Reset()				{ myStart = globalCount;		}
-		
+
 		void AssertFreshCount(size_t		expected,
 							  const char*	file   = "unspecified",
 							  long			line   = 0			  );
-		
+
 		void AssertMaxFreshCount(size_t		 maxExpected,
 							     const char* file   = "unspecified",
 							     long		 line   = 0			   );
@@ -141,7 +141,7 @@ namespace EnumerableTests {
 		{
 		}
 	};
-	
+
 
 	template <class T>
 	struct CountedCopy final {

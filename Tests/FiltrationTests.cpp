@@ -268,7 +268,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (3,		   common.Count());
 			ASSERT_EQ (bases + 0, &common.First());
 			ASSERT_EQ (bases + 3, &common.Last());
-			
+
 			auto r1 = Enumerate<const Base&>(bases).Except(deriveds);
 			auto c1 = Enumerate<const Base&>(bases).Intersect(deriveds);
 
@@ -297,7 +297,7 @@ namespace EnumerableTests {
 
 			// However, slicing filter values is not allowed:
 			//  auto r4 = Enumerate(bases).Except(Enumerate<Derived>(deriveds));	// CTE
-			
+
 			// Nor is a filter of partial data (even if a conversion exists):
 			//  auto r5 = Enumerate(deriveds).Except(Enumerate<Base>(bases));		// CTE
 			//  auto r6 = Enumerate(deriveds).Except(bases);						// CTE
@@ -365,7 +365,7 @@ namespace EnumerableTests {
 			// More typical example (though providing a transparent hash/equals could avoid conversions - from C++17):
 			std::string fruits[] = { "apple", "banana" };
 			auto remFruits1 = Enumerate(fruits).Except({ "coconut", "banana" });	// direct (eager) operand set
-			
+
 			const char* toHide[] = { "coconut", "banana" };
 			auto remFruits2 = Enumerate(fruits).Except(Enumerate(toHide));			// deferred operand set
 			ASSERT_ELEM_TYPE (std::string&, remFruits1);

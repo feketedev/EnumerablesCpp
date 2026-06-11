@@ -25,6 +25,11 @@ namespace Enumerables::TypeHelpers {
 
 	/// Holds a pointer bypassing a reference for unified storage/access in generic code.
 	/// Convertible to and std::hashable as the referred lvalue.
+	/// @remarks
+	///		The pointer is semantically const.
+	///		- RefHolder must be assignable (swappable) as a whole for container algorithms.
+	///		- Any other assignments are forbidden, for being rather ambiguous!
+	///		- Otherwise the conversion to T& and comparisons are provided.
 	template <class T>
 	class RefHolder {
 		static_assert (!is_reference<T>(), "Use with (qualified) decayed type.");
@@ -34,10 +39,14 @@ namespace Enumerables::TypeHelpers {
 	public:
 		template <class Ref>
 		requires IsRefCompatible<T, Ref>
-		RefHolder(Ref&& ref) noexcept : ptr { &ref }
+		RefHolder(Ref& ref) noexcept : ptr { &ref }
 		{
-			static_assert (is_lvalue_reference<Ref>(), "Reference stored from rvalue soon becomes dangling!");
 		}
+
+		RefHolder(const RefHolder&)				= default;
+		RefHolder& operator =(const RefHolder&)	= default;		// OK to swap refs by algorithms
+		RefHolder& operator =(const T&)			= delete;		// would be ambiguous!
+
 
 		T&		 Get() const noexcept	{ return *ptr; }
 		operator T&()  const noexcept	{ return *ptr; }
@@ -46,13 +55,13 @@ namespace Enumerables::TypeHelpers {
 		// let's have full transparency with equality-checks
 		template <class RH = T>
 		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
-		
+
 		template <class RH = T>
 		bool operator !=(const RH& rhs)				const	 noexcept(noexcept(Get() != rhs))		{ return Get() != rhs; }
 
 		template <class RT>
 		bool operator ==(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() == rhs.Get()))	{ return Get() == rhs.Get(); }
-		
+
 		template <class RT>
 		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
 
@@ -86,16 +95,17 @@ namespace Enumerables::TypeHelpers {
 
 
 
-	/// Temporary storage for arbitrary T input in generic code - supports both (l-value) references and values.
+	/// Temporary storage for arbitrary T to be stored in a container/union by generic code - supports (l-value) references and values.
 	/// @remarks
 	///	  The input element, as a source Enumerator's return value can be:
 	///	 	* lvalue ref  -> its address is available, and we assume it is sustained during the entire enumeration (constness preserved)
 	///	 	* prvalue	  -> temporary / mapped result, must be stored if needed later (T left as is, no overhead)
-	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the enumeration
+	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the next Fetch
 	template <class T>
 	using StorableT = conditional_t< is_lvalue_reference_v<T>,
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
+
 
 	/// Elem type restorable from a temporary container - i.e. resolve StorableT.
 	/// [ignores ref, strips it from an unwrapped T&]
@@ -124,34 +134,12 @@ namespace Enumerables::TypeHelpers {
 
 #pragma region GenericStorage
 
-	// Optimization to accept function results - potentially avoid requiring move ctor from C++17
-	template <class Factory>
-	struct RvoEmplacer {
-		using R = InvokeResultT<Factory>;
-
-		static_assert (!is_reference<R>(), "Expecting a prvalue from factory.");
-
-		R	obj;
-		R*	GetPtr()	{ return &obj; }
-
-		RvoEmplacer(Factory& fact) : obj { fact() }
-		{
-			static_assert (sizeof(RvoEmplacer) == sizeof(R),   "Size mismatch??");
-			static_assert (alignof(RvoEmplacer) == alignof(R), "Alignment mismatch??");
-		}
-	};
-
-
-	// Constructor selectors
-	enum FactoryInvokeSelector { InvokeFactory };
-	enum ParamForwardSelector  { ForwardParams };
-
-
 	/// Generalized temporary storage for potentially any type (refs/immutables included).
 	/// Defines all supposable operations, but leaves their management (even lifetime handling!) to the user/inheritor.
 	template <class T>
 	class GenericStorage {
-		using S	= StorableT<T>;
+		using S = StorableT<T>;
+
 		union { S val; };
 
 		S&			Storage()				{ return *std::launder(&val); }
@@ -165,22 +153,23 @@ namespace Enumerables::TypeHelpers {
 
 		// ---- Access ----
 
-		const T&	Value()			const&	{ return Revive(Storage()); }
-		T&			Value()				 &	{ return Revive(Storage()); }
-		T&&			Value()				&&	{ return PassRevived(Storage()); }
-		T&&			PassValue()				{ return PassRevived(Storage()); }
+		const T&	Value()			const&	noexcept  { return Revive(Storage()); }
+		T&			Value()				 &	noexcept  { return Revive(Storage()); }
+		T&&			Value()				&&	noexcept  { return PassRevived(Storage()); }
+		T&&			PassValue()				noexcept  { return PassRevived(Storage()); }
 
-		const T&	operator *()	const&	{ return Value(); }
-		T&			operator *()		 &	{ return Value(); }
-		T&&			operator *()		&&	{ return PassValue(); }
+		const T&	operator *()	const&	noexcept  { return Value(); }
+		T&			operator *()		 &	noexcept  { return Value(); }
+		T&&			operator *()		&&	noexcept  { return PassValue(); }
 
 		// &-collapsing suffice for Value(), but pointers need auto*  --> or explicit help
-		Ptr			operator ->()			{ return &Value(); }
-		ConstPtr	operator ->()	const	{ return &Value(); }
+		Ptr			operator ->()			noexcept  { return &Value(); }
+		ConstPtr	operator ->()	const	noexcept  { return &Value(); }
 
-		operator	const T&()		const&	{ return Value(); }
-		operator	T&()				 &	{ return Value(); }
-		operator	T&&()				&&	{ return PassValue(); }
+		operator	const T&()		const&	noexcept  { return Value(); }
+		operator	T&()				 &	noexcept  { return Value(); }
+		operator	T&&()				&&	noexcept  { return PassValue(); }
+
 
 
 		// ---- Outsourced lifetime management (!) ----
@@ -188,20 +177,23 @@ namespace Enumerables::TypeHelpers {
 		GenericStorage()	{}
 		~GenericStorage()	{}
 
-		void Destroy()		{ Storage().~S(); }
+		void Destroy()  noexcept(is_nothrow_destructible_v<T>)
+		{
+			Storage().~S();
+		}
 
 
 		// copy/move manually if appropriate!
 		GenericStorage(const GenericStorage& src) = delete;
 
 		/// if only @p src is initialized!
-		void MoveFrom(GenericStorage& src)
+		void MoveFrom(GenericStorage& src)		  noexcept(is_nothrow_move_constructible_v<T>)
 		{
 			new (&val) S { src.PassValue() };
 		}
 
 		/// if only @p src is initialized!
-		void CopyFrom(const GenericStorage& src)
+		void CopyFrom(const GenericStorage& src)  noexcept(is_nothrow_copy_constructible_v<T>)
 		{
 			new (&val) S { src.Value() };
 		}
@@ -210,49 +202,55 @@ namespace Enumerables::TypeHelpers {
 		// ---- Construction/assignment ops ----
 
 		template <class... Args>
-		GenericStorage(ParamForwardSelector, Args&&... ctorArgs) : val { std::forward<Args>(ctorArgs)... }
+		void ConstructBraced(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
-		}
-
-		template <class Fact>
-		GenericStorage(FactoryInvokeSelector, Fact& create) : val { create() }
-		{
+			new (&val) S { forward<Args>(ctorArgs)... };
 		}
 
 
 		template <class... Args>
-		void Construct(Args&&... ctorArgs)
+		void ConstructParens(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
-			new (&val) S { std::forward<Args>(ctorArgs)... };
+			new (&val) S (forward<Args>(ctorArgs)...);
 		}
 
 
-		// Note: to allow conversions, use Construct! That will need a temporary anyway.
-		template <class Factory>
-		void InvokeFactory(Factory&& create)
+		template <class... Args>
+		enable_if_t<is_constructible_v<T, Args...>>
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
-			if constexpr (is_same_v<S, T>) {
-				static_assert (is_same<decltype(create()), T>(),			 "Factory returns mismatching type.");
-				static_assert (is_same<typename RvoEmplacer<Factory>::R, S>(), "GenericStorage deduction error.");
-				new (&val) RvoEmplacer<Factory> { create };
-			}
-			else {
-				// shortcut branch for S = RefHolder<T>
-				static_assert (is_same<decltype(create()), T>(), "Factory returns mismatching type.");
-				new (&val) S { create() };
-			}
+			new (&val) S (forward<Args>(ctorArgs)...);
+		}
+
+		template <class... Args>
+		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible_v<T, Args...>>
+		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
+		{
+			new (&val) S { forward<Args>(ctorArgs)... };
+		}
+
+
+		// Note: When expecting conversions, use Construct! That will need a temporary anyway.
+		template <class Factory>
+		void InvokeFactory(Factory&& create)  noexcept(noexcept(create()))
+		{
+			static_assert (is_same<T, decltype(create())>(), "To allow conversions, use Construct*() directly");
+
+			new (&val) S { create() };
 		}
 
 
 		// Check with optimization: constexpr for unmatching types
 		template <class Src>
-		constexpr bool IsNotSelf(const Src&)   const	{ return true; }
-		bool		   IsNotSelf(const T& src) const	{ return &src != &Value(); }
+		constexpr bool IsNotSelf(const Src&)   const noexcept	{ return true; }
+		bool		   IsNotSelf(const T& src) const noexcept	{ return &src != &Value(); }
 
 
-		/// only if already initialized!
+		/// Assign or Reconstruct depending on type capability.
+		/// Only if already initialized!
 		template <class Src>
 		T& Reassign(Src&& src)
+		noexcept(IsHeadAssignable<T, Src> ? is_nothrow_assignable_v<T&, Src> : IsNothrowReconstructible<T, Src>)
 		{
 			if constexpr (IsHeadAssignable<T, Src>) {
 				static_assert (!is_reference<T>(), "GenericStorage Internal error.");
@@ -263,7 +261,7 @@ namespace Enumerables::TypeHelpers {
 			else {
 				if (IsNotSelf(src)) {
 					Destroy();
-					Construct(forward<Src>(src));
+					ConstructParens(forward<Src>(src));
 				}
 				return Value();
 			}

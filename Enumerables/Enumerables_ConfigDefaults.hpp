@@ -83,15 +83,32 @@ namespace Enumerables {
 
 // ResultsView evaluation mode if ENUMERABLES_USE_RESULTSVIEW is enabled.
 //		0 - manual only [Test() or Print() from immediate window]
-//		1 - on l-value usage: when a derived query is "forked" or GetEnumerator called
+//		1 - on First l-value usage: when a derived query is "forked" or GetEnumerator called
 //			[includes terminal operations except the container-creator ones]
-//		2 - right after creation
-//			[most convinient, but each chained operation will allocate its ResultView!]
+//		2 - right after creation - except trivial container wrappings
+//			[convinient, but each chained operation will allocate its ResultView!]
+//		3 - both 1 & 2
+//		5 - on Every l-value usage
+//			[try to show current state for each operation, even if underlying sources change between calls]
+//		7 - both 5 & 2
 #ifndef ENUMERABLES_RESULTSVIEW_AUTO_EVAL
 #	define ENUMERABLES_RESULTSVIEW_AUTO_EVAL		1
 #endif
 
 
+// Define Test()/Print() functions to populate ResultsView from Immediate Window, and
+// try to force symbol generation for them, if ENUMERABLES_USE_RESULTSVIEW is enabled.
+// This causes measurable symbol-bloat (~9% in Test cpp-s) and obj file size increase.
+#ifndef ENUMERABLES_RESULTSVIEW_MANU_EVAL
+#	if !(ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2)
+#		define ENUMERABLES_RESULTSVIEW_MANU_EVAL	true
+#	else
+#		define ENUMERABLES_RESULTSVIEW_MANU_EVAL	false
+#	endif
+#endif
+
+
+// Evaluate and show the top n elements in ResultsView when enabled.
 #ifndef ENUMERABLES_RESULTSVIEW_MAX_ELEMS
 #	define ENUMERABLES_RESULTSVIEW_MAX_ELEMS		100
 #endif
@@ -116,7 +133,7 @@ namespace Enumerables {
 #	ifdef _DEBUG
 #		define ENUMERABLES_ETOR_USAGE_ASSERT(cond, text)	if (!(cond)) ENUMERABLES_CLIENT_BREAK(text)
 #	else
-#		define ENUMERABLES_ETOR_USAGE_ASSERT(cond, text) 
+#		define ENUMERABLES_ETOR_USAGE_ASSERT(cond, text)	
 #	endif
 #endif
 
@@ -449,7 +466,7 @@ namespace Enumerables::DefaultBinding {
 		}
 	};
 
-		
+
 	// Recommended default for terminal operations of optional result.
 	struct OptionalOperations {
 		template <class T>	using Container = OptResult<T>;		// this alias could adjust type (e.g. decay<T>)
@@ -473,7 +490,7 @@ namespace Enumerables {
 #ifdef ENUMERABLES_SMALLLIST_BINDING
 	using SmallListOperations = ENUMERABLES_SMALLLIST_BINDING;
 
-#	define ENUMERABLES_WARN_FOR_SMALLLIST 
+#	define ENUMERABLES_WARN_FOR_SMALLLIST	
 #else
 	using SmallListOperations = DefaultBinding::FallbackSmallListOperations;
 
@@ -515,10 +532,10 @@ namespace Enumerables {
 	// Since C++17, default GetSize is defined in terms of std::size (or its ADL overload).
 	// Custom Enumerables::GetSize overloads still can be defined by client code if needed.
 	// (Binding operations need not contain a GetSize definition anymore.)
-	template <class Container>		
+	template <class Container>
 	auto GetSize(const Container& c) -> decltype(static_cast<size_t>(TypeHelpers::AdlSize(c)))
-	{ 
-		return TypeHelpers::AdlSize(c);	 
+	{
+		return TypeHelpers::AdlSize(c);
 	}
 
 	// NOTE: To improve performance ensure that size hints are enabled for input container types in either form!
@@ -530,7 +547,7 @@ namespace Enumerables {
 	template <class T>
 	bool HasValue(const OptResult<T>& o)
 	{
-		return o.HasValue(); 
+		return o.HasValue();
 	}
 
 #if defined(_MSC_VER) && defined(_OPTIONAL_) || defined(_GLIBCXX_OPTIONAL)

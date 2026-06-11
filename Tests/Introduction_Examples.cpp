@@ -16,7 +16,7 @@
 
 namespace EnumerableTests {
 
-	
+
 	// 3.1. Provide queries using internal index structures.
 	static void Example1()
 	{
@@ -29,13 +29,13 @@ namespace EnumerableTests {
 		class Registry {
 			std::list<Person>							persons;
 			std::map<unsigned, std::vector<Person*>>	byAge;
-		
+
 		public:
 			// Simple const getter - hiding container implementation.
 			// The main goal of implicit interfaced conversions is to have such succinct getters.
 			Enumerable<const Person&>	Persons() const		{ return persons; }
 
-			
+
 			// With inline functions, staying templated is an option - although reduces readability.
 			// Explicit element type might help a bit + guards against unintended interface changes!
 			auto						Persons2() const	{ return Enumerate<const Person&>(persons); }
@@ -118,7 +118,7 @@ namespace EnumerableTests {
 			const Vector2D<double>&	BasePoint()		const	{ return basePoint; }
 			const Vector2D<double>&	Direction()		const	{ return direction; }
 			Enumerable<Interval>	SegmentParams() const	{ return endParams; }
-			
+
 			// safe to expose
 			Vector2D<double>&		BasePoint()				{ return basePoint; }
 

@@ -31,27 +31,41 @@ jobs:
       max-parallel: 2
       matrix:
         config: [Debug, Release]
+        testResultsView: [null]   # default, set by Tests/Enumerables.cpp
         platform:
         - sln: x64
           proj: x64
         - sln: x86
           proj: Win32
+        include:
+        - config: Debug
+          testResultsView: "2"    # evaluate all on creation - compiles an extra code path,
+          platform:               # while cancels forcing the emission of Test/Print functions
+            sln: x64
+            proj: x64
+        - config: Release
+          testResultsView: "2"
+          platform:
+            sln: x64
+            proj: x64
 
     env:
-      # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_Clang_${{matrix.platform.proj}}_${{matrix.config}}.txt
+      # ideally, config and ResultsView level should be irrelevant
+      WARNINGS_LOG: Warnings_Clang_${{matrix.platform.proj}}_${{matrix.config}}${{matrix.testResultsView}}.txt
       WARNINGS_REFERENCE: Clang_${{matrix.platform.proj}}.txt
+      EXTRA_PROPS: &extraProperties >-
+        ${{matrix.testResultsView && ',TestResultsView=' || ''}}${{matrix.testResultsView}}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: >
-        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}
+        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}${{env.EXTRA_PROPS}}
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         EnumerablesCpp.sln /t:TestsClang
 
@@ -84,19 +98,20 @@ jobs:
 
     env:
       # ideally, config should be irrelevant
-      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform.proj}}_${{matrix.config}}.txt
+      WARNINGS_LOG: Warnings_MSVC_${{matrix.platform.proj}}_${{matrix.config}}${{matrix.testResultsView}}.txt
       WARNINGS_REFERENCE: MSVC_${{matrix.platform.proj}}.txt
+      EXTRA_PROPS: *extraProperties
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: >
-        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}
+        msbuild /M /P:Platform=${{matrix.platform.sln}},Configuration=${{matrix.config}}${{env.EXTRA_PROPS}},PlatformToolset=v142
         /FileLogger /FLP:"logfile=$env:WARNINGS_LOG;verbosity=Quiet"
         EnumerablesCpp.sln /t:TestsMSVC
 

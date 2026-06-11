@@ -6,6 +6,11 @@
 #include <map>
 
 
+// Some assertions can be misled by automatic evaluations, when enabled.
+#define EVAL_ON_CREATION	 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2)
+#define EVAL_ON_FIRSTCALL	 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1)
+#define EVAL_ON_LCALLS		 (ENUMERABLES_USE_RESULTSVIEW && ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 4)
+
 
 namespace {
 
@@ -35,10 +40,10 @@ namespace {
 			creationOccurred = true;
 		}
 
-		void operator ++() 
-		{ 
+		void operator ++()
+		{
 			++x;
-			incrementOccurred = true; 
+			incrementOccurred = true;
 		}
 
 		int	 operator *()								const	{ return x; }
@@ -62,8 +67,8 @@ namespace {
 
 	// follow std::size
 	template <bool D>
-	size_t	size(const MyStrangeRange<D, true>& r)	
-	{ 
+	size_t	size(const MyStrangeRange<D, true>& r)
+	{
 		return static_cast<size_t>(1 + r.endNum - 5);
 	}
 
@@ -82,11 +87,12 @@ namespace EnumerableTests {
 
 		ASSERT_EQ (false, NumIterator::creationOccurred);
 		ASSERT_EQ (false, NumIterator::incrementOccurred);
-
 		ASSERT_EQ (expected.size(), numbers.Count());
 
-		ASSERT_EQ (!HasSize ||  HasDiff, NumIterator::creationOccurred);		// IteratorEnumerator is preferred for being simpler!
+#if !EVAL_ON_FIRSTCALL														// Else ResultsView iterates on .Count().
+		ASSERT_EQ (!HasSize ||  HasDiff, NumIterator::creationOccurred);	// IteratorEnumerator is preferred for being simpler!
 		ASSERT_EQ (!HasSize && !HasDiff, NumIterator::incrementOccurred);
+#endif
 
 		ASSERT (Enumerables::AreEqual(expected, numbers));
 
@@ -99,11 +105,16 @@ namespace EnumerableTests {
 		// -- Direct iterator capture --
 
 		auto numRange = Enumerate(range.begin(), range.end());
-		
+
+#if EVAL_ON_CREATION
+		NumIterator::incrementOccurred = false;				// ResultsView iterates automatically
+#endif
 		ASSERT_EQ (false, NumIterator::incrementOccurred);
 		ASSERT_EQ (expected.size(), numRange.Count());
-		ASSERT_EQ (!HasDiff, NumIterator::incrementOccurred);
 
+		constexpr bool debugEval = EVAL_ON_CREATION ? EVAL_ON_LCALLS : EVAL_ON_FIRSTCALL;
+
+		ASSERT_EQ (debugEval || !HasDiff, NumIterator::incrementOccurred);
 		ASSERT (Enumerables::AreEqual(expected, numbers));
 		ASSERT_EQ (true, NumIterator::incrementOccurred);
 
@@ -115,7 +126,7 @@ namespace EnumerableTests {
 
 		ASSERT_EQ (HasSize || HasDiff, wholeSize.IsExact());
 		ASSERT_EQ (HasDiff,			   iterSize.IsExact());
-		
+
 		if (wholeSize.IsExact())	ASSERT_EQ (expected.size(), wholeSize.value);
 		if (iterSize.IsExact())		ASSERT_EQ (expected.size(), iterSize.value);
 
@@ -138,7 +149,7 @@ namespace EnumerableTests {
 
 		// Iterators have diff
 		AssertSizeBehaviour({ 5, 6, 7, 8 }, MyStrangeRange<true,  false> { 8 });
-	
+
 		// Collection has queriable size
 		AssertSizeBehaviour({ 5, 6, 7, 8 }, MyStrangeRange<false, true> { 8 });
 
@@ -158,11 +169,11 @@ namespace EnumerableTests {
 		auto numbers = Enumerate(numList);
 
 		ASSERT_EQ (numList.size(), numbers.Count());	// O(1)
-		
+
 		allocations.AssertFreshCount(0);
 
 		std::vector<int> numVec = numbers.ToList();		// ignore names being messed up a bit vs. STL...
-		
+
 		allocations.AssertFreshCount(1);				// 1 reserve
 
 		ASSERT (Enumerables::AreEqual(numList, numVec));
@@ -201,7 +212,7 @@ namespace EnumerableTests {
 
 			ASSERT_EQ (passed, index);
 			ASSERT_EQ (10 - passed, value);
-			
+
 			++passed;
 		}
 	}

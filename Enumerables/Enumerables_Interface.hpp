@@ -2,7 +2,7 @@
 #define ENUMERABLES_INTERFACE_HPP
 
 	/*  --------------------------------------------------------------------------------------------------------  *
-	 *  									Enumerables for C++   v2.0.4-F20									  *
+	 *  									Enumerables for C++   v2.0.5-F20									  *
 	 *  																										  *
 	 *  A  [less and less]  rudimentary attempt to introduce LINQ-style evaluation of collections to C++, along	  *
 	 *  with the fruits of declarative reasoning.																  *
@@ -111,11 +111,19 @@ namespace Enumerables::Def {
 	struct ResultBuffer {
 		using TDebugValue = std::remove_cv_t<StorableT<T>>;
 
-#	if ENUMERABLES_RESULTSVIEW_AUTO_EVAL == 0
-		const char* Status = "Not evaluated.  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
-#	else
-		const char* Status = "Not evaluated.  Step over first (&) method call, or invoke Test()/Print() from Immediate window.  See ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
-#	endif
+		const char* Status =
+#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 1
+				"Not evaluated until first (&) method call."
+#			elif ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2
+				"Not evaluated by default - trivial construction."
+#			else
+				"Not evaluated."
+#			endif
+#			if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+				"  Call Test() or Print() from Immediate window, or set ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
+#			else
+				"  See ENUMERABLES_RESULTSVIEW_AUTO_EVAL.";
+#			endif
 
 		SmallListType<TDebugValue, 4>	Elements;
 
@@ -208,16 +216,16 @@ namespace Enumerables::Def {
 #	if ENUMERABLES_USE_RESULTSVIEW
 		mutable ResultBuffer<TElem>		ResultsView;
 
-		// force the compiler to generate those functions for immediate window...
-		const char*						(AutoEnumerable::*	testResultsViewPtr)()  const = nullptr;
-		decltype(ResultsView.Elements)&	(AutoEnumerable::*	printResultsViewPtr)() const = nullptr;
+#		if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+			// force the compiler to generate those functions for immediate window...
+			decltype(ResultsView.Elements)&	(AutoEnumerable::*	printResultsViewPtr)() const = nullptr;
 
+			/// Fill the debug buffer with yielded values if possible. For immediate window.
+			ENUMERABLES_NOINLINE const char* Test()	 const;
 
-		/// Fill the debug buffer with yielded values if possible. For immediate window.
-		ENUMERABLES_NOINLINE const char* Test()	 const;
-
-		/// Print yielded values if possible. For immediate window.
-		ENUMERABLES_NOINLINE auto		 Print() const -> decltype(ResultsView.Elements)&;
+			/// Print yielded values if possible. For immediate window.
+			ENUMERABLES_NOINLINE auto		 Print() const -> decltype(ResultsView.Elements)&;
+#		endif
 #	endif
 
 	public:
@@ -226,7 +234,7 @@ namespace Enumerables::Def {
 
 	// =========== Constructors ======================================================================================================
 	#pragma region
-	
+
 		/// Main constructor. Wraps an Enumerator-factory directly. Intended for usage through creator functions.
 		/// @param pureSource:  enumerating is sideeffect-free, allows auto-evaluation for debugging.
 		/// @param stepToDebug: reasonable to auto-evaluate - e.g. not just a wrapped container.
@@ -235,12 +243,13 @@ namespace Enumerables::Def {
 			isPure  { pureSource && is_copy_constructible<TElem>() }
 		{
 #		if ENUMERABLES_USE_RESULTSVIEW
-#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL >= 2
+#			if ENUMERABLES_RESULTSVIEW_AUTO_EVAL & 2
 				if (stepToDebug)
-					ResultsView.Fill(factory, isPure, true);
+					ResultsView.Fill(this->factory, isPure, true);
 #			endif
-			testResultsViewPtr  = &AutoEnumerable::Test;
-			printResultsViewPtr = &AutoEnumerable::Print;
+#			if ENUMERABLES_RESULTSVIEW_MANU_EVAL
+				printResultsViewPtr = &AutoEnumerable::Print;
+#			endif
 #		endif
 		}
 
@@ -323,38 +332,40 @@ namespace Enumerables::Def {
 	// ----- Unified mapper utils ----------------------------------------------------------------------------------------------------
 
 		// Shorthands to accept any kind of mapper argument (lambda / free function pointer / member pointer) taking TElem.
-		// CAUTION: interface convention is to omit std::forward at call-sites. For that always specify type argument explicitly!
+		// CAUTION: interface convention is to omit std::forward at call-sites. Instead specify the mapper type explicitly!
 		//			Note the &'s here to accept the callers universal reference w/o copy - pass their deduced type to forward!
 		// NOTE:	decltype(auto): if no adjustment needed, the provided lambda gets forwarded as is.
-		//			[member-] function pointers always generate a prvalue wrapper.
+		//			Member-pointers always generate a prvalue wrapper, callables only when a mismatching result type is set.
 
-		template <class Mapper, class VForced = void>
-		static decltype(auto) Selector(Mapper& m)		{ return LambdaCreators::Selector<TElem, VForced>(forward<Mapper>(m)); }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) Selector(Mapper& m)		{ return LambdaCreators::Selector<TElem, ForcedRes>(forward<Mapper>(m)); }
 
-		template <class Mapper, class VForced = void>
-		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m)); }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) FreeMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem, ForcedRes>(forward<Mapper>(m)); }
 
-		// Forced l-value variant for ToDictionary
+		// Forced l-value mapper to extract a Key before potentially moving the rest as a Value (for ToDictionary, GroupBy etc.)
+		// No safe-result conversion: the result is emplaced decayed into Dictionary anyway.
 		template <class Mapper>
-		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::CustomMapper<TElem&>(forward<Mapper>(m)); }
+		static decltype(auto) KeyMapper(Mapper& m)		{ return LambdaCreators::UniformMapper<TElem&>(forward<Mapper>(m)); }
 
-		// Special SFINAE variant for ToDictionary overloads - Not forcing Selector, as target is always decayed.
-		template <class Mapper, enable_if_t<!is_convertible_v<Mapper, size_t>, int> = 0>
-		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::CustomMapper<TElem>(forward<Mapper>(m)); }
+		// Mapper for transforming into some Value associated with a pre-extracted Key.
+		// No safe-result conversion: like for Keys, the target is always decayed.
+		template <class Mapper>
+		static decltype(auto) ValueMapper(Mapper& m)	{ return LambdaCreators::UniformMapper<TElem&&>(forward<Mapper>(m)); }
 
 
-		template <class Mapper, class VForced = void>
+		template <class Mapper, class ForcedRes = void>
 		static decltype(auto) IndepMapper(Mapper& m)
 		{
 			static_assert (!is_member_object_pointer<Mapper>(), "Use projection (.Select) to access a member with related lifetime!");
-			return LambdaCreators::CustomMapper<TElem, VForced>(forward<Mapper>(m));
+			return LambdaCreators::CustomMapper<TElem, ForcedRes>(forward<Mapper>(m));
 		}
 
 		template <class Pred>
 		static decltype(auto) Predicate(Pred& p)	{ return LambdaCreators::Predicate<TElem>(forward<Pred>(p)); }
 
 		template <class Pred>
-		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryMapper<TElemConstParam, TElemConstParam, bool>(forward<Pred>(p)); }
+		static decltype(auto) BinPred(Pred& p)		{ return LambdaCreators::BinaryPredicate<TElemConstParam>(forward<Pred>(p)); }
 
 
 
@@ -390,40 +401,28 @@ namespace Enumerables::Def {
 		using PF = TypeHelpers::FreePredicatePtr<TElemDecayed>;
 
 
-		template <class Res>
-		static auto			  SelectorOverload(const OverloadResolver<TElem, Res>& s)   { return LambdaCreators::Selector<TElem, Res>(s);  }
-
-
 		// Custom binary operation over TElem
-		template <class Mapper, class VForced = void>
-		static decltype(auto) Combiner(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TElem, VForced>(forward<Mapper>(m));  }
+		template <class Mapper, class ForcedRes = void>
+		static decltype(auto) Combiner(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TElem, ForcedRes>(forward<Mapper>(m));  }
 
-		// Custom binary operation: (TLeft, TElem) -> VForced / auto
-		template <class TLeft,  class Mapper, class VForced = void>
-		static decltype(auto) CombinerL(Mapper& m)		{ return LambdaCreators::BinaryMapper<TLeft, TElem, VForced>(forward<Mapper>(m));  }
+		// Custom binary operation: (TLeft, TElem) -> ForcedRes / auto
+		template <class TLeft,  class Mapper, class ForcedRes = void>
+		static decltype(auto) CombinerL(Mapper& m)		{ return LambdaCreators::BinaryMapper<TLeft, TElem, ForcedRes>(forward<Mapper>(m));  }
 
-		// Custom binary operation: (TElem, TRight) -> VForced / auto
-		template <class TRight, class Mapper, class VForced = void>
-		static decltype(auto) CombinerR(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TRight, VForced>(forward<Mapper>(m)); }
-
-
-		// Forward binary operation with reversed operand order
-		template <class BinOp>
-		static auto SwappedBinop(BinOp&& opp)
-		{
-			return [op = forward<BinOp>(opp)](auto&& l, auto&& r)	{ return op(r, l); };
-		}
+		// Custom binary operation: (TElem, TRight) -> ForcedRes / auto
+		template <class TRight, class Mapper, class ForcedRes = void>
+		static decltype(auto) CombinerR(Mapper& m)		{ return LambdaCreators::BinaryMapper<TElem, TRight, ForcedRes>(forward<Mapper>(m)); }
 
 
 	// ----- Result type shorthands --------------------------------------------------------------------------------------------------
 
-		template <class Mapper>  using DecayedResult   = decay_t<MappedT<TElem, Mapper>>;
-		template <class Mapper>  using DecayedResultLV = decay_t<MappedT<TElem&, Mapper>>;
+		template <class Mapper>  using DecayedResult   = decay_t<LambdaCreators::LambdaResultT<Mapper, TElem>>;
+		template <class Mapper>  using DecayedResultLV = decay_t<LambdaCreators::LambdaResultT<Mapper, TElem&>>;
 
 
 	// ----- Scan/Aggregate deduction utils ------------------------------------------------------------------------------------------
 
-		using DeduceAccumulator = AccuDeducer<TElem>;
+		using DeduceAccumulator = ScanAccuDeducer<TElem>;
 
 	public:
 	#pragma endregion
@@ -431,14 +430,14 @@ namespace Enumerables::Def {
 
 	// =========== Transformations ===================================================================================================
 	#pragma region
-	
+
 		/// Disables ResultsView auto-evaluation for debugging, when really necessary.
 		/// @remarks
 		///		Enumerables with side-effects are discouraged. However, when really needed,
 		///		a NonPure call keeps them functional under debugging by shielding downstream
 		///		filters from auto-evaluating ther contets, which could alter program state.
-		AutoEnumerable<TEnumerator> NonPure() const &	{ return AutoEnumerable { CloneFactory(), false }; }
-		AutoEnumerable<TEnumerator> NonPure() &&		{ return AutoEnumerable { move(factory),  false }; }
+		AutoEnumerable	NonPure() const &	{ return { CloneFactory(), false }; }
+		AutoEnumerable	NonPure() &&		{ return { move(factory),  false }; }
 
 
 	// ----- Filtration / Truncation -------------------------------------------------------------------------------------------------
@@ -472,7 +471,7 @@ namespace Enumerables::Def {
 
 
 		// --- Boolean operations capturing readily available sets [can form in-place using braced-initializer] ---
-		
+
 		// NOTE: Result is not a set! Duplicated elements of this sequence (where accepted) will pass through.
 
 		template <class... SetOptions>  auto Except(const SetType<TElemDecayed, SetOptions...>& set)	const &	 { return		 Where(FUN(x, !SetOperations::Contains(set, x))); }
@@ -498,7 +497,7 @@ namespace Enumerables::Def {
 		template <class... SetOptions>	auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
 		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) const &;
 		template <class... SetOptions>	auto Intersect(initializer_list<DeepConstT<TElemDecayed*>>&& elems) &&;
-		
+
 		/// @param setOptions:    hash/equal_to/etc. strategy objects [against const TElem&] injected directly to SetType used as filter
 		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) const &;
 		template <class... Os>			auto Except   (initializer_list<DeepConstT<TElemDecayed*>>&& elems, const Os&... setOptions) &&;
@@ -507,13 +506,13 @@ namespace Enumerables::Def {
 
 
 		// --- Boolean operations evaluating other iterables ---
-		
+
 		// NOTE: 2nd operand gets evaluated lazily, before enumeration - forming a temporary SetType [scalars decayed for efficiency].
 		//		 For further convenience, default mode supports filtration (via conversion) by:
 		//			- compatible and similar pointers
 		//			- descendant references [r-values forbidden]
 		//			- unrelated(!) types convertible to TElem (compared as such)
-		//		 If user SetOptions are present, operand type is left as is 
+		//		 If user SetOptions are present, operand type is left as is
 		//			-> SetOptions may implement "transparent" check as needed.
 
 		/// @tparam SetOptions:   Hash/Comparer/etc. strategy types injected directly to SetType used as filter internally
@@ -521,7 +520,7 @@ namespace Enumerables::Def {
 		template <class... SetOptions, class E>	 auto Except   (E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(false)); }
 		template <class... SetOptions, class E>	 auto Intersect(E&& elems) const &	{ return   ChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
 		template <class... SetOptions, class E>	 auto Intersect(E&& elems) &&		{ return MvChainJoined<E, void, SetFilterEnumerator, SetOptions...>(elems, SteadyParams(true)); }
-		
+
 		/// @param setOptions:    hash/equal_to/etc. strategy objects injected to the internally constructed SetType used as filter
 		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) const &	{ return   ChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
 		template <class E, class... Os>  auto Except   (E&& elems, const Os&... setOptions) &&		{ return MvChainJoined<E, void, SetFilterEnumerator>(elems, SteadyParams(false), setOptions...); }
@@ -562,8 +561,8 @@ namespace Enumerables::Def {
 		/// @tparam TSelected: explicitly specified result type - usage optional
 		template <class TSelected = void, class S>	auto Select(S&& selector)				  const &	{ return   Chain<MapperEnumerator>(Selector<S, TSelected>(selector)); }
 		template <class TSelected = void, class S>	auto Select(S&& selector)				  &&		{ return MvChain<MapperEnumerator>(Selector<S, TSelected>(selector)); }
-		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) const &	{ return   Chain<MapperEnumerator>(SelectorOverload<TSelected>(getter)); }
-		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) &&		{ return MvChain<MapperEnumerator>(SelectorOverload<TSelected>(getter)); }
+		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) const &	{ return   Chain<MapperEnumerator>(Selector(getter)); }
+		template <class TSelected>					auto Select(OverloadTo<TSelected> getter) &&		{ return MvChain<MapperEnumerator>(Selector(getter)); }
 
 
 		// --- Shorthands for convenience ---
@@ -581,12 +580,12 @@ namespace Enumerables::Def {
 
 		/// Apply an implicit conversion to type R for each element.
 		template <class R>	auto As() const &
-		{ 
+		{
 			if constexpr (is_same_v<R, TElem>)	return *this;
 			else								return Chain<ConverterEnumerator, R>();
 		}
 		template <class R>	auto As() &&
-		{ 
+		{
 			if constexpr (is_same_v<R, TElem>)	return Move();
 			else								return MvChain<ConverterEnumerator, R>();
 		}
@@ -598,7 +597,7 @@ namespace Enumerables::Def {
 			else								return Chain<CastingEnumerator, R>();
 		}
 		template <class R>	auto Cast() &&
-		{ 
+		{
 			if constexpr (is_same_v<R, TElem>)	return Move();
 			else								return MvChain<CastingEnumerator, R>();
 		}
@@ -759,25 +758,25 @@ namespace Enumerables::Def {
 		Optional<TElem>		ElementAt(size_t i) const						{ return ToReferenced().Skip(i).FirstIfAny(); }
 
 		/// Apply binary predicate to each pair of consequtive elements.
-		template <class BinPred>  bool AllNeighbors(BinPred&& p) const		{ return !ToReferenced().template MapNeighbors<bool>(p).Contains(false); }
-		template <class BinPred>  bool AnyNeighbors(BinPred&& p) const		{ return ToReferenced() .template MapNeighbors<bool>(p).Contains(true);  }
+		template <class BinPred>	bool AllNeighbors(const BinPred& p) const	{ return !ToReferenced().template MapNeighbors<bool>(RefLambda(p)).Contains(false); }
+		template <class BinPred>	bool AnyNeighbors(const BinPred& p) const	{ return ToReferenced() .template MapNeighbors<bool>(RefLambda(p)).Contains(true);  }
 
 
 	// ----- Shorthands taking a predicate -------------------------------------------------------------------------------------------
 
 		template <class Pred = PF>	bool			  All		  (const Pred& p) const;
-		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(p).Any();		   }
-		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(p).First();		   }
-		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(p).Last();		   }
-		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(p).Single();	   }
-		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(p).FirstIfAny();   }
-		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(p).LastIfAny();    }
-		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(p).SingleIfAny();  }
-		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(p).SingleOrNone(); }
-		
+		template <class Pred = PF>	bool			  Any		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Any();		  }
+		template <class Pred = PF>	TElem			  First		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).First();		  }
+		template <class Pred = PF>	TElem			  Last		  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Last();		  }
+		template <class Pred = PF>	TElem			  Single	  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).Single();		  }
+		template <class Pred = PF>	Optional<TElem>	  FirstIfAny  (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).FirstIfAny();   }
+		template <class Pred = PF>	Optional<TElem>	  LastIfAny   (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).LastIfAny();    }
+		template <class Pred = PF>	Optional<TElem>	  SingleIfAny (const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).SingleIfAny();  }
+		template <class Pred = PF>	Optional<TElem>	  SingleOrNone(const Pred& p) const   { return ToReferenced().Where(RefLambda(p)).SingleOrNone(); }
+
 		template <class Pred = PF>
 		requires (!is_convertible_v<Pred, TElemConstParam>)
-		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(p).Count(); }
+		size_t	Count(const Pred& p)		  const   { return ToReferenced().Where(RefLambda(p)).Count(); }
 
 
 	// ----- Shorthands comparing to an element --------------------------------------------------------------------------------------
@@ -795,7 +794,10 @@ namespace Enumerables::Def {
 		/// @throws		on empty input
 		/// @returns	Acc, or in case of implicit accumulator type: result of combiner(TElem, TElem)
 		template <class Acc = void, class F>
-		decltype(auto) Aggregate(F&& combiner) const	{ return ToReferenced().template Scan<Acc>(forward<F>(combiner)).Last(); }
+		decltype(auto) Aggregate(const F& combiner) const
+		{
+			return ToReferenced().template Scan<Acc>(RefLambda(combiner)).Last();
+		}
 
 
 		/// [N-1 calls for input length N, after mapping First()]
@@ -804,9 +806,9 @@ namespace Enumerables::Def {
 		/// @returns			Acc, determined by initMapper in implicit case
 		template <class Acc = void, class M, class F>
 		requires IsAccuInit<TElem, M, Acc>::byMapping
-		decltype(auto) Aggregate(M&& initMapper, F&& combiner) const
+		decltype(auto) Aggregate(const M& initMapper, const F& combiner) const
 		{
-			return ToReferenced().template Scan<Acc>(forward<M>(initMapper), forward<F>(combiner)).Last();
+			return ToReferenced().template Scan<Acc>(RefLambda(initMapper), RefLambda(combiner)).Last();
 		}
 
 
@@ -815,11 +817,11 @@ namespace Enumerables::Def {
 		/// @returns		initVal directly in case of an empty sequence
 		template <class Acc = void, class Init, class F>
 		requires IsAccuInit<TElem, Init, Acc>::byValue
-		decltype(auto) Aggregate(Init&& initVal, F&& combiner) const
+		decltype(auto) Aggregate(Init&& initVal, const F& combiner) const
 		{
 			// CONSIDER: Separate implementation could avoid Init copy - along with its whole copyable requirement, which is naturally set by Scan.
 			return ToReferenced()
-				  .template Scan<Acc>(Init { initVal }, forward<F>(combiner))
+				  .template Scan<Acc>(Init { initVal }, RefLambda(combiner))
 				  .LastIfAny()
 				  .OrDefault(forward<Init>(initVal));
 		}
@@ -827,19 +829,23 @@ namespace Enumerables::Def {
 	#pragma endregion
 
 
-	// =========== Arithmetics (chaining & terminal) =================================================================================
+	// =========== Arithmetics (chaining + terminal) =================================================================================
 	#pragma region
 
 		// CONSIDER: This form of min/max search is the most powerful, but uses more memory for a non-uniqie sequence.
 		//			 A more performant 'SingleMinimum()' or 'MinimalFirst()' could be added.
 		//			 Alternatively: Enumerators could provide some internal trick (FetchFirstOnly?) as an optional feature.
 
+		/// Find extreme elements according to a comparison function.
+		/// [The order of equals is preserved.]
 		template <class Comp = std::less<>>		auto Minimums(Comp&& isLess = {}) const &	{ return   Chain<MinSeekEnumerator>(BinPred<Comp>(isLess)); }
 		template <class Comp = std::less<>>		auto Minimums(Comp&& isLess = {}) &&		{ return MvChain<MinSeekEnumerator>(BinPred<Comp>(isLess)); }
 
 		template <class Comp = std::less<>>		auto Maximums(Comp&& isLess = {}) const &	{ return		Minimums(SwappedBinop(BinPred<Comp>(isLess))); }
 		template <class Comp = std::less<>>		auto Maximums(Comp&& isLess = {}) &&		{ return Move().Minimums(SwappedBinop(BinPred<Comp>(isLess))); }
 
+		/// Find extreme points of some property or any function of elements.
+		/// [The order of equals is preserved.]
 		template <class TProp = void, class P>	auto MinimumsBy(P&& toMinimize)				  const &	{ return		Minimums(ComparatorForProperty<P, TProp>(toMinimize)); }
 		template <class TProp = void, class P>	auto MinimumsBy(P&& toMinimize)				  &&		{ return Move().Minimums(ComparatorForProperty<P, TProp>(toMinimize)); }
 		template <class TProp>					auto MinimumsBy(ConstOverloadTo<TProp> toMin) const &	{ return				 MinimumsBy<TProp, ConstOverloadTo<TProp>>(move(toMin)); }
@@ -850,19 +856,31 @@ namespace Enumerables::Def {
 		template <class TProp>					auto MaximumsBy(ConstOverloadTo<TProp> toMax) const &	{ return				 MaximumsBy<TProp, ConstOverloadTo<TProp>>(move(toMax)); }
 		template <class TProp>					auto MaximumsBy(ConstOverloadTo<TProp> toMax) &&		{ return Move().template MaximumsBy<TProp, ConstOverloadTo<TProp>>(move(toMax)); }
 
-		/// Sort elements in order defined by comparison function
+		/// Sort elements in order defined by a comparison function
+		/// [Uses std::sort - No guarantee to preserve order of equal elements!]
 		template <class Comp = std::less<>> 	auto Order(Comp&& isLess = {})				const & { return   Chain<SorterEnumerator>(forward<Comp>(isLess)); }
 		template <class Comp = std::less<>> 	auto Order(Comp&& isLess = {})				&&		{ return MvChain<SorterEnumerator>(forward<Comp>(isLess)); }
 
-		/// In order by the value of a selected property
+		template <class Comp = std::less<>> 	auto OrderDescending(Comp&& isLess = {})	const & { return   Chain<SorterEnumerator>(SwappedBinop(BinPred<Comp>(isLess))); }
+		template <class Comp = std::less<>> 	auto OrderDescending(Comp&& isLess = {})	&&		{ return MvChain<SorterEnumerator>(SwappedBinop(BinPred<Comp>(isLess))); }
+
+
+		/// Sort elements in order by a selected property, or any inferred value.
+		/// [Uses std::sort - No guarantee to preserve order of equals!]
 		template <class TProp = void, class P>	auto OrderBy(P&& getProperty)				const &	{ return		Order(ComparatorForProperty<P, TProp>(getProperty)); }
 		template <class TProp = void, class P>	auto OrderBy(P&& getProperty)				&&		{ return Move().Order(ComparatorForProperty<P, TProp>(getProperty)); }
 		template <class TProp>					auto OrderBy(ConstOverloadTo<TProp> getter)	const &	{ return				 OrderBy<TProp, ConstOverloadTo<TProp>>(move(getter)); }
 		template <class TProp>					auto OrderBy(ConstOverloadTo<TProp> getter)	&&		{ return Move().template OrderBy<TProp, ConstOverloadTo<TProp>>(move(getter)); }
 
+		template <class TProp = void, class P>	auto OrderByDescending(P&& getProperty)					const &	{ return		OrderDescending(ComparatorForProperty<P, TProp>(getProperty)); }
+		template <class TProp = void, class P>	auto OrderByDescending(P&& getProperty)					&&		{ return Move().OrderDescending(ComparatorForProperty<P, TProp>(getProperty)); }
+		template <class TProp>					auto OrderByDescending(ConstOverloadTo<TProp> getter)	const &	{ return				 OrderByDescending<TProp, ConstOverloadTo<TProp>>(move(getter)); }
+		template <class TProp>					auto OrderByDescending(ConstOverloadTo<TProp> getter)	&&		{ return Move().template OrderByDescending<TProp, ConstOverloadTo<TProp>>(move(getter)); }
+
+
 		/// Find extreme value, if not Empty.
-		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(Comp&& isLess = {}) const;
-		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(Comp&& isLess = {}) const	{ return Min(SwappedBinop(isLess)); }
+		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Min(const Comp& isLess = {}) const;
+		template <class Comp = std::less<>> 	Optional<TElemDecayed>	Max(const Comp& isLess = {}) const;
 
 		template <class S = TElemDecayed>		Optional<S>				Avg() const;
 		template <class S = TElemDecayed>		S						Sum() const;
@@ -872,7 +890,7 @@ namespace Enumerables::Def {
 
 	// =========== Materialization / Lifetime-utils ==================================================================================
 	#pragma region
-		
+
 		// ----- Container creators --------------------------------------------------------------------------------------------------
 
 		// NOTE: For the customizability of the resulting containers, any further constructor arguments
@@ -890,7 +908,7 @@ namespace Enumerables::Def {
 		/// @tparam Options:  Additional arguments for ListType
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint = 0) const;
-		
+
 		/// Form a List with predefined inline buffer for N elements.
 		/// @tparam N:		  size of inline buffer
 		/// @tparam Options:  Additional arguments for SmallListType
@@ -901,39 +919,39 @@ namespace Enumerables::Def {
 		/// Can be ordered or based on hash, according to configuration.
 		/// @tparam Options:  Additional arguments for SetType
 		///					  (typ.: Hasher, Equality comparer, Allocator)
-		template <class... Options>	
+		template <class... Options>
 		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint = 0) const;
 
 
 		/// Map sequence elements to unique keys, forwarding them as a whole into values of a Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @param  makeKey:  TElem& -> Key mapper function
-		template <class... Options, class KeyMap>
-		auto ToDictionary(KeyMap&& toKey, size_t sizeHint = 0)			 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(toKey))>,
-																								 TElemDecayed,
-																								 Options...>;
-		
+		/// @param  getKey:   TElem& -> Key mapper function
+		template <class... Options, class KeyMapper>
+		DictionaryType<DecayedResultLV<KeyMapper>, TElemDecayed, Options...>	ToDictionary  (const KeyMapper& getKey, size_t sizeHint = 0) const;
+
 		/// Map sequence elements to unique keys by a pointer to possibly const-overloaded getter.
-		/// @tparam  K:		  Explicit type of keys (required)
+		/// Explicit type can be ref-qualified to resolve edge-cases, will be decayed for Dictionary.
+		/// @tparam  K:		  Explicit type of keys to extract (required, auto-decayed)
 		template <class K, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K> getKey, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+		DictionaryType<decay_t<K>, TElemDecayed, Options...>					ToDictionaryOf(LVOverloadTo<K> getKey,  size_t sizeHint = 0) const;
 
 
 		/// Form a custom Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @param  k:		  TElem& -> Key   mapper function
-		/// @param  v:		  TElem  -> Value mapper function
-		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint = 0)	 const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																								 DecayedResult<decltype(ValueMapper(v))>,
-																								 Options...>;
+		/// @param  toKey:	  TElem& -> Key   mapper function
+		/// @param  toValue:  TElem  -> Value mapper function
+		template <class... Options, class KeyMapper, class ValueMapper>
+		requires (!is_convertible_v<ValueMapper, size_t>)
+		DictionaryType<DecayedResultLV<KeyMapper>,
+					   DecayedResult<ValueMapper>, Options...>	ToDictionary  (const KeyMapper& toKey, const ValueMapper& toValue, size_t sizeHint = 0) const;
 
 		/// Form a custom Dictionary resolving const/ref-overloaded getters of TElem. [No mix with lambdas atm.]
+		/// Explicit types can be ref-qualified to resolve edge-cases, will be decayed for Dictionary.
 		/// @tparam Options:  Additional arguments for DictionaryType
-		/// @tparam  K:		  Explicit type of keys   (required)
-		/// @tparam  V:		  Explicit type of values (required)
+		/// @tparam K:		  Explicit type of keys to extract   (required, auto-decayed)
+		/// @tparam V:		  Explicit type of values to extract (required, auto-decayed)
 		template <class K, class V, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K> getKey, OverloadTo<V> getValue, size_t sizeHint = 0) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+		DictionaryType<decay_t<K>, decay_t<V>, Options...>		ToDictionaryOf(LVOverloadTo<K> toKey,  OverloadTo<V> toValue,      size_t sizeHint = 0) const;
 
 
 
@@ -941,7 +959,7 @@ namespace Enumerables::Def {
 
 		template <class... Options>
 		ListType<TElemDecayed, Options...>			ToList(size_t sizeHint, const Options&...) const;
-		
+
 		template <size_t N, class... Options>
 		SmallListType<TElemDecayed, N, Options...>	ToList(size_t sizeHint, const Options&...) const;
 
@@ -949,20 +967,20 @@ namespace Enumerables::Def {
 		SetType<TElemDecayed, Options...>			ToSet(size_t sizeHint, const Options&...) const;
 
 
-		template <class... Options, class KeyMap>
-		auto ToDictionary(KeyMap&& k, size_t sizeHint, const Options&...)				const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																												TElemDecayed,
-																												Options...>;
+		template <class... Options, class KeyMapper>
+		DictionaryType<DecayedResultLV<KeyMapper>, TElemDecayed, Options...>	ToDictionary  (const KeyMapper&, size_t sizeHint, const Options&...) const;
+
 		template <class K, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K>, size_t sizeHint, const Options&...)		const -> DictionaryType<decay_t<K>, TElemDecayed, Options...>;
+		DictionaryType<decay_t<K>, TElemDecayed, Options...>					ToDictionaryOf(LVOverloadTo<K>,  size_t sizeHint, const Options&...) const;
 
 
-		template <class... Options, class KeyMap, class ValMap>
-		auto ToDictionary(KeyMap&& k, ValMap&& v, size_t sizeHint, const Options&...)	const -> DictionaryType<DecayedResultLV<decltype(KeyMapper(k))>,
-																												DecayedResult<decltype(ValueMapper(v))>,
-																												Options...>;
+		template <class... Options, class KeyMapper, class ValueMapper>
+		requires (!is_convertible_v<ValueMapper, size_t>)
+		DictionaryType<DecayedResultLV<KeyMapper>,
+					   DecayedResult<ValueMapper>, Options...>	ToDictionary  (const KeyMapper&, const ValueMapper&, size_t sizeHint, const Options&...) const;
+
 		template <class K, class V, class... Options>
-		auto ToDictionaryOf(LVOverloadTo<K>, OverloadTo<V>, size_t sizeHint, const Options&...) const -> DictionaryType<decay_t<K>, decay_t<V>, Options...>;
+		DictionaryType<decay_t<K>, decay_t<V>, Options...>		ToDictionaryOf(LVOverloadTo<K>,  OverloadTo<V>,      size_t sizeHint, const Options&...) const;
 
 
 
@@ -971,12 +989,12 @@ namespace Enumerables::Def {
 		/// Evaluate current query and pass it as a self-contained enumeration (an abstract collection).
 		template <class Output = TElem>
 		auto ToMaterialized()  const;
-		
+
 		/// Cache calculation results (For & elements => not totally self-contained!)
 		auto ToSnapshot()	   const;
 
 		/// Fork a temporary instance referencing this (just like a container), when a heavy copy would be undesired.
-		/// @remarks	
+		/// @remarks
 		///		Mostly an internal tool for utilizing existing Enumerators to implement terminal operations concisely.
 		///		CONSIDER: for usage somehow at parameters, like EnumerableRef<T> ?
 		auto ToReferenced() const &  noexcept
@@ -1042,14 +1060,14 @@ namespace Enumerables::Def {
 		///
 		///		Covariance seems not to be viable, because it hinders overload resolution.
 		///
-		template <class F> 
+		template <class F>
 		requires (IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any)
 		AutoEnumerable(const AutoEnumerable<F>& src) :
 			AutoEnumerable { src.template As<TElem>().ToInterfaced().PassFactory(), src.isPure }
 		{
 		}
 
-		template <class F> 
+		template <class F>
 		requires (IsInterfacedConversion<InvokeResultT<F>, TEnumerator>::any)
 		AutoEnumerable(AutoEnumerable<F>&& src) :
 			AutoEnumerable { move(src).template As<TElem>().ToInterfaced().PassFactory(), src.isPure }
@@ -1077,7 +1095,7 @@ namespace Enumerables::Def {
 
 	};
 
-	template <class Fact>	
+	template <class Fact>
 	AutoEnumerable(Fact&&, bool = true, bool = true) -> AutoEnumerable<Fact>;
 
 
@@ -1088,135 +1106,262 @@ namespace Enumerables::Def {
 	#pragma region Generate sequences
 
 	/// A 0-length sequence of any type is gladly provided.
-	template <class V>
+	template <class T>
 	auto Empty()
 	{
-		return AutoEnumerable { []() { return EmptyEnumerator<V> {}; } };
+		return AutoEnumerable { []() { return EmptyEnumerator<T> {}; } };
 	}
+
+
+
+	template <class Storage, class Output>
+	struct InfRepeaterFactory {
+		Storage seed;
+
+		RepeaterEnumerator<Storage, Output>   operator ()() const   { return { seed }; }
+	};
 
 
 	/// Infinitely repeat a value/reference.
-	template <class V = void, class Vin>
-	auto Repeat(Vin&& val)
+	/// @tparam TForced:	forced element type [convertible from stored value]
+	/// @param  value:   	stored value to repeat [ref/move-captured]
+	template <class TForced = void, class Seed>
+	requires NotScalarConversion<Seed, TForced>
+	auto Repeat(Seed&& value)
 	{
-		using Storage = typename SeededEnumerationTypes<Vin, V>::SeedStorage;
-		using Output  = typename SeededEnumerationTypes<Vin, V>::Output;
+		using Storage = typename SeededEnumerationTypes<Seed, TForced>::SeedStorage;
+		using Output  = typename SeededEnumerationTypes<Seed, TForced>::Output;
 
-		struct InfRepeaterFactory {
-			Storage seed;
-
-			RepeaterEnumerator<Storage, Output>   operator ()() const   { return { seed }; }
-		};
-
-		return AutoEnumerable { InfRepeaterFactory { forward<Vin>(val) } };
+		return AutoEnumerable { InfRepeaterFactory<Storage, Output> { forward<Seed>(value) } };
 	}
 
 
-	/// Repeat a value/reference the given number of times.
-	template <class V = void, class Vin>
-	auto Repeat(Vin&& val, size_t count)
+	/// Infinitely repeat a value. [Explicit scalar-rvalue overload.]
+	template <Scalar TForced>
+	auto Repeat(NoDeduce<TForced>&& value)
 	{
-		using Storage = typename SeededEnumerationTypes<Vin, V>::SeedStorage;
-		using Output  = typename SeededEnumerationTypes<Vin, V>::Output;
+		return AutoEnumerable { InfRepeaterFactory<TForced, TForced> { value } };
+	}
 
-		struct RepeaterFactory {
-			Storage	seed;
-			size_t	count;
 
-			CounterEnumerator<RepeaterEnumerator<Storage, Output>>  operator ()() const
-			{
-				auto createRepeater = [this]() { return RepeaterEnumerator<Storage, Output>{ seed }; };
-				return { createRepeater, FilterMode::TakeWhile, count };
-			}
-		};
 
-		return AutoEnumerable { RepeaterFactory { forward<Vin>(val), count } };
+	template <class Storage, class Output>
+	struct RepeaterFactory {
+		Storage	seed;
+		size_t	count;
+
+		CounterEnumerator<RepeaterEnumerator<Storage, Output>>  operator ()() const
+		{
+			auto createRepeater = [this]() {
+				return RepeaterEnumerator<Storage, Output> { seed };
+			};
+			return { createRepeater, FilterMode::TakeWhile, count };
+		}
+	};
+
+
+	/// Repeat a value/reference the given number of times.
+	/// @tparam TForced:  forced element type [convertible from stored value]
+	/// @param value:	  stored value to repeat [ref/move-captured]
+	/// @param count:	  length of sequence
+	template <class TForced = void, class Seed>
+	requires NotScalarConversion<Seed, TForced>
+	auto Repeat(Seed&& value, size_t count)
+	{
+		using Storage = typename SeededEnumerationTypes<Seed, TForced>::SeedStorage;
+		using Output  = typename SeededEnumerationTypes<Seed, TForced>::Output;
+
+		return AutoEnumerable { RepeaterFactory<Storage, Output> { forward<Seed>(value), count } };
+	}
+
+
+	/// Repeat a value the given number of times. [Explicit scalar-rvalue overload]
+	template <Scalar TForced>
+	auto Repeat(NoDeduce<TForced>&& value, size_t count)
+	{
+		return AutoEnumerable { RepeaterFactory<TForced, TForced> { value, count } };
 	}
 
 
 	/// A single-element sequence (value/reference).
-	template <class V = void, class Vin>
-	auto Once(Vin&& val)
+	template <class TForced = void, class Seed>
+	requires NotScalarConversion<Seed, TForced>
+	auto Once(Seed&& value)
 	{
-		return Repeat<V>(forward<Vin>(val), 1u);
+		return Repeat<TForced>(forward<Seed>(value), 1u);
 	}
+
+
+	/// A single-element sequence. [Explicit scalar-rvalue overload]
+	template <Scalar TForced>
+	auto Once(NoDeduce<TForced>&& value)
+	{
+		return Repeat<TForced>(move(value), 1u);
+	}
+
+
+
+
+	template <class Seed, class Step, class Acc, class ForcedElem = void>
+	struct SequenceFactory {
+		Seed	seed;
+		Step	step;
+
+		static_assert (is_reference<Seed>() || !is_reference<Acc>(),
+					   "Accumulator can't reference the Seed value in the factory. "
+					   "Modify ForcedAcc or the result of 'step' to a decayed type!");
+
+		static_assert (!is_rvalue_reference<Acc>(), "X-value accumulator is not supported.");
+
+
+		SequenceEnumerator<Acc, Step, ForcedElem>	operator ()() const
+		{
+			return { seed, step };
+		}
+	};
 
 
 	/// Custom infinite sequence specified by the starting value/reference and a step function.
+	/// The step function can be pure or a void mutator action over a decayed Accumulator type.
+	/// @param start:  	captured ref/value to initialize Acc for the first element [copy-converts on query]
+	/// @param step:	function or member-pointer to get the next element
+	///					-- void(Acc&) mutator or
+	///					-- Acc(Acc&) pure function [may move]
+	/// @tparam Elem:  		yielded element type     	[default = Accumulator type; can be & iff Acc is & too]
+	/// @tparam ForcedAcc:	explicit accumulator type	[default = StepFun's result / Seed]
 	/// @remarks
-	///		Deduced mode: 	Result = accumulator = result_of @p step
-	///		Explicit more:	Result = accumulator = V
-	///		Usages:
-	///			A ) Sequence(5, x => x*7)						---> store/give prvalue
-	///			A') Sequence(n, x => x*7)						---> store & / give prvalue
-	///			B ) Sequence(headObj, (auto& o) => o.nNext())	---> store/give &
-	template <class V = void, class StepFun, class Vin>
-	auto Sequence(Vin&& seed, StepFun&& step)
+	///		Examples:
+	///			A ) Sequence(5, x => x*7)					---> store/yield prvalue
+	///			A') Sequence(5, (int& x){ x*=7 })			---> same via mutator
+	///			B ) Sequence(n, x => x*7)					---> store & / yield prvalue
+	///			B') Sequence(n, (int& x){ x*=7 })			---> same(!) via mutator - mutating Acc must be decayed!
+	///			C ) Sequence(headObj, o => o.Next())		---> store/yield &
+	template <class Elem = void, class ForcedAcc = Elem, class Seed, class StepFunction>
+	requires NotScalarConversion<Seed, ForcedAcc>
+	auto Sequence(Seed&& start, StepFunction&& step)
 	{
-		using SeedStorage = typename SeededEnumerationTypes<Vin>::SeedStorage;
-		using StepStorage = BaseT<StepFun>;
-		using StepRes	  = MappedT<OverrideT<V, const Vin&>, const StepStorage&>;
-		using Acc		  = OverrideT<V, StepRes>;
+		using SeedStorage = typename SeededEnumerationTypes<Seed, ForcedAcc>::SeedStorage;
+		using Acc		  = typename SeqAccuDeducer<ForcedAcc, SeedStorage, StepFunction>::TAccumulator;
+		using StepStorage = LambdaCreators::CustomMapperT<Acc&, StepFunction>;
 
-		struct SequenceFactory {
-			SeedStorage	seed;
-			StepStorage	step;
-
-			SequenceEnumerator<Acc, StepStorage>	operator ()() const
-			{
-				return { static_cast<Acc>(seed), step };	// Narrowing allowed if explicit
-			}
-		};
-
-		return AutoEnumerable { SequenceFactory { forward<Vin>(seed), forward<StepFun>(step) } };
+		return AutoEnumerable { SequenceFactory<SeedStorage, StepStorage, Acc, Elem> {
+			forward<Seed>(start),
+			LambdaCreators::CustomMapper<Acc&>(forward<StepFunction>(step))
+		}};
 	}
 
 
-	/// Range of given length generated by operator++ [value capture only].
+	/// [resolves overloaded step function]
+	template <class Elem, class Acc = Elem, class Seed>
+	requires NotScalarConversion<Seed, Acc>
+	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, Acc>> step)
+	{
+		// force main overload  ---------v
+		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, Acc>&>(forward<Seed>(start), step);
+	}
+
+
+	/// [resolves overloaded step mutator]
+	template <class Elem, class Acc = Elem, class Seed>
+	requires NotScalarConversion<Seed, Acc>
+	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, void>> step)
+	{
+		// force main overload  ---------v
+		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, void>&>(forward<Seed>(start), step);
+	}
+
+	// NOTE: NoDeduce for OverloadResolver params is required by MSVC.
+	//		 It's sensible to protect Acc's default, but deduction is probably too eager here...
+
+
+	/// Custom infinite sequence of an explicitly specified scalar type.
+	/// [Explicit scalar-rvalue overload]
+	/// @tparam Elem:		yielded element type [anything convertible]
+	/// @tparam ForcedAcc:	scalar accumulator type, if differs from Elem
+	/// @param  step:		pure function to next value or a void mutator
+	template <class Elem, Scalar ForcedAcc = Elem, class StepFun>
+	auto Sequence(NoDeduce<ForcedAcc>&& start, StepFun&& step)
+	{
+		using Acc = typename SeqAccuDeducer<ForcedAcc, ForcedAcc, StepFun>::TAccumulator;
+
+		return AutoEnumerable { SequenceFactory<ForcedAcc, BaseT<StepFun>, Acc, Elem> {
+			start,
+			forward<StepFun>(step)
+		}};
+	}
+
+
+	/// [Explicit scalar-rvalue overload; resolves overloaded step function]
+	template <class Elem, Scalar Acc = Elem>
+	auto Sequence(NoDeduce<Acc>&& start, NoDeduce<OverloadResolver<Acc&, Acc>> step)
+	{
+		// force main scalar overload ---v
+		return Sequence<Elem, Acc, OverloadResolver<Acc&, Acc>&>(move(start), step);
+	}
+
+
+	/// [Explicit scalar-rvalue overload; resolves overloaded step mutator]
+	template <class Elem, Scalar Acc = Elem>
+	auto Sequence(NoDeduce<Acc>&& start, NoDeduce<OverloadResolver<Acc&, void>> step)
+	{
+		// force main scalar overload ---v
+		return Sequence<Elem, Acc, OverloadResolver<Acc&, void>&>(move(start), step);
+	}
+
+
+
+	/// Range of given length generated by operator++. [value capture only]
 	template <class V>
 	auto Range(V start, size_t count)
 	{
-		// using op++ is not very functional, but gives more abstraction than "+ 1" literal
-		auto advance = [](auto x) { return ++x; };
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
 
-		return Sequence<V>(move(start), advance).Take(count);
+		return Sequence<V>(move(start), [](V& x) { ++x; }).Take(count);
 	}
 
 
-	/// Simple range of numbers in [0, count).
+	/// Simple range of numbers in [0, count). [value capture]
 	template <class V = size_t>
 	auto Range(size_t count)
 	{
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
+
 		return Range<V>(V {}, count);
 	}
 
 
-	/// Range of given length generated by operator-- [value capture only].
+	/// Range of given length generated by operator--. [value capture only]
 	template <class V>
 	auto RangeDown(V start, size_t count)
 	{
-		auto advance = [](auto x) { return --x; };
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
 
-		return Sequence<V>(move(start), advance).Take(count);
+		return Sequence<V>(move(start), [](V& x) { --x; }).Take(count);
 	}
 
 
-	/// Range stepped by operator++ until the given closing element reached (inclusive). [value capture]
+	/// Range stepped by operator++ until the given closing element reached (inclusive).
+	/// [value capture; No order/overflow check!]
 	template <class V>
 	auto RangeBetween(V first, V last)
 	{
-		auto advance = []				(V x)			{ return ++x; };
-		auto stop	 = [l = move(last)]	(const V& x)	{ return x == l; };
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
+
+		auto advance = []				(V& x)		 { ++x; };
+		auto stop	 = [l = move(last)]	(const V& x) { return x == l; };
 
 		return Sequence<V>(move(first), advance).TakeUntilFinal(stop);
 	}
 
 
-	/// Range stepped by operator-- until the given closing element reached (inclusive). [value capture]
+	/// Range stepped by operator-- until the given closing element reached (inclusive).
+	/// [value capture; No order/overflow check!]
 	template <class V>
 	auto RangeDownBetween(V first, V last)
 	{
-		auto advance = []				(V x)			{ return --x; };
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
+
+		auto advance = []				(V& x)			{ --x; };
 		auto stop	 = [l = move(last)]	(const V& x)	{ return x == l; };
 
 		return Sequence<V>(move(first), advance).TakeUntilFinal(stop);
@@ -1228,17 +1373,17 @@ namespace Enumerables::Def {
 	template <class V = size_t, class Container>
 	auto IndexRange(Container& list)
 	{
-		static_assert (!is_reference<V>(), "Index type should not be reference.");
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
 
 		struct IndexRangeFactory {
 			const Container&  list;
 
 			auto operator ()() const
 			{
-				auto advance  = [](V x)	{ return ++x; };
+				auto advance  = [](V& x) { ++x; };
 
 				using SeqGen  = SequenceEnumerator<V, decltype(advance)>;
-				auto startSeq = [&]()	{ return SeqGen { 0, advance }; };
+				auto startSeq = [&]()	{ return SeqGen { V {}, advance }; };
 
 				return CounterEnumerator<SeqGen> {
 					startSeq,
@@ -1252,21 +1397,22 @@ namespace Enumerables::Def {
 
 
 	/// Descending indices of a sequence container according to its size at start of enumeration. [Ref capture]
-	/// @remarks	For a snapshot consider RangeDownBetween(list.size() - 1, 0).
+	/// @remarks	For a snapshot consider RangeDown(list.size() - 1, list.size())
+	///									 or RangeDownBetween(list.size() - 1, 0) provided it's known non-empty!
 	template <class V = size_t, class Container>
 	auto IndexRangeReversed(Container& list)
 	{
-		static_assert (!is_reference<V>(), "Index type should not be reference.");
+		static_assert (!is_reference<V>(), "Can't create Range of references!");
 
 		struct RevIndexRangeFactory {
 			const Container&  list;
 
 			auto operator ()() const
 			{
-				auto advance  = [](V x)	{ return --x; };
+				auto advance  = [](V& x) { --x; };
 
 				using SeqGen  = SequenceEnumerator<V, decltype(advance)>;
-				auto startSeq = [&]()	{ return SeqGen { GetSize(list) - 1, advance }; };
+				auto startSeq = [&]()	{ return SeqGen { static_cast<V>(GetSize(list) - 1), advance }; };
 
 				return CounterEnumerator<SeqGen> {
 					startSeq,
@@ -1383,7 +1529,7 @@ namespace Enumerables::Def {
 	auto InitEnumerable(initializer_list<I>&& init, const A& alloc)
 	{
 		static_assert (!is_reference<R>() || is_pointer<I>(), "Supply pointers to output references.");
-		
+
 		// NOTE: List-init support is assumed only here for ListType! Is it expectable?
 		if constexpr (is_reference<R>())
 			return Enumerate<remove_reference_t<R>*>(BracedInitWithOptionalAlloc(init, alloc)).Dereference();
@@ -1404,7 +1550,7 @@ namespace Enumerables::Def {
 	/// Take explicitly typed values from braced initializer. (Explicit type allows conversions.)
 	template <NonvoidValue Elem, class CustomAllocator = None
 #	ifdef __clang__
-			, IfNonvoidVal<Elem, int> = 0		// TODO clang: concept doesn't suffice to discard - bug or standard?
+			, IfNonvoidValue<Elem, int> = 0		// TODO clang: concept doesn't suffice to discard - bug or standard?
 #	endif
 	>
 	auto Enumerate(initializer_list<NoDeduce<Elem>>&& init, const CustomAllocator& alloc = {})
@@ -1431,7 +1577,7 @@ namespace Enumerables::Def {
 	}
 
 	/// Take implicitly typed references from braced initializer, using pointers as "capture-syntax".
-	/// @remarks 
+	/// @remarks
 	///		For internal reasons (Concat), must also accept a list of compatible pointers
 	///		in the explicit case, should those be already deduced and mismatch ForcedElem.
 	template <class ForcedElem = void, class CustomAllocator = None, class I>
@@ -1569,7 +1715,7 @@ namespace Enumerables::Def {
 		return ConcatInternal<TForced>(forward<Containers>(conts)...);
 	}
 
-	
+
 	template <NonScalar TForced = void, class I1, class I2, class I3, class... Containers>
 	auto Concat(initializer_list<I1>&& iList1, initializer_list<I2>&& iList2, initializer_list<I3>&& iList3, Containers&&... tail)
 	{
@@ -1721,7 +1867,7 @@ namespace Enumerables::Def {
 
 
 
-namespace Enumerables {			
+namespace Enumerables {
 
 	// Published to client code:
 
@@ -1729,7 +1875,7 @@ namespace Enumerables {
 	using Def::Enumerable;
 	using Def::IEnumerator;
 	using Def::InterfacedEnumerator;
-	
+
 	// -- coroutines --
 	using Def::CoEnumerator;
 

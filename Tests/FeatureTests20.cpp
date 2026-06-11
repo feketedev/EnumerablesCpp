@@ -6,7 +6,7 @@
 
 namespace EnumerableTests {
 
-	
+
 	//  --- Most importantly with C++20, co_yield has arrived! ---
 
 
@@ -26,21 +26,21 @@ namespace EnumerableTests {
 	static CoEnumerator<CountedCopy<int>>   YieldHeavyInts()
 	{
 		CountedCopy<int> local = 1;
-			
+
 		co_yield 1;
-			
+
 		co_yield local;
-			
+
 		local.data++;
 		co_yield std::move(local);
-			
+
 		co_yield CountedCopy<int>(5);
 	}
 
 
 	// NOTE: This is CTE currently, for .Current() calls must be repeatable.
 	//		 ConsumeCurrent() could make it possible!
-	// 
+	//
 	// static CoEnumerator<MoveOnly<int>>	YieldUncopiableInts()
 	// {
 	//		co_yield 1;
@@ -140,7 +140,7 @@ namespace EnumerableTests {
 			ASSERT	  (et.FetchNext());
 			ASSERT_EQ (1, et.Current().data);
 			ASSERT_EQ (0, et.Current().moveCount);	// simply converts on the fly
-		
+
 			ASSERT	  (!et.FetchNext());
 		}
 	}
@@ -178,7 +178,7 @@ namespace EnumerableTests {
 
 	// Unfortunately, the creation of udnerlying state objects is tied to coroutine calls,
 	// and the result (even std::generator of C++23) becomes exhausted after a single iteration
-	// => to maintain reusability (aka. virtual collection-like behaviour) 
+	// => to maintain reusability (aka. virtual collection-like behaviour)
 	//    Enumerables must wrap a pointer to the coroutine, and capture its desired arguments!
 	//
 	// Thus, in contrast to C# automatism, using a coroutine as an Enumerable requires a manual nesting step.
@@ -215,7 +215,7 @@ namespace EnumerableTests {
 	}
 
 	// I consider this the most concise form:
-	// Returning a lambda directly allows proper (user-controlled) capture 
+	// Returning a lambda directly allows proper (user-controlled) capture
 	// of the required arguments, making the implicit conversion possible.
 	static Enumerable<int>	WrapAutomaticallyL(int start)
 	{
@@ -240,7 +240,7 @@ namespace EnumerableTests {
 			co_yield x;
 			co_yield x + 1;
 			co_yield x + 2;
-		}, 
+		},
 		start);
 	}
 

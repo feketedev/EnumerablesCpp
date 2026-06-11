@@ -15,14 +15,14 @@
 	#define ENUMERABLES_INTERNAL_ASSERT(cond)	assert(cond)
 	#define ENUMERABLES_CLIENT_BREAK(txt)		EnumerableTests::MaskableClientBreak(txt)
 
-	// 2 = at creation;  1 = on lvalue usage; Now disabled for sake of allocation tests
+	// 2 = at non-trivial creation;  1 = on lvalue usage; Now disabled for sake of allocation tests
 	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	0
 	#define ENUMERABLES_RESULTSVIEW_MAX_ELEMS	10
 #endif
 
 
 // Custom container bindings can be defined and set here.
-// 
+//
 // StlBinding::OptionalOperations is readily made available whenever <optional> is included,
 // but an own binding struct could be defined here as well.
 #define ENUMERABLES_OPTIONAL_BINDING	Enumerables::StlBinding::OptionalOperations;
@@ -30,7 +30,7 @@
 
 // For custom types, you might want to define appropriate GetSize / HasValue overloads.
 // These are allowed extensions of the Enumerables namespace. (Consider supporting std::size instead!)
-namespace Enumerables 
+namespace Enumerables
 {
 	//template <class T>
 	//auto GetSize(const MyContainer<T>& c)	{ return c.GetMySize(); }
@@ -38,6 +38,15 @@ namespace Enumerables
 	//template <class T>
 	//bool HasValue(const MyOptional<T>& o)	{ return o.HasValue();	}
 }
+
+
+
+// For auto-testing this project: allow force-enabling ResultsView from command-line
+#ifdef TEST_RESULTSVIEW_LVL
+	#pragma warning (disable : 4005)			// redefined macros
+	#define ENUMERABLES_USE_RESULTSVIEW			true
+	#define ENUMERABLES_RESULTSVIEW_AUTO_EVAL	TEST_RESULTSVIEW_LVL
+#endif
 
 
 

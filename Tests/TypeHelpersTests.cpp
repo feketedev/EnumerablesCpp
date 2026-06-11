@@ -24,6 +24,8 @@ namespace EnumerableTests {
 			char cConst		= 'c';
 			char cLeftConst = 'k';
 
+			const char cSubobj = 's';
+
 			const char&	GetCharConst()	const	{ return cConst; }
 
 			char&&		PassChar()				{ return std::move(c); }
@@ -46,6 +48,9 @@ namespace EnumerableTests {
 			// mutable & can be missing from ref-qualified triple - and even makes sense
 			char	GetCopy32()		const&	{ return cLeftConst; }
 			char	GetCopy32()		&&		{ return cRight; }
+
+
+			int SubtractConstOf(const GetterTester& rhs) const  { return c - rhs.cConst; }
 		};
 
 
@@ -64,6 +69,12 @@ namespace EnumerableTests {
 
 		static char			MapFunction2(const GetterTester&)		{ return GlobChar; }
 		static char			MapFunction2(GetterTester&& obj)		{ return std::move(obj.cRight); }
+
+
+		static bool	FreePredicate(const GetterTester&   obj)	{ return obj.c == 'a'; }
+		static bool	FreePredicateNonConst(GetterTester& obj)	{ return obj.c == 'a'; }
+
+		static int	FreeBinop(const GetterTester& l, const GetterTester& r)  { return l.c - r.cConst; }
 
 	}	// namespace
 
@@ -104,6 +115,49 @@ namespace EnumerableTests {
 				ASSERT(&obj.c == &cPassed2);
 				ASSERT(&obj.c == &cPassed3);
 			}
+
+			// --- Subobjects (no resolution needed) ---
+			{
+				// Just pass them to enable mixing with overloaded arguments, e.g. in ToDictionary).
+
+				OverloadResolver<const GetterTester&,	const char&>	c1 { &GetterTester::c };
+				OverloadResolver<GetterTester&,			const char&>	c2 { &GetterTester::c };
+				OverloadResolver<GetterTester,			const char&>	c3 { &GetterTester::c };
+				OverloadResolver<GetterTester&&,		const char&>	c4 { &GetterTester::c };
+				OverloadResolver<const GetterTester,	const char&>	c5 { &GetterTester::c };
+				OverloadResolver<const GetterTester&,	const char&>	k1 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&,			const char&>	k2 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester,			const char&>	k3 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&&,		const char&>	k4 { &GetterTester::cSubobj };
+				OverloadResolver<const GetterTester,	const char&>	k5 { &GetterTester::cSubobj };
+
+				// lifetime checks are out of scope here
+				ASSERT(&obj.c == &c1(obj));
+				ASSERT(&obj.c == &c2(obj));
+				ASSERT(&obj.c == &c3(std::move(obj)));
+				ASSERT(&obj.c == &c4(std::move(obj)));
+				ASSERT(&obj.c == &c5(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k1(obj));
+				ASSERT(&obj.cSubobj == &k2(obj));
+				ASSERT(&obj.cSubobj == &k3(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k4(std::move(obj)));
+				ASSERT(&obj.cSubobj == &k5(std::move(obj)));
+
+				OverloadResolver<GetterTester&,  char&>			m1 { &GetterTester::c };
+				OverloadResolver<GetterTester,   char&&>		m2 { &GetterTester::c };
+				OverloadResolver<GetterTester&&, char&&>		m3 { &GetterTester::c };
+			//	OverloadResolver<GetterTester,   char&&>	   km2 { &GetterTester::cSubobj };		//
+			//	OverloadResolver<GetterTester&&, char&&>	   km3 { &GetterTester::cSubobj };		// CTE,
+			//	OverloadResolver<const GetterTester, char&>		m4 { &GetterTester::c };			// dropping const
+			//	OverloadResolver<const GetterTester&, char&>	m5 { &GetterTester::c };			//
+
+				ASSERT(&obj.c == &m1(obj));
+				char&& cPassed2 = m2(std::move(obj));
+				char&& cPassed3 = m3(std::move(obj));
+				ASSERT(&obj.c == &cPassed2);
+				ASSERT(&obj.c == &cPassed3);
+			}
+
 
 			// --- Triple-qualified overload ---
 			{
@@ -166,6 +220,31 @@ namespace EnumerableTests {
 
 				ASSERT(obj.cConst == c1(obj));
 				ASSERT(obj.cConst == c5(std::move(obj)));
+			}
+
+			// --- Subobjects (no resolution needed) ---
+			{
+				OverloadResolver<const GetterTester&,	char>	p1 { &GetterTester::c };
+				OverloadResolver<GetterTester&,			char>	p2 { &GetterTester::c };
+				OverloadResolver<GetterTester,			char>	p3 { &GetterTester::c };
+				OverloadResolver<GetterTester&&,		char>	p4 { &GetterTester::c };
+				OverloadResolver<const GetterTester,	char>	p5 { &GetterTester::c };
+				OverloadResolver<const GetterTester&,	char>  kp1 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&,			char>  kp2 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester,			char>  kp3 { &GetterTester::cSubobj };
+				OverloadResolver<GetterTester&&,		char>  kp4 { &GetterTester::cSubobj };
+				OverloadResolver<const GetterTester,	char>  kp5 { &GetterTester::cSubobj };
+
+				ASSERT_EQ('u', p1(obj));
+				ASSERT_EQ('u', p2(obj));
+				ASSERT_EQ('u', p3(std::move(obj)));
+				ASSERT_EQ('u', p4(std::move(obj)));
+				ASSERT_EQ('u', p5(std::move(obj)));
+				ASSERT_EQ('s', kp1(obj));
+				ASSERT_EQ('s', kp2(obj));
+				ASSERT_EQ('s', kp3(std::move(obj)));
+				ASSERT_EQ('s', kp4(std::move(obj)));
+				ASSERT_EQ('s', kp5(std::move(obj)));
 			}
 
 			// --- Triple-qualified overload ---
@@ -383,6 +462,160 @@ namespace EnumerableTests {
 
 
 
+	static void TestLambdaWrappers()
+	{
+		using namespace LambdaCreators;
+
+		GetterTester		obj {};
+		const GetterTester&	constObj = obj;
+
+		const char& (*fp)(const GetterTester&) = &FreeExtractor;
+		const char& (&fr)(const GetterTester&) = FreeExtractor;
+
+		// Custom Map
+		{
+			auto m1 = CustomMapper<const GetterTester&>(fp);
+			auto m2 = CustomMapper<const GetterTester&>(fr);
+			auto m3 = CustomMapper<const GetterTester&>(FreeExtractorValParam);			// exact,
+			auto m4 = CustomMapper<const GetterTester&>(&GetterTester::c);				// no
+			auto m5 = CustomMapper<const GetterTester&>(&GetterTester::GetCharConst);	// overaloads
+
+			static_assert (is_same<decltype(fp), decltype(m1)>(),					  "Should not wrap.");
+			static_assert (is_same<decltype(fp), decltype(m2)>(),					  "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(m3)>(), "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(m4)>(),						  "Should wrap to unify calling!");
+			static_assert (!is_member_pointer<decltype(m5)>(),						  "Should wrap to unify calling!");
+
+			ASSERT_EQ ('c', m1(constObj));
+			ASSERT_EQ ('c', m2(constObj));
+			ASSERT_EQ ('u', m3(constObj));
+			ASSERT_EQ ('u', m4(constObj));
+			ASSERT_EQ ('c', m5(constObj));
+
+			static_assert (is_same<const char&, decltype(m1(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(m2(constObj))>(), "Changed return.");
+			static_assert (is_same<      char , decltype(m3(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(m4(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(m5(constObj))>(), "Changed return.");
+
+			// Note: the parameter types actually don't get restricted. Member-pointers are wrapped
+			//		 in a templated manner, only to unify call syntax. If calling with the supposed
+			//		 arguments produce a safe result, the lambda object is returned as-is.
+			//		 However, the enumerators always input an exact TElem object, anyways.
+			static_assert (is_same<char&, decltype(m4(obj))>(), "Changed return.");
+
+
+			// forcing a convertible return value:
+			auto mc1 = CustomMapper<const GetterTester&, int>(fp);
+			auto mc2 = CustomMapper<const GetterTester&, int>(fr);
+			auto mc3 = CustomMapper<const GetterTester&, int>(&GetterTester::c);
+			static_assert (!is_pointer<decltype(mc1)>(), "Should wrap!");
+			static_assert (!is_pointer<decltype(mc2)>(), "Should wrap!");
+			static_assert (!is_pointer<decltype(mc3)>(), "Should wrap!");
+
+			ASSERT_EQ ('c', mc1(constObj));
+			ASSERT_EQ ('c', mc2(constObj));
+			ASSERT_EQ ('u', mc3(constObj));
+			static_assert (is_same<int, decltype(mc1(constObj))>(), "Not the requested type.");
+			static_assert (is_same<int, decltype(mc2(constObj))>(), "Not the requested type.");
+			static_assert (is_same<int, decltype(mc3(constObj))>(), "Not the requested type.");
+		}
+
+		// Subobject select - simple
+		{
+			auto s1 = Selector<const GetterTester&>(fp);
+			auto s2 = Selector<const GetterTester&>(fr);
+			auto s3 = Selector<const GetterTester&>(FreeExtractorValParam);			// exact,
+			auto s4 = Selector<const GetterTester&>(&GetterTester::cConst);			// no
+			auto s5 = Selector<const GetterTester&>(&GetterTester::GetCharConst);	// overaloads
+
+			static_assert (is_same<decltype(fp), decltype(s1)>(),					  "Should not wrap.");
+			static_assert (is_same<decltype(fp), decltype(s2)>(),					  "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(s3)>(), "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(s4)>(),						  "Should wrap to unify calling!");
+			static_assert (!is_member_pointer<decltype(s5)>(),						  "Should wrap to unify calling!");
+
+			ASSERT_EQ ('c', s1(constObj));
+			ASSERT_EQ ('c', s2(constObj));
+			ASSERT_EQ ('u', s3(constObj));
+			ASSERT_EQ ('c', s4(constObj));
+			ASSERT_EQ ('c', s5(constObj));
+
+			static_assert (is_same<const char&, decltype(s1(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(s2(constObj))>(), "Changed return.");
+			static_assert (is_same<      char , decltype(s3(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(s4(constObj))>(), "Changed return.");
+			static_assert (is_same<const char&, decltype(s5(constObj))>(), "Changed return.");
+		}
+
+		// Subobject select - materialize
+		{
+			auto s1 = Selector<GetterTester>(fp);
+			auto s2 = Selector<GetterTester>(fr);
+			auto s3 = Selector<GetterTester>(FreeExtractorValParam);			// exact,
+			auto s4 = Selector<GetterTester>(&GetterTester::cConst);			// no
+			auto s5 = Selector<GetterTester>(&GetterTester::GetCharConst);		// overaloads
+
+			static_assert (!is_same<decltype(fp), decltype(s1)>(),					  "Should wrap!");
+			static_assert (!is_same<decltype(fp), decltype(s2)>(),					  "Should decay, no wrapping.");
+			static_assert (is_same<decltype(&FreeExtractorValParam), decltype(s3)>(), "Should not wrap.");
+			static_assert (!is_member_pointer<decltype(s4)>(),						  "Should wrap anyway!");
+			static_assert (!is_member_pointer<decltype(s5)>(),						  "Should wrap anyway!");
+
+			ASSERT_EQ ('c', s1(constObj));
+			ASSERT_EQ ('c', s2(constObj));
+			ASSERT_EQ ('u', s3(constObj));
+			ASSERT_EQ ('c', s4(constObj));
+			ASSERT_EQ ('c', s5(constObj));
+
+			static_assert (is_same<char, decltype(s1(constObj))>(), "Should materialize!");
+			static_assert (is_same<char, decltype(s2(constObj))>(), "Should materialize!");
+			static_assert (is_same<char, decltype(s3(constObj))>(), "Changed return.");
+			static_assert (is_same<char, decltype(s4(constObj))>(), "Should materialize!");
+			static_assert (is_same<char, decltype(s5(constObj))>(), "Should materialize!");
+		}
+
+		// Predicate
+		{
+			auto p1 = Predicate<GetterTester&>(&FreePredicate);
+			auto p2 = Predicate<GetterTester&>(&FreePredicateNonConst);
+			auto p3 = Predicate<GetterTester&>(&GetterTester::c);				// in fact, char is
+			auto p4 = Predicate<GetterTester&>(&GetterTester::GetCharConst);	// convertible to bool...
+
+			static_assert (is_pointer<decltype(p1)>(),			"Should not wrap.");
+			static_assert (is_pointer<decltype(p2)>(),			"Should not wrap.");
+			static_assert (!is_member_pointer<decltype(p3)>(),	"Should wrap!");
+			static_assert (!is_member_pointer<decltype(p4)>(),	"Should wrap!");
+
+			ASSERT (!p1(constObj));
+			ASSERT (!p2(obj));		// the only one with actual non-const parameter
+			ASSERT (p3(constObj));
+			ASSERT (p4(constObj));
+
+			// bool-convertibility is enforced, but no wrapper imposed
+			static_assert (is_same<bool, decltype(p1(obj))>(),		  "Changed return.");
+			static_assert (is_same<bool, decltype(p2(obj))>(),		  "Changed return.");
+			static_assert (is_same<char&, decltype(p3(obj))>(),		  "Changed return.");
+			static_assert (is_same<const char&, decltype(p4(obj))>(), "Changed return.");
+		}
+
+		// Binary mappers
+		{
+			auto op1 = BinaryMapper<const GetterTester&, const GetterTester&>(&FreeBinop);
+			auto op2 = BinaryMapper<const GetterTester&, const GetterTester&>(&GetterTester::SubtractConstOf);
+
+			static_assert (is_pointer<decltype(op1)>(),			"Should not wrap.");
+			static_assert (!is_member_pointer<decltype(op2)>(), "Should wrap!");
+
+			ASSERT_EQ (18, op1(constObj, constObj));
+			ASSERT_EQ (18, op2(constObj, constObj));
+			ASSERT_EQ (18, op1(obj, obj));
+			ASSERT_EQ (18, op2(obj, obj));
+		}
+	}
+
+
+
 	static void TestGenStorage()
 	{
 		// StorableT / RefHolder
@@ -455,7 +688,7 @@ namespace EnumerableTests {
 
 		// Note that the following tests require proper STL implementation of pair/tuple comparison operators,
 		// e.g. std::pair<int&, char&>{x, y} == std::pair<int, char>{x, y}
-		// 
+		//
 		// Older MS libraries only have that for tuple.
 		// Kept the pair version too. It illustrates that these tests depend on STL capabilities.
 #if !defined(_MSC_VER) || (_MSC_VER >= 1930)
@@ -629,130 +862,331 @@ namespace EnumerableTests {
 #endif
 
 
-		struct alignas(64) ConstStruct {
+		struct alignas(64) ConstCtorStruct {
 			const int				id;
 			std::unique_ptr<double> payload;
 
-			ConstStruct(int id, double pl) : id { id }, payload { std::make_unique<double>(pl) }
+			ConstCtorStruct(int id, double pl) : id { id }, payload { std::make_unique<double>(pl) }
 			{
 			}
 		};
 
-		auto getStruct = []() { return ConstStruct { 4, 4.4 }; };
+		struct ConstAggregate {
+			const int				id;
+			std::unique_ptr<double> payload;
+		};
+
+		auto getCtorStruct = []() { return ConstCtorStruct { 4, 4.4 }; };
+		auto getStruct     = []() { return ConstAggregate  { 4, std::make_unique<double>(4.4) }; };
 
 
 		// Reassignable
 		{
-			Reassignable<ConstStruct> s1 { ForwardParams, 1, 1.1 };
-			ASSERT_EQ (1,	s1->id);
-			ASSERT_EQ (1.1,	*s1->payload);
+			// construct via conversion op
+			{
+				struct ConvSource {
+					int id;
+					operator ConstCtorStruct() const { return { id, 15.0 }; }
+				};
+				ConvSource src { 5 };
 
-			static_assert (is_same<ConstStruct&,  decltype(*s1)>(),			   "type check");
-			static_assert (is_same<ConstStruct&&, decltype(*std::move(s1))>(), "type check");
+				Reassignable<ConstCtorStruct> converted = src;
+				ASSERT_EQ (5,    converted->id);
+				ASSERT_EQ (15.0, *converted->payload);
+			}
 
-			Reassignable<ConstStruct> s2 = std::move(s1);
-			ASSERT_EQ (1,	s2->id);
-			ASSERT_EQ (1.1,	*s2->payload);
+			// construct transparently - caution: () preferred by default (narrowing if needed)
+			Reassignable<ConstCtorStruct> s1 { 1, 1.1 };
+			Reassignable<ConstAggregate>  a1 { 3, std::make_unique<double>(1.3) };
+			Reassignable<ConstAggregate>  a0 { 5 };		// value-init omitted field of aggregate
+			ASSERT_EQ (1, s1->id);
+			ASSERT_EQ (3, a1->id);
+			ASSERT_EQ (5, a0->id);
+			ASSERT_EQ (1.1, *s1->payload);
+			ASSERT_EQ (1.3, *a1->payload);
+			ASSERT_EQ (nullptr, a0->payload);			// zeroed
 
-			s2.Reconstruct(2, 2.2);
-			s1.Reconstruct(3, 3.3);
-			ASSERT_EQ (3,	s1->id);
-			ASSERT_EQ (3.3,	*s1->payload);
-			ASSERT_EQ (2,	s2->id);
-			ASSERT_EQ (2.2,	*s2->payload);
+			static_assert (is_same<ConstCtorStruct&,  decltype(*s1)>(),			   "type check");
+			static_assert (is_same<ConstCtorStruct&&, decltype(*std::move(s1))>(), "type check");
 
-			ConstStruct so = s2.PassValue();
-			ASSERT_EQ (2,	so.id);
-			ASSERT_EQ (2.2,	*so.payload);
+			// basics on object vs. aggregate
+			{
+				Reassignable<ConstCtorStruct> s2 = std::move(s1);
+				Reassignable<ConstAggregate>  a2 = std::move(a1);
+				ASSERT_EQ (1, s2->id);
+				ASSERT_EQ (3, a2->id);
+				ASSERT_EQ (1.1, *s2->payload);
+				ASSERT_EQ (1.3, *a2->payload);
 
-			Reassignable<ConstStruct> s4 { InvokeFactory, getStruct };
-			s2.AcceptRvo(getStruct);
-			ASSERT_EQ (4,	s4->id);
-			ASSERT_EQ (4.4,	*s4->payload);
-			ASSERT_EQ (4,	s2->id);
-			ASSERT_EQ (4.4,	*s2->payload);
+				s1 = { 3, 3.3 };
+				ASSERT_EQ (3, s1->id);
+				ASSERT_EQ (3.3, *s1->payload);
 
-			Reassignable<ConstStruct&> r1 { ForwardParams, *s1 };
-			ASSERT_EQ (3.3, *r1->payload);
-		 // r1.Reconstruct(5, 5.5);			// CTE
-			r1 = so;
-			ASSERT_EQ (2.2, *r1->payload);
+				a0 = { 4, std::make_unique<double>(4.4) };
+				a1 = { 5 };
+				ASSERT_EQ (4, a0->id);
+				ASSERT_EQ (4.4, *a0->payload);
+				ASSERT_EQ (5, a1->id);
+				ASSERT_EQ (nullptr, a1->payload);		// value-initialized
 
-			// But if assignment is available, it should be used!
-			std::vector<int> nums1 { 1, 2, 3, 4, 5 };
-			std::vector<int> nums2 { 1, 2, 3, 4 };
-			std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+				ConstCtorStruct so = s2.PassValue();
+				ConstAggregate  ao = *move(a2);
+				ASSERT_EQ (1,	so.id);
+				ASSERT_EQ (3,	ao.id);
+				ASSERT_EQ (1.1,	*so.payload);
+				ASSERT_EQ (1.3,	*ao.payload);
+				ASSERT_EQ (nullptr, s2->payload);		// moved
+				ASSERT_EQ (nullptr, a2->payload);		// moved
 
-			Reassignable<std::vector<int>> v1 { ForwardParams, nums1 };
+			 //	s2 = so;								//
+			 //	a2 = ao;								// CTE: non-copyable
+				s2 = move(so);
+				a2 = move(ao);
+				ASSERT_EQ (1,	s2->id);
+				ASSERT_EQ (3,	a2->id);
+				ASSERT_EQ (1.1,	*s2->payload);
+				ASSERT_EQ (1.3,	*a2->payload);
+			}
 
-			NO_MORE_HEAP;
+			// prefer copy/move ctor call even when ambiguous for aggregates
+			{
+				struct Convertible;
 
-			Reassignable<std::vector<int>> v2 { ForwardParams, std::move(nums1) };
-			ASSERT_EQ (5, v2->size());
-			ASSERT_EQ (5, v1->size());
+				struct Ambig {
+					const Convertible& ref;
+					int x;
+				};
 
-			v2 = nums2;
-			v1 = v2;
-			ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
-			ASSERT_EQ (4, v1->size());
+				struct Convertible {
+					int x;
+					operator Ambig() const & { return Ambig { *this, x }; }
+				};
 
-			v2 = std::move(nums3);		// size increased, but move -> no realloc
-			ASSERT_EQ (6, v2->size());
+				Convertible content { 5 };
 
-			v1 = std::move(v2);
-			ASSERT_EQ (6, v1->size());
+				// language rules
+				{
+					Ambig amb1 { content };
+					Ambig amb2 (content);
+					ASSERT_EQ (0, amb1.x);
+					ASSERT_EQ (5, amb2.x);
+				}
+
+				// Reassignable: prefer ctor!
+				{
+					Reassignable<Ambig> amb1 { content };
+					Reassignable<Ambig> amb2 (content);		// ofc. outer format does not matter due to delegation
+					ASSERT_EQ (5, amb1->x);
+					ASSERT_EQ (5, amb2->x);
+				}
+
+				// Reassignable: force braced-init
+				{
+					Reassignable<Ambig> amb { ConstructBraced, content };
+					ASSERT_EQ (0, amb->x);
+				}
+			}
+
+			// RVO placement; references
+			{
+				Reassignable<ConstCtorStruct> s4 { InvokeFactory, getCtorStruct };
+				ASSERT_EQ (4, s4->id);
+				ASSERT_EQ (4.4, *s4->payload);
+
+				Reassignable<ConstCtorStruct&> r1 { *s1 };
+				ASSERT_EQ (3.3, *r1->payload);
+				r1 = s4;						// converting op=
+				ASSERT_EQ (4.4, *r1->payload);
+				ASSERT_EQ (3.3, *s1->payload);
+
+			 //	r1 = { 5, 5.5 };		// CTE
+				r1 = *s1;
+				ASSERT_EQ (3.3, *r1->payload);
+				ASSERT_EQ (4.4, *s4->payload);
+			}
+
+			// If assignment is available, it should be used!
+			{
+				std::vector<int> nums1 { 1, 2, 3, 4, 5 };
+				std::vector<int> nums2 { 1, 2, 3, 4 };
+				std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+
+				Reassignable<std::vector<int>> v1 { nums1 };
+
+				NO_MORE_HEAP;
+
+				Reassignable<std::vector<int>> v2 { std::move(nums1) };
+				ASSERT_EQ (5, v2->size());
+				ASSERT_EQ (5, v1->size());
+
+				v2 = nums2;
+				v1 = v2;
+				ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
+				ASSERT_EQ (4, v1->size());
+
+				v2 = std::move(nums3);		// size increased, but move -> no realloc
+				ASSERT_EQ (6, v2->size());
+
+				v1 = std::move(v2);
+				ASSERT_EQ (6, v1->size());
+			}
 
 			static_assert (!std::is_default_constructible<Reassignable<int>>(), "Should be forbidden.");
 		}
 
 		// Deferred
 		{
-			Deferred<ConstStruct> s;
-			ASSERT (!s.IsInitialized());
+			// Basics
+			{
+				DeferredReplaceable<ConstCtorStruct>	s;
+				Deferred<ConstCtorStruct>				s2;
+				ASSERT (!s.IsInitialized());
+				ASSERT (!s2.IsInitialized());
 
-			static_assert (is_same<ConstStruct&,  decltype(*s)>(),			  "type check");
-			static_assert (is_same<ConstStruct&&, decltype(*std::move(s))>(), "type check");
+				static_assert (is_same<ConstCtorStruct&,  decltype(*s)>(),			  "type check");
+				static_assert (is_same<ConstCtorStruct&&, decltype(*std::move(s))>(), "type check");
 
-			s = ConstStruct { 1, 1.1 };
-			ASSERT (s.IsInitialized());
-			ASSERT_EQ (1,	s->id);
-			ASSERT_EQ (1.1,	*s->payload);
+				s = ConstCtorStruct { 1, 1.1 };
+				ASSERT (s.IsInitialized());
+				ASSERT_EQ (1,	s->id);
+				ASSERT_EQ (1.1,	*s->payload);
 
-			s.AcceptRvo(getStruct);
-			ASSERT_EQ (4,	s->id);
-			ASSERT_EQ (4.4,	*s->payload);
+				s.AcceptRvo(getCtorStruct);
+				ASSERT_EQ (4,	s->id);
+				ASSERT_EQ (4.4,	*s->payload);
 
-			ConstStruct so = s.PassValue();
-			ASSERT_EQ (4,	so.id);
-			ASSERT_EQ (4.4,	*so.payload);
-			ASSERT (s.IsInitialized());		// only moved!
+				s2 = *std::move(s);
+				ASSERT (s2.IsInitialized());
+				ASSERT_EQ (4,	s2->id);
+				ASSERT_EQ (4.4,	*s2->payload);
+
+				ConstCtorStruct so = s2.PassValue();
+				ASSERT_EQ (4,	so.id);
+				ASSERT_EQ (4.4,	*so.payload);
+
+				ASSERT (s.IsInitialized());			// only moved!
+				ASSERT (s2.IsInitialized());		//
+			}
+
+			// ctor object vs. aggregate
+			{
+				DeferredReplaceable<ConstCtorStruct> s1;
+				DeferredReplaceable<ConstAggregate>  a1;
+				DeferredReplaceable<ConstAggregate>  a0;
+
+				s1.Reconstruct(1, 1.1);
+				a1.Reconstruct(3, std::make_unique<double>(1.3));	// works because of fallback to {}
+				a0.ReconstructAggregate(5);							// force use {}, value-init omitted field of aggregate
+				ASSERT_EQ (1, s1->id);
+				ASSERT_EQ (3, a1->id);
+				ASSERT_EQ (5, a0->id);
+				ASSERT_EQ (1.1, *s1->payload);
+				ASSERT_EQ (1.3, *a1->payload);
+				ASSERT_EQ (nullptr, a0->payload);					// value-initialized
+
+				s1.Reconstruct(3, 3.3);
+				a0.Reconstruct(4, std::make_unique<double>(4.4));
+				a1.ReconstructAggregate(5);
+				ASSERT_EQ (3, s1->id);
+				ASSERT_EQ (4, a0->id);
+				ASSERT_EQ (5, a1->id);
+				ASSERT_EQ (3.3, *s1->payload);
+				ASSERT_EQ (4.4, *a0->payload);
+				ASSERT_EQ (nullptr, a1->payload);					// value-initialized
+
+				ConstCtorStruct so = s1.PassValue();
+				ConstAggregate  ao = a0.PassValue();
+				ASSERT_EQ (3,	so.id);
+				ASSERT_EQ (4,	ao.id);
+				ASSERT_EQ (3.3,	*so.payload);
+				ASSERT_EQ (4.4,	*ao.payload);
+				ASSERT_EQ (nullptr, s1->payload);					// moved
+				ASSERT_EQ (nullptr, a0->payload);					// moved
+
+				s1.AcceptRvo(getCtorStruct);
+				a1.AcceptRvo(getStruct);
+				ASSERT_EQ (4,	s1->id);
+				ASSERT_EQ (4,	a1->id);
+				ASSERT_EQ (4.4,	*s1->payload);
+				ASSERT_EQ (4.4,	*a1->payload);
+			}
+
+			// Containers' braced vs. parenthesized construction
+			{
+				Deferred<std::vector<unsigned>> v1;
+				Deferred<std::vector<unsigned>> v2;
+
+				v1.Reconstruct(5u, 42u);
+				v2.ReconstructAggregate(5u, 42u);
+
+				ASSERT (v1.IsInitialized() && v2.IsInitialized());
+				ASSERT_EQ (5, v1->size());
+				ASSERT_EQ (2, v2->size());
+				ASSERT_EQ (42, v1->front());
+				ASSERT_EQ (5, v2->front());
+			}
+
+			// RVO placement; references
+			{
+				DeferredReplaceable<ConstCtorStruct> val;
+				val.AcceptRvo(getCtorStruct);
+				ASSERT_EQ (4,   val->id);
+				ASSERT_EQ (4.4, *val->payload);
+
+				DeferredReplaceable<ConstCtorStruct&> ref;
+				ref = *val;
+				ASSERT_EQ (4,   ref->id);
+				ASSERT_EQ (4.4, *ref->payload);
+
+				val.AcceptRvo([]() { return ConstCtorStruct { 5, 5.5 }; });
+				ASSERT_EQ (5,   val->id);
+				ASSERT_EQ (5.5, *val->payload);
+				ASSERT_EQ (5,   ref->id);
+				ASSERT_EQ (5.5, *ref->payload);
+
+				ConstCtorStruct plain { 6, 6.6 };
+				ref = plain;
+				ASSERT_EQ (6,   ref->id);
+				ASSERT_EQ (6.6, *ref->payload);
+				ASSERT_EQ (5,   val->id);
+				ASSERT_EQ (5.5, *val->payload);
+
+			  // ref.Reconstruct(5, 5.5);		// CTE
+				ref.Reconstruct(*val);
+				ASSERT_EQ (5,   ref->id);
+				ASSERT_EQ (5.5, *ref->payload);
+				ASSERT_EQ (6,   plain.id);
+				ASSERT_EQ (6.6, *plain.payload);
+			}
 
 			// Same checks for assignment as for Reassignable
-			std::vector<int> nums1 { 1, 2, 3, 4, 5 };
-			std::vector<int> nums2 { 1, 2, 3, 4 };
-			std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
+			{
+				std::vector<int> nums1 { 1, 2, 3, 4, 5 };
+				std::vector<int> nums2 { 1, 2, 3, 4 };
+				std::vector<int> nums3 { 1, 2, 3, 4, 5, 6 };
 
-			Deferred<std::vector<int>> v1;
-			v1 = nums1;
+				DeferredReplaceable<std::vector<int>> v1;
+				v1 = nums1;
 
-			NO_MORE_HEAP;
+				NO_MORE_HEAP;
 
-			Deferred<std::vector<int>> v2;
-			v2 = std::move(nums1);
+				DeferredReplaceable<std::vector<int>> v2;
+				v2 = std::move(nums1);
 
-			ASSERT_EQ (5, v2->size());
-			ASSERT_EQ (5, v1->size());
+				ASSERT_EQ (5, v2->size());
+				ASSERT_EQ (5, v1->size());
 
-			v2 = nums2;
-			v1 = v2;
-			ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
-			ASSERT_EQ (4, v1->size());
+				v2 = nums2;
+				v1 = *v2;
+				ASSERT_EQ (4, v2->size());	// size reduced -> no realloc, just copy
+				ASSERT_EQ (4, v1->size());
 
-			v2 = std::move(nums3);		// size increased, but move -> no realloc
-			ASSERT_EQ (6, v2->size());
+				v2 = std::move(nums3);		// size increased, but move -> no realloc
+				ASSERT_EQ (6, v2->size());
 
-			v1 = std::move(v2);
-			ASSERT_EQ (6, v1->size());
+				v1 = *std::move(v2);
+				ASSERT_EQ (6, v1->size());
+			}
 		}
 	}
 
@@ -990,7 +1424,7 @@ namespace EnumerableTests {
 
 
 		// 4. further tests from CompatResultT
-		
+
 		// incompatibles
 		static_assert (is_same< void,				CompatComparisonBaseT<int,		double *	>>(),	"Err");
 		static_assert (is_same< void,				CompatComparisonBaseT<double *,	int			>>(),	"Err");
@@ -1016,10 +1450,10 @@ namespace EnumerableTests {
 		static_assert (is_same< int[],				CompatComparisonBaseT<int [] ,			int []	>>(), "Err");
 	}
 
-	
-	
+
+
 	namespace TestDeepConst {		// static test
-		
+
 		// Result is "Deep-only const", top-level is left intact, easy to qualify manually
 		static_assert (is_same< int,				DeepConstT<int>				  >(),	"Err");
 		static_assert (is_same< int	const,			DeepConstT<int const>		  >(),	"Err");
@@ -1091,7 +1525,7 @@ namespace EnumerableTests {
 		static_assert (is_same< int	const	  [][4],	DeepConstT<int			 [][4]>	 >(),	"Err");
 		static_assert (is_same< int	const (&) [][4],	DeepConstT<int (&)		 [][4]>	 >(),	"Err");
 		static_assert (is_same< int	const (&) [][4],	DeepConstT<int const (&) [][4]>	 >(),	"Err");
-		
+
 		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int			(*)	[4]>   >(),	"Err");
 		static_assert (is_same< int	const		   (*) [4],		DeepConstT<int const	(*) [4]>   >(),	"Err");
 		static_assert (is_same< int	const volatile (*) [4],		DeepConstT<int volatile (*) [4]>   >(),	"Err");
@@ -1114,30 +1548,43 @@ namespace EnumerableTests {
 
 		using V2   = Vector2D<double>;
 		using Plus = decltype(&V2::operator+);
+		using FldX = decltype(&V2::x);
 
-		static_assert (IsCallableMember<V2,		   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2>::value,	"Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2,			Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2*&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2*&,	Plus, V2>::value,	"Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2>::value,	"Error");
 
-		static_assert (IsCallableMember<V2,		   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2&>::value, "Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2,			Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2&>::value, "Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2&>::value, "Error");
 
-		static_assert (IsCallableMember<V2,		   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2*,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2&,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<V2&&,	   Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2,  Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2*, Plus, V2&&>::value, "Error");
-		static_assert (IsCallableMember<const V2&, Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2,			Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2*,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<V2&&,		Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2,	Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2*,	Plus, V2&&>::value, "Error");
+		static_assert (IsCallableMember<const V2&,	Plus, V2&&>::value, "Error");
+
+		static_assert (IsCallableMember<V2,			FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2*,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2*&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<V2&&,		FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2*,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2*&,	FldX>::value,	"Error");
+		static_assert (IsCallableMember<const V2&,	FldX>::value,	"Error");
 
 		// ----
 
@@ -1156,6 +1603,36 @@ namespace EnumerableTests {
 		static_assert (!IsCallableMember<const V2,	Plus, int>::value,	"Error");
 		static_assert (!IsCallableMember<const V2*,	Plus, int>::value,	"Error");
 		static_assert (!IsCallableMember<const V2&,	Plus, int>::value,	"Error");
+
+		static_assert (!IsCallableMember<V2,		Plus>::value,		"Error");
+		static_assert (!IsCallableMember<V2&,		Plus>::value,		"Error");
+		static_assert (!IsCallableMember<const V2&,	Plus>::value,		"Error");
+
+		static_assert (!IsCallableMember<V2,		FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	FldX, V2>::value,	"Error");
+		static_assert (!IsCallableMember<V2,		FldX, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<V2&,		FldX, V2*>::value,	"Error");
+		static_assert (!IsCallableMember<const V2&,	FldX, V2*>::value,	"Error");
+
+		// --------
+
+		struct LeftCallable  { bool operator()(int&) &;				};
+		struct ConstCallable { bool operator()(const int&) const;	};
+
+		static_assert (is_same<bool, InvokeResultT<LeftCallable&, int& >>(), "Error");
+	//	static_assert (is_same<bool, InvokeResultT<LeftCallable,  int& >>(),		"Error");		//
+	//	static_assert (is_same<bool, InvokeResultT<const LeftCallable&, int& >>(),	"Error");		// should be Error
+	//	static_assert (is_same<bool, InvokeResultT<LeftCallable&, const int >>(),	"Error");		//
+		static_assert (is_same<bool, InvokeResultT<ConstCallable,		 int		>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<ConstCallable&,		 int&		>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<const ConstCallable,	 const int&	>>(), "Error");
+		static_assert (is_same<bool, InvokeResultT<const ConstCallable&, int		>>(), "Error");
+
+		static_assert (is_same<V2, InvokeResultT<Plus, V2,		  V2		>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, V2&&,	  V2&&		>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, const V2,  const V2	>>(), "Error");
+		static_assert (is_same<V2, InvokeResultT<Plus, const V2&, const V2&	>>(), "Error");
 
 	}
 
@@ -1224,7 +1701,7 @@ namespace EnumerableTests {
 		static_assert (is_same<tuple<unsigned, char, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 1, char>>(), "Err");
 		static_assert (is_same<tuple<unsigned, int, char>,		OverriddenNthArgT<tuple<unsigned, int, double>, 2, char>>(), "Err");
 		static_assert (is_same<tuple<unsigned, int, double>,	OverriddenNthArgT<tuple<unsigned, int, double>, 2, None>>(), "Err");
-		
+
 	 // Friendly assertions (CTE):
 	 //	using Bad1 = OverriddenNthArgT<tuple<unsigned, int, double>, 3, char>;
 	 //	using Bad2 = OverriddenNthArgT<tuple<>, 0, char>;
@@ -1321,7 +1798,7 @@ namespace EnumerableTests {
 		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*>>(), "Err");
 		static_assert (is_same<std::vector<const int*>,								  AdjustedContainerT<ListOperations, const int*, std::allocator<const int*>>>(), "Err");
 		static_assert (is_same<std::vector<const int*, TestAllocator<const int*, 4>>, AdjustedContainerT<ListOperations, const int*, TestAllocator<const int*, 4>>>(), "Err");
-		
+
 		// default allocator will be correct ofc.
 		static_assert (is_same<std::vector<RefHolder<int>>,							 AdjustedContainerT<ListOperations, RefHolder<int>>>(), "Err");
 
@@ -1341,6 +1818,7 @@ namespace EnumerableTests {
 		AllocationCounter::EnableAsserts = true;
 
 		TestOverloadResolver();
+		TestLambdaWrappers();
 		TestGenStorage();
 	}
 

@@ -142,7 +142,7 @@ namespace Enumerables {
 			if (HasValue())
 				return;
 
-			ENUMERABLES_CLIENT_BREAK(ReasonOfMissText());
+			ENUMERABLES_CLIENT_BREAK (ReasonOfMissText());
 			throw LogicException(ReasonOfMissText());
 		}
 
@@ -152,12 +152,13 @@ namespace Enumerables {
 
 	public:
 		template <class... Args>
-		requires TypeHelpers::BraceConstructible<T, Args...>
-		OptResult(Args&&... args)	: storage { TypeHelpers::ForwardParams, std::forward<Args>(args)... }
+		requires TypeHelpers::IsConstructibleAnyway<T, Args...>
+		OptResult(Args&&... args)
 		{
+			storage.ConstructParensPreferred(std::forward<Args>(args)...);
 		}
 
-		OptResult(StopReason code)	: error	  { code }
+		OptResult(StopReason code) : error { code }
 		{
 			ENUMERABLES_INTERNAL_ASSERT (code != StopReason::None);
 		}
@@ -172,13 +173,15 @@ namespace Enumerables {
 		}
 
 
-		OptResult(OptResult&& src)		: error { src.error }
+		OptResult(OptResult&& src)		noexcept(std::is_nothrow_move_constructible_v<T>)
+			: error { src.error }
 		{
 			if (src.HasValue())
 				storage.MoveFrom(src.storage);
 		}
 
-		OptResult(const OptResult& src)	: error { src.error }
+		OptResult(const OptResult& src)	noexcept(std::is_nothrow_copy_constructible_v<T>)
+			: error { src.error }
 		{
 			if (src.HasValue())
 				storage.CopyFrom(src.storage);
@@ -189,14 +192,14 @@ namespace Enumerables {
 		OptResult(OptResult<S>&& src)		: error { src.ReasonOfMiss() }
 		{
 			if (src.HasValue())
-				storage.Construct(src.Value());
+				storage.ConstructParens(src.Value());
 		}
 
 		template <class S>
 		OptResult(const OptResult<S>& src)	: error { src.ReasonOfMiss() }
 		{
 			if (src.HasValue())
-				storage.Construct(src.Value());
+				storage.ConstructParens(src.Value());
 		}
 
 		template <class S>
@@ -205,7 +208,7 @@ namespace Enumerables {
 		}
 
 
-		~OptResult()
+		~OptResult()  noexcept(std::is_nothrow_destructible_v<T>)
 		{
 			if (HasValue())
 				storage.Destroy();

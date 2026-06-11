@@ -9,6 +9,7 @@
 
 
 #include <type_traits>
+#include <iterator>
 
 
 
@@ -20,6 +21,7 @@ namespace Enumerables::TypeHelpers {
 	using std::decay_t;
 	using std::enable_if_t;
 	using std::conditional_t;
+	using std::remove_const_t;
 	using std::remove_pointer_t;
 	using std::remove_reference_t;
 	using std::void_t;
@@ -57,6 +59,11 @@ namespace Enumerables::TypeHelpers {
 	using std::is_scalar_v;
 	using std::is_class;
 	using std::is_class_v;
+	using std::is_nothrow_constructible_v;
+	using std::is_nothrow_destructible_v;
+	using std::is_nothrow_move_constructible_v;
+	using std::is_nothrow_copy_constructible_v;
+	using std::is_nothrow_assignable_v;
 
 
 
@@ -109,7 +116,7 @@ namespace Enumerables::TypeHelpers {
 	/// Any container-like entity, candidate to be wrapped by an Enumerable.
 	template <class C>
 	concept RangeIterable = requires (IteratorT<C>& begin, EndIteratorT<C>& end)
-	{ 
+	{
 		++begin;
 		* begin;
 		{ begin != end } -> std::convertible_to<bool>;
@@ -251,6 +258,20 @@ namespace Enumerables::TypeHelpers {
 
 
 
+	/// Reusable lambda-object to forward a known type.
+	template <class T>
+	struct Forwarder {
+		T&&  operator ()(T&& obj) const noexcept   { return move(obj); }
+		T&&  operator ()(T&  obj) const noexcept   { return move(obj); }
+	};
+	template <class T>
+	struct Forwarder<T&> {
+		T&   operator ()(T&&)     const noexcept   = delete;
+		T&   operator ()(T&  obj) const noexcept   { return obj; }
+	};
+
+
+
 	/// Implementation of DeepConstT.
 	template <class T>
 	struct DeepConst {
@@ -267,11 +288,11 @@ namespace Enumerables::TypeHelpers {
 	struct DeepConst<T* volatile>		{ using Type = std::add_const_t<typename DeepConst<T>::Type> * volatile; };
 	template <class T>
 	struct DeepConst<T&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T&&>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> &&; };
-	template <class T>		
+	template <class T>
 	struct DeepConst<T[]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> []; };
-	template <class T, size_t N>		
+	template <class T, size_t N>
 	struct DeepConst<T[N]>				{ using Type = std::add_const_t<typename DeepConst<T>::Type> [N]; };
 
 	/// Inject const under every pointed / referenced level. Top qualifiers left intact!
@@ -313,10 +334,23 @@ namespace Enumerables::TypeHelpers {
 	constexpr bool HaveRefcompatibleRoots = HasRefcompatibleRoot<T, U>
 										 || HasRefcompatibleRoot<U, T>;
 
-	
+
 	template <class T>
 	constexpr bool IsUnknownBoundArray = std::is_array_v<T> && std::extent_v<T> == 0;
 
+
+	/// Simplified, unchecked version of std::align.
+	template <class T>
+	void* AlignFor(void* trg)
+	{
+		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
+		size_t offs = miss ? alignof(T) - miss : 0u;
+		return static_cast<char*>(trg) + offs;
+	}
+
+
+
+	// ===== Conversion tools =========================================================================================
 
 	/// Graceful variant of std::commontype: falling back to void instead of substitution failure.
 	template <class T, class U, class = void>
@@ -326,7 +360,7 @@ namespace Enumerables::TypeHelpers {
 	template <class T, class U>
 	struct CommonOrVoid<T, U, void_t< std::common_type_t<T, U>,
 									  enable_if_t<!is_void_v<T> && !is_void_v<U>>,	// guard UB
-									  enable_if_t< !IsUnknownBoundArray<T> 
+									  enable_if_t< !IsUnknownBoundArray<T>
 												&& !IsUnknownBoundArray<U>>		 >> {
 		using Type = std::common_type_t<T, U>;
 	};
@@ -364,17 +398,6 @@ namespace Enumerables::TypeHelpers {
 											  || is_convertible_v<O, BaseT<T>> && !HaveRefcompatibleRoots<T, O>,
 												 BaseT<T>,
 								  void >>>;
-
-
-
-	/// Simplified, unchecked version of std::align.
-	template <class T>
-	void* AlignFor(void* trg)
-	{
-		size_t miss = reinterpret_cast<uintptr_t>(trg) % alignof(T);
-		size_t offs = miss ? alignof(T) - miss : 0u;
-		return static_cast<char*>(trg) + offs;
-	}
 
 
 
@@ -423,7 +446,7 @@ namespace Enumerables::TypeHelpers {
 		using Tail     = typename MapTypeList<TypeList<Ts...>, Mapping>::typeList;
 		using typeList = typename PrependType<Mapping<H>, Tail>::typeList;
 	};
-	
+
 
 	/// Implementation of BindChangingNthT / ChangedNthArgT.
 	template <template <class...> class Trg, template <class> class Change, unsigned n, class ProcessedList, class... OrigArgs>
@@ -501,23 +524,50 @@ namespace Enumerables::TypeHelpers {
 	};
 
 
+	/// A const l-value of Func is callable with the given Args.
+	template <class Func, class... Args>
+	using IsConstCallable = IsCallable<ConstValueT<Func>&, Args...>;
 
-	template <class T, class Mptr, class... Args>
+
+
+	/// Check for a callable member-function or addressable subobject.
+	/// @tparam Obj:	The owner type.
+	/// @tparam Mptr:	A pointer-to-member type.
+	/// @tparam Args:	Argumentent types [in case of a member-function].
+	template <class Obj, class Mptr, class... Args>
 	struct IsCallableMember {
 
-		template <class Obj = T, enable_if_t<!is_pointer_v<remove_reference_t<Obj>>, int> = 0>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<Mptr>()) (declval<Args>()...))>*)
+		// Possible function calls:
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
-		template <class Obj = T, enable_if_t<is_pointer_v<remove_reference_t<Obj>>, int> = 0>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<Mptr>()) (declval<Args>()...))>*)
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
 
+		// Possible member-access:
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()))>*)
+		{
+			return sizeof...(Args) == 0;
+		}
+
+		template <class M = Mptr>
+		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()))>*)
+		{
+			return sizeof...(Args) == 0;
+		}
+
+
+		// Fail:
 		static constexpr bool Check(...)
 		{
 			return false;
@@ -525,6 +575,74 @@ namespace Enumerables::TypeHelpers {
 
 		static constexpr bool value = Check(nullptr);
 	};
+
+
+
+	/// Implementation for DeclaredResult<F>.
+	template <class F, class = void>
+	struct ResolveDeclaredResult {
+		static constexpr bool isFound = false;
+	};
+
+	// Function object (lambda) -> check its operator(), if exact
+	template <class Obj>
+	struct ResolveDeclaredResult<Obj, std::void_t<decltype(&Obj::operator())>> {
+		using type = typename ResolveDeclaredResult<decltype(&Obj::operator())>::type;
+		static constexpr bool isFound = true;
+	};
+
+	// Member object types
+	template <class Data, class Obj>
+	struct ResolveDeclaredResult<Data Obj::*, void> {
+		using type = Data;
+		static constexpr bool isFound = true;
+	};
+
+	// Member function types (of common qualifier combinations)
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) const, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) const &, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) &, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class Obj, class... Params>
+	struct ResolveDeclaredResult<R (Obj::*)(Params...) &&, void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+
+	// Free function types (& omitted, used with BaseT!)
+	template <class R, class... Params>
+	struct ResolveDeclaredResult<R (Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+	template <class R, class... Params>
+	struct ResolveDeclaredResult<R (*)(Params...), void> {
+		using type = R;
+		static constexpr bool isFound = true;
+	};
+
+
+	/// Try to match the declared result type of an exact callable.
+	/// If ::isFound, result is provided as ::type.
+	/// @tparam F: [member-] function pointer or object with an exact operator() having a usual qualifier set
+	template <class F>
+	using DeclaredResult = ResolveDeclaredResult<BaseT<F>>;
 
 
 
@@ -548,12 +666,44 @@ namespace Enumerables::TypeHelpers {
 	template <class T, class... Args>
 	concept BraceConstructible = IsBraceConstructible<T, Args...>::value;
 
+	// NOTE: For MSVC v141 tolerates inline "noexcept(T { declval<Args...>() })" checks badly.
+	//		 (Seems to instantiate default-ctor calls where we don't have SFINAE against that.)
+	template <class T, class... Args>
+	struct IsNothrowBraceConstructible {
+
+		// Even here, the expression can't be present in the parameter list!
+		template <class TT = T, class = decltype(TT { declval<Args>()... })>
+		constexpr static bool Check(TT* = nullptr)
+		{
+			return noexcept(TT { declval<Args>()... });
+		}
+
+		constexpr static bool Check(...)
+		{
+			return false;
+		}
+
+		constexpr static bool value = Check(nullptr);
+	};
+
+
 
 	/// Constructible either via {} as a struct, or possibly narrowing via ().
 	template <class T, class... Args>
 	constexpr bool IsConstructibleAnyway = IsBraceConstructible<T, Args...>::value
 										|| is_constructible_v<T, Args...>;
 
+
+	/// Destruction + in-place (parenthesized) recreation from Args... is noexcept.
+	template <class T, class... Args>
+	constexpr bool IsNothrowReconstructible =  is_nothrow_destructible_v<T>
+											&& is_nothrow_constructible_v<T, Args...>;
+
+	/// Assignment to l-value of T, or as fallback the recreation as T(S) is noexcept.
+	template <class T, class S>
+	constexpr bool IsNothrowReassignable = IsHeadAssignable<T, S>
+											? is_nothrow_assignable_v<T&, S>
+											: IsNothrowReconstructible<T, S>;
 
 
 	/// Checks wether T has operator +=
@@ -579,7 +729,10 @@ namespace Enumerables::TypeHelpers {
 	// ===== Enable_if shorthands =====================================================================================
 
 	template <class T, class S = T>
-	using IfNonvoidVal	= enable_if_t<std::is_object_v<T>, S>;
+	using IfNonvoid = enable_if_t<!is_void_v<T>, S>;
+
+	template <class T, class S = T>
+	using IfNonvoidValue = enable_if_t<std::is_object_v<T>, S>;
 
 	template <class T>
 	concept NonvoidValue = std::is_object_v<T>;
@@ -587,8 +740,15 @@ namespace Enumerables::TypeHelpers {
 	template <class T>
 	concept NonScalar = !is_scalar_v<T>;
 
+	template <class T>
+	concept Scalar = is_scalar_v<T>;
+
+	// To avoid potential narrowing
+	template <class F, class T>
+	concept NotScalarConversion = !Scalar<F> || !Scalar<T>;
+
 	template <class T, class S = T>
-	using IfPRValue	  = enable_if_t<!is_reference_v<T>, S>;
+	using IfPRValue = enable_if_t<!is_reference_v<T>, S>;
 
 	template <class T, class S = T>
 	using IfReference = enable_if_t<is_reference_v<T>, S>;

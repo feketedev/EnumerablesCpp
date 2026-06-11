@@ -29,11 +29,11 @@ namespace Enumerables::Def {
 
 	/// Result of Mapper function supplied with a V input.
 	template <class V, class Mapper>
-	using MappedT	= decltype(declval<Mapper>() (declval<V>()));
+	using MappedT	= decltype(declval<const Mapper&>() (declval<V>()));
 
 	/// Result of 2 param Mapper function supplied with a (V1, V2) input.
 	template <class V1, class V2, class Combiner>
-	using CombinedT	= decltype(declval<Combiner>() (declval<V1>(), declval<V2>()));
+	using CombinedT	= decltype(declval<const Combiner&>() (declval<V1>(), declval<V2>()));
 
 
 
@@ -239,12 +239,11 @@ namespace Enumerables::Def {
 		}
 
 
-		template <class Factory>
-		void* InlineTarget()
+		template <class Et>
+		void* InlineTargetFor()
 		{
-			using Etor = InvokeResultT<Factory>;
-			void* aligned = AlignFor<Etor>(fixBuffer);
-			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Etor));
+			void* aligned = AlignFor<Et>(fixBuffer);
+			ENUMERABLES_INTERNAL_ASSERT (fixBuffer + sizeof(fixBuffer) >= reinterpret_cast<char*>(aligned) + sizeof(Et));
 			return aligned;
 		}
 
@@ -258,11 +257,6 @@ namespace Enumerables::Def {
 			size_t slack = (req <= buffAlign) ? 0 : req - buffAlign;
 			return slack + sizeof(Et) <= sizeof(fixBuffer);
 		}
-#	else
-		bool					IsOnHeap() const	{ return true; }
-
-		template <class Nested>
-		static constexpr bool	SureFitsInline()	{ return false; }
 #	endif
 
 	public:
@@ -274,6 +268,7 @@ namespace Enumerables::Def {
 		IEnumerator<T>&			WrappedInterface()		{ return *ptr; }
 
 
+#	if ENUMERABLES_INTERFACED_ETOR_INLINE_SIZE > 0
 		~InterfacedEnumerator() override
 		{
 			if (IsOnHeap())
@@ -288,11 +283,30 @@ namespace Enumerables::Def {
 		template <class NestedFactory>
 		InterfacedEnumerator(NestedFactory&& fact)
 		{
-			if constexpr (SureFitsInline<InvokeResultT<NestedFactory>>())
-				ptr = (new (InlineTarget<NestedFactory>()) RvoEmplacer<NestedFactory> { fact })->GetPtr();
+			using Etor = InvokeResultT<NestedFactory>;
+
+			// c++17 provides move-elision even with new-expressions!
+			// (still no need for move ctors)
+			if constexpr (SureFitsInline<Etor>())
+				ptr = new (InlineTargetFor<Etor>()) Etor { fact() };
 			else
-				ptr = new InvokeResultT<NestedFactory> { fact() };
+				ptr = new Etor { fact() };
 		}
+
+#	else
+
+		~InterfacedEnumerator() override
+		{
+			delete ptr;
+			ptr = nullptr;
+		}
+
+
+		template <class NestedFactory>
+		InterfacedEnumerator(NestedFactory&& fact) : ptr { new InvokeResultT<NestedFactory> { fact() } }
+		{
+		}
+#	endif
 	};
 
 }	// namespace Enumerables::Def
@@ -326,7 +340,7 @@ namespace Enumerables::Def {
 		void			operator ++()	{ hasCurrent = enumerator.FetchNext(); }
 
 		bool operator !=(EnumeratorAdapterEnd) const
-		{ 
+		{
 			return hasCurrent;
 		}
 
@@ -357,7 +371,7 @@ namespace Enumerables::Def {
 	///		  CachingEnumerator<ListOperations::Container<T>>
 	///		have different RTTI.
 	template <class Cache>
-	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {	
+	class CachingEnumerator : public IEnumerator<RestorableT<IterableT<Cache&>>> {
 
 		struct State {
 			Cache					results;
@@ -397,7 +411,7 @@ namespace Enumerables::Def {
 		{
 			if (fetchState.IsInitialized() && fetchState->HasMore())
 				++fetchState->current;
-			else
+			else if (!fetchState.IsInitialized())
 				fetchState.Reconstruct(*this);
 
 			return fetchState->HasMore();
@@ -532,16 +546,14 @@ namespace Enumerables::Def {
 
 
 
-	/// Repeats a single value indefinitely.
-	template <class V, class Result = void>
-	class RepeaterEnumerator : public IEnumerator<OverrideT<Result, V>> {
+	/// Repeats a single value indefinitely, through a possible return-conversion.
+	template <class V, class Result>
+	class RepeaterEnumerator : public IEnumerator<Result> {
 		const V&	value;
 
 	public:
-		using typename RepeaterEnumerator::IEnumerator::TElem;
-
 		bool		FetchNext()	      override	{ return true; }
-		TElem		Current()	      override	{ return value; }
+		Result		Current()	      override	{ return value; }
 		SizeInfo	Measure()	const override	{ return Boundedness::Unbounded; }
 
 		RepeaterEnumerator(const V& val) : value { val } {}
@@ -550,11 +562,28 @@ namespace Enumerables::Def {
 
 
 	/// Generates infinite (unchecked) sequence. Requires termination from outside.
-	template <class V, class Stepper, class Result = void>
-	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, V>> {
-		Reassignable<V>  curr;
-		const Stepper&	 step;
-		bool			 firstFetched = false;
+	template <class Acc, class Stepper, class Result = void>
+	class SequenceEnumerator final : public IEnumerator<InterimElemAccessT<Result, Acc>> {
+
+		static_assert (IsConstCallable<Stepper, Acc&>::value,
+					   "Supplied step function is not callable on the Accumulator type.");
+
+		static constexpr bool StepByMutate = is_void_v<MappedT<Acc&, Stepper>>;
+
+		using AccStore = conditional_t<StepByMutate, Acc, Reassignable<Acc>>;
+
+		AccStore		curr;
+		const Stepper&	step;
+		bool			firstFetched = false;
+
+
+		// Chose operation depending on StepByMutate
+		// CONSIDER: Still a move-conversion (requires movable). To avoid it, some alternating storage would be necessary.
+		template <class PAcc>
+		void ApplyStep(Reassignable<PAcc>& acc)	{ acc = step(*acc); }
+
+		template <class PAcc>
+		void ApplyStep(PAcc& acc)				{ step(acc); }
 
 	public:
 		using typename SequenceEnumerator::IEnumerator::TElem;
@@ -562,7 +591,8 @@ namespace Enumerables::Def {
 		TElem	Current()	override
 		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (firstFetched, MissedFetchError);
-			return curr;
+			const Acc& val = curr;		// unwrap if Reassignable
+			return val;
 		}
 
 
@@ -572,17 +602,18 @@ namespace Enumerables::Def {
 			//			 e.g. curr2.AcceptRvo([this]() -> decltype(auto) { return step(*curr); });
 			//			 Check also: ScannerBase
 
-			if (firstFetched)
-				curr = step(*curr);
-			else
-				firstFetched = true;
-
-			return true;
+			if (firstFetched) {
+				ApplyStep(curr);
+				return true;
+			}
+			return firstFetched = true;
 		}
 
 		SizeInfo  Measure()	const override	{ return Boundedness::Unbounded; }
 
-		SequenceEnumerator(const V& start, const Stepper& step) : curr { ForwardParams, start }, step { step }  {}
+
+		template <class Seed>
+		SequenceEnumerator(/*const*/ Seed&& start, const Stepper& step) : curr(start), step { step }  {}
 	};
 
 	#pragma endregion
@@ -690,9 +721,9 @@ namespace Enumerables::Def {
 
 	template <class T, class S = T>
 	struct CoPromise {
-		Deferred<S>			current;
-		std::exception_ptr	exception;
-		bool				ended	 = false;
+		DeferredReplaceable<S>	current;
+		std::exception_ptr		exception;
+		bool					ended	 = false;
 
 		CoEnumerator<T, S>	  get_return_object()	noexcept;
 
@@ -724,7 +755,7 @@ namespace Enumerables::Def {
 			exception = std::current_exception();
 		}
 	};
-	
+
 
 
 	/// Enumerator and return object for basic coroutine operations.
@@ -752,23 +783,23 @@ namespace Enumerables::Def {
 
 			if (!Promise().exception)	[[likely]]
 				return !Promise().ended;
-			
+
 			std::rethrow_exception(Promise().exception);
 		}
 
 
 		T		Current()	      override
-		{ 
+		{
 			ENUMERABLES_ETOR_USAGE_ASSERT (Promise().current.IsInitialized(), NotFetchedError);
 			ENUMERABLES_ETOR_USAGE_ASSERT (!Promise().ended,				  DepletedError);
 
-			return *Promise().current; 
+			return *Promise().current;
 		}
 
 
-		SizeInfo Measure()	const override	
-		{ 
-			return { Boundedness::Unknown }; 
+		SizeInfo Measure()	const override
+		{
+			return { Boundedness::Unknown };
 		}
 
 
@@ -778,7 +809,7 @@ namespace Enumerables::Def {
 
 		~CoEnumerator() override
 		{
-			handle.destroy(); 
+			handle.destroy();
 		}
 	};
 
@@ -909,7 +940,7 @@ namespace Enumerables::Def {
 
 		SizeInfo	Measure() const override
 		{
-			return source.Measure().Filtered(mode != FilterMode::SkipUntil); 
+			return source.Measure().Filtered(mode != FilterMode::SkipUntil);
 		}
 
 
@@ -919,13 +950,13 @@ namespace Enumerables::Def {
 	};
 
 
-	
+
 	// for cases when the operand can't be readily captured as a SetType<T>
 	template <class Source, class OpSource, class... SetOptions>
 	class SetFilterEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 	public:
 		using typename SetFilterEnumerator::IEnumerator::TElem;
-	
+
 	private:
 		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
 		using Op = DecayIfScalarT<EnumeratedT<OpSource>>;
@@ -1073,8 +1104,8 @@ namespace Enumerables::Def {
 
 	public:
 		static_assert (is_pointer<typename Source::TElem>() || is_reference<typename Source::TElem>(),
-					   "Only pointer or reference elements can hide a different dynamic type!");
-		
+					   "Only pointer or reference elements can hide a different dynamic type!"		 );
+
 		static_assert (is_pointer<TWanted>() || is_reference<TWanted>(),
 					   "Please specify the desired pointer or reference type exactly for readability.");
 
@@ -1095,7 +1126,7 @@ namespace Enumerables::Def {
 		}
 
 		SizeInfo Measure()	const override
-		{ 
+		{
 			return source.Measure().Filtered();
 		}
 
@@ -1177,7 +1208,7 @@ namespace Enumerables::Def {
 		MapperEnumerator(Factory&& getSource, const Mapper& map) : source { getSource() }, map { map }  {}
 	};
 
-	
+
 
 	template <class Source>
 	class IndexerEnumerator final : public IEnumerator<Indexed<EnumeratedT<Source>>> {
@@ -1205,37 +1236,37 @@ namespace Enumerables::Def {
 	// NOTE: Could be replaced with ScannerEnumerator  -  Acc = (curr, prev * curr),
 	//		 But:  for Current() TElem would need to be copyable.
 	template <class Source, class Combiner>
-	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {		
+	class CombinerEnumerator final : public IEnumerator<CombinedT<EnumeratedT<Source>, EnumeratedT<Source>, Combiner>> {
 		using V = EnumeratedT<Source>;
 
-		Source				source;
-		const Combiner&		binop;
-		Deferred<V>			prev;
-		bool				nextFetched = false;
+		Source					source;
+		const Combiner&			binop;
+		DeferredReplaceable<V>	prev;
+		bool					hasCurrent = false;
 
 	public:
 		using typename CombinerEnumerator::IEnumerator::TElem;
 
 		bool	FetchNext()	override
 		{
-			if (nextFetched) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+			if (hasCurrent) {
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
 			if (!prev.IsInitialized() && source.FetchNext()) {
-				prev.AssignCurrent(source);
-				return nextFetched = source.FetchNext();
+				prev.AcceptCurrent(source);
+				return hasCurrent = source.FetchNext();
 			}
 
-			ENUMERABLES_INTERNAL_ASSERT (!nextFetched);
+			ENUMERABLES_INTERNAL_ASSERT (!hasCurrent);
 			return false;
 		}
 
 
 		TElem	Current()	override
 		{
-			ENUMERABLES_ETOR_USAGE_ASSERT (nextFetched, NotFetchedError);
+			ENUMERABLES_ETOR_USAGE_ASSERT (hasCurrent, NotFetchedError);
 
 			return binop(*prev, source.Current());
 		}
@@ -1281,7 +1312,7 @@ namespace Enumerables::Def {
 
 
 	#pragma region Concatenations
-	
+
 	template <class Source, class ContinuationSource>
 	class ConcatEnumerator final : public IEnumerator<EnumeratedT<Source>> {
 		static_assert (is_convertible<EnumeratedT<ContinuationSource>, EnumeratedT<Source>>(), "Concat: Incompatible continuation.");
@@ -1315,9 +1346,9 @@ namespace Enumerables::Def {
 		using Deducer  = UniformEnumerationDeducer<NestedEb>;
 		using NestedEt = typename Deducer::TEnumerator;
 
-		Source				ebSource;
-		Deferred<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
-		Deferred<NestedEt>	nestedEnumerator;
+		Source							ebSource;
+		DeferredReplaceable<NestedEb>	nested;				// lifetime might be tied to it! (e.g. ToMaterialized())
+		DeferredReplaceable<NestedEt>	nestedEnumerator;
 
 	public:
 		using typename FlattenerEnumerator::IEnumerator::TElem;
@@ -1326,12 +1357,12 @@ namespace Enumerables::Def {
 		{
 			// try to advance outer enumerator as needed
 			while (!nestedEnumerator.IsInitialized() || !nestedEnumerator->FetchNext()) {
-				if (!ebSource.FetchNext())
-					return false;
-
-				// avoid move requirements on returns
-				nested.AssignCurrent(ebSource);
-				nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				if (ebSource.FetchNext()) {
+					// avoid move requirements on returns
+					nested.AcceptCurrent(ebSource);
+					nestedEnumerator.AcceptRvo([this]() { return Deducer::GetEnumerator(*nested); });
+				}
+				else return false;
 			}
 
 			return true;
@@ -1430,7 +1461,7 @@ namespace Enumerables::Def {
 					   || is_assignable_v<TAcc, CombinedT<TAcc, InElem, Combiner>>,
 					   "Accumulator type is neither constructible nor assignable from "
 					   "the result of the Aggregator function."						   );
-	
+
 	protected:
 		Source				source;
 		Storage<TAcc>		accumulator;
@@ -1446,8 +1477,8 @@ namespace Enumerables::Def {
 
 	public:
 		// CONSIDER: ETORUSAGE_ASSERTs? Would require extra bytes here - prob. not worth it this case.
-		TAcc		Current()		  override final	{ return accumulator; }
-		SizeInfo	Measure()	const override final	{ return this->source.Measure(); }
+		TAcc		Current()		  override			{ return *accumulator; }
+		SizeInfo	Measure()	const override final	{ return source.Measure(); }
 
 		template <class Factory>
 		ScannerBase(Factory&& getSource, const Combiner& combiner) :
@@ -1460,7 +1491,7 @@ namespace Enumerables::Def {
 		ScannerBase(Factory&& getSource, const Combiner& combiner, const StorableT<TAcc>& init) :
 			source		{ getSource() },
 			combine		{ combiner },
-			accumulator	{ ForwardParams, Revive(init) }
+			accumulator	{ Revive(init) }
 		{
 		}
 	};
@@ -1484,9 +1515,9 @@ namespace Enumerables::Def {
 		class Combiner,
 		class InitAccMapper /*= None*/,		// NOTE: a bit clunky with Chain<...>
 		class TAcc >
-	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, Deferred> {
+	class FetchFirstScannerEnumerator final : public ScannerBase<Source, Combiner, TAcc, DeferredReplaceable> {
 
-		using Base   = ScannerBase<Source, Combiner, TAcc, Deferred>;
+		using Base   = typename FetchFirstScannerEnumerator::ScannerBase;
 		using InElem = typename Source::TElem;
 
 		const InitAccMapper&	initAccumulator;
@@ -1496,7 +1527,7 @@ namespace Enumerables::Def {
 		{
 			if constexpr (IsNone<InitAccMapper>) {
 				if constexpr (is_same_v<InElem, TAcc>) {
-					this->accumulator.AssignCurrent(this->source);
+					this->accumulator.AcceptCurrent(this->source);
 				}
 				else {
 					static_assert (IsBraceConstructible<TAcc, InElem>::value,
@@ -1532,6 +1563,13 @@ namespace Enumerables::Def {
 				InitFromCurrent();
 
 			return any;
+		}
+
+
+		TAcc Current() override
+		{
+			ENUMERABLES_ETOR_USAGE_ASSERT (this->accumulator.IsInitialized(), MissedFetchError);
+			return this->accumulator.Value();
 		}
 
 
@@ -1641,7 +1679,7 @@ namespace Enumerables::Def {
 	{
 		using Beg = IteratorT<C&>;
 		using End = EndIteratorT<C&>;
-		constexpr bool containerSizeOnly = HasQueryableSize<C>::value && 
+		constexpr bool containerSizeOnly = HasQueryableSize<C>::value &&
 										  !HasQueryableDistance<Beg, End>::value;
 		if constexpr (containerSizeOnly)
 			return ContainerEnumerator<C, ForcedResult> { container };
@@ -1659,7 +1697,7 @@ namespace Enumerables::Def {
 	///		This class makes a light enable_if decision only, further checks should commence after the choice is made.
 	template <class TElem, class ValOrMapper, class ForcedAcc = void>
 	class IsAccuInit {
-		
+
 		static constexpr bool IsMapper()
 		{
 			if constexpr (is_void_v<ForcedAcc> || !IsConstructibleAnyway<ForcedAcc, ValOrMapper>)
@@ -1683,7 +1721,7 @@ namespace Enumerables::Def {
 	/// Determines accumulator type for Scan/Aggregate and provides friendly errors.
 	/// Member-Select semantics are the default, use explicit ForcedAcc to force &.
 	template <class TElem>
-	class AccuDeducer {
+	class ScanAccuDeducer {
 
 		template <class A, class E, class C>
 		static auto TryCombine() -> CombinedT<A, E, C>;
@@ -1707,9 +1745,9 @@ namespace Enumerables::Def {
 		struct CombineCheck {
 			// NOTE: repeated wrapping mechanism of AutoEnumerable::CombinerL for concise call...
 			//		 Also TryCombine got augmented for memberpointers.
-			using Wrapped = decay_t<decltype(LambdaCreators::BinaryMapper<Acc, TElem>(declval<Combiner>()))>;
+			using Wrapped = LambdaCreators::BinaryMapperT<Acc, TElem, Combiner>;
 
-			static_assert (IsCallable<Wrapped, Acc&&, TElem>::value,
+			static_assert (IsCallable<Wrapped&, Acc&&, TElem>::value,
 						   "The Combiner object is not callable with (Acc, TElem).");
 
 			using Next = CombinedT<Acc&&, TElem, Wrapped>;
@@ -1795,6 +1833,65 @@ namespace Enumerables::Def {
 
 		template <class InitMapper, class Combiner, class ForcedAcc = void>
 		using ForMappingInit = typename MappingInitCheck<InitMapper, Combiner, ForcedAcc>::TAcc;
+	};
+
+	#pragma endregion
+
+
+
+	#pragma region Sequence deductions
+
+	/// Helper for SeqAccuDeducer
+	template <class Res, class SeedStorage, class StepFunction>
+	struct CheckedAccuFromDeducedResult {
+
+		// void => assume mutator over (decayed) Seed type
+		using TAccumulator = OverrideT<Res, BaseT<SeedStorage>>;
+
+		static constexpr bool callable = IsConstCallable<StepFunction, TAccumulator&>::value
+									  || IsCallableMember<TAccumulator&, StepFunction>::value;
+
+		static_assert (callable || is_void<Res>(),
+					   "The supplied mapper (function/member) is not const-callable on its result stored as accumulator!");
+		static_assert (callable || !is_void<Res>(),
+					   "The supplied step function/member is not callable on the seed type. Specify accumulator type explicitly!");
+	};
+
+
+
+	/// Helper for Enumerables::Sequence.
+	template <class ForcedAcc, class SeedStorage, class StepFunction, class = void>
+	struct SeqAccuDeducer {
+
+		// default case: ForcedAcc is specified
+		using TAccumulator = ForcedAcc;
+
+		static_assert (IsConstCallable<StepFunction, ForcedAcc&>::value
+					|| IsCallableMember<ForcedAcc&, StepFunction>::value,
+					   "The supplied step function/member is not const-callable on the specified accumulator type!");
+	};
+
+	template <class SeedStorage, class StepFunction>
+	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<typename DeclaredResult<StepFunction>::type>> {
+
+		// Use declaration if exact (instead of probing with fictive argument)
+		// void => assume mutator over [decayed] Seed type
+		using TResult      = typename DeclaredResult<StepFunction>::type;
+		using TAccumulator = typename CheckedAccuFromDeducedResult<LambdaCreators::NonExpiringT<TResult>, SeedStorage, StepFunction>::TAccumulator;
+	};
+
+	template <class SeedStorage, class StepFunction>
+	struct SeqAccuDeducer<void, SeedStorage, StepFunction, enable_if_t<!DeclaredResult<StepFunction>::isFound>> {
+
+		// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
+		using ProbingArg = SeedStorage&;
+
+		static_assert (IsConstCallable<StepFunction, ProbingArg>::value
+					|| IsCallableMember<ProbingArg, StepFunction>::value,
+					   "Unable to deduce accumulator type. Specify it as explicit type argument!");
+
+		using DeducedResult = InvokeResultT<LambdaCreators::CustomMapperT<ProbingArg, StepFunction>, ProbingArg>;
+		using TAccumulator  = typename CheckedAccuFromDeducedResult<DeducedResult, SeedStorage, StepFunction>::TAccumulator;
 	};
 
 	#pragma endregion

@@ -866,12 +866,17 @@ namespace Legacy {
 
 
 	struct OutRedirector {
+		std::ostream&			trg;
 		std::streambuf* const	original;
 
-		OutRedirector(std::ostream& os, std::ostream& file) : original { os.rdbuf(file.rdbuf()) }
+		OutRedirector(std::ostream& trg, std::ostream& file) : trg { trg }, original { trg.rdbuf(file.rdbuf()) }
 		{
 		}
-		~OutRedirector()	{ std::cout.set_rdbuf(original); }
+
+		~OutRedirector() noexcept(false)	// impl./mask dependent
+		{
+			trg.rdbuf(original);
+		}
 	};
 
 
@@ -895,7 +900,7 @@ namespace Legacy {
 
 		while (reference.getline(line, MaxChunk)) {
 			if (!act.getline(actLine, MaxChunk)) {
-				std::cout << "  FAILED Reference comparison: reached end of actual output!" << std::endl;
+				std::cout << "    FAILED Reference comparison: reached end of actual output!" << std::endl;
 				return false;
 			}
 
@@ -908,7 +913,7 @@ namespace Legacy {
 			++ln;
 		}
 		if (act.getline(actLine, 2)) {
-			std::cout << "  FAILED Reference comparison: reached end of reference output!" << std::endl;
+			std::cout << "    FAILED Reference comparison: reached end of reference output!" << std::endl;
 			return false;
 		}
 		return true;
@@ -957,7 +962,10 @@ namespace Legacy {
 			scannerTest();
 		}
 
-		CheckTranscript(GetDir(myPath), transcript);
+		if (!ENUMERABLES_USE_RESULTSVIEW || !ENUMERABLES_RESULTSVIEW_AUTO_EVAL)
+			CheckTranscript(GetDir(myPath), transcript);
+		else
+			std::cout << "    SKIPPED Reference comparison: ResultsView is enabled!" << std::endl;
 	}
 
 

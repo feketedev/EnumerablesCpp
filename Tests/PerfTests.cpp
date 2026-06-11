@@ -74,7 +74,7 @@ namespace EnumerableTests {
 	};
 
 
-	
+
 	template <bool PosFiltered = false>
 	struct PairMinimumsTestBase : PairTestBase {
 
@@ -417,7 +417,7 @@ namespace EnumerableTests {
 #if CPP23_ENABLED
 		static auto CreateRange(const std::vector<N>& in)
 		{
-			return in | std::views::pairwise_transform([](auto&& p, auto&& n) { 
+			return in | std::views::pairwise_transform([](auto&& p, auto&& n) {
 							return n - p;
 						});
 		}
@@ -431,7 +431,7 @@ namespace EnumerableTests {
 
 	template <>		const char NeighborDiffs<int>::Name[]	 = "Pairwise diffs int";
 	template <>		const char NeighborDiffs<double>::Name[] = "Pairwise diffs double";
-	
+
 
 
 	struct OrderByOtherField : PairTestBase {
@@ -531,7 +531,7 @@ namespace EnumerableTests {
 			return res;
 		}
 
-		
+
 		static auto CreateRange(const std::vector<Pair>& in)
 		{
 			return in | std::views::filter([](const Pair& p) {
@@ -599,7 +599,7 @@ namespace EnumerableTests {
 			auto filtered = in | std::views::filter([](const Pair& p) { return p.first > 0; });
 			int  min	  = std::ranges::min(filtered | std::views::transform(&Pair::first));
 			auto wanted	  = filtered | std::views::filter([=](const Pair& p) { return p.first == min; });
-			
+
 			std::vector<Pair> sorted (wanted.begin(), wanted.end());
 			std::ranges::sort(sorted, std::less<>(), &Pair::second);
 			return sorted;
@@ -688,7 +688,7 @@ namespace EnumerableTests {
 			return minimums;
 		}
 
-		
+
 		static auto CreateRange(const std::vector<Pair>& in)
 		{
 			// Not fully equivalent - not a lazy/updateable view
@@ -943,7 +943,7 @@ namespace EnumerableTests {
 				v.reserve(std::max(size(r), allocHint));
 			else
 				v.reserve(allocHint);
-			
+
 			// Sticking to conventional iteration!
 			for (auto&& elem : r)
 				v.push_back(elem);
@@ -1589,7 +1589,7 @@ namespace EnumerableTests {
 	{
 		auto& [sumTimes, timesPath]     = summarizeTimes;
 		auto& [sumOverheads, ovrhdPath] = summarizeOverheads;
-		
+
 		bool printTimes = sumTimes && timesPath.empty();
 		bool printOvrhd = sumOverheads && ovrhdPath.empty() && !printTimes;
 
@@ -1601,7 +1601,7 @@ namespace EnumerableTests {
 		SectionBreak("  Short sequences...", 98);
 		auto results2 = RunAllWith(10, DefaultComplexity / 50 * DefaultCycles);
 		std::cout << std::endl;
-		
+
 		SectionBreak("  Long sequences summary:", printTimes || printOvrhd ? 119 : 102, '=');
 		SummarizeOnScreen(printTimes, printOvrhd, results1);
 		std::cout << std::endl;
