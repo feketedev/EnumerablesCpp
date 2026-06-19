@@ -215,16 +215,24 @@ namespace Enumerables::TypeHelpers {
 		}
 
 
+		// Aggregate's copy/move construction needs shortcut to stick with () for ambiguous aggregate cases!
+		template <convertible_to<T> A>
+		requires Aggregate<T>
+		void ConstructParensPreferred(A&& other)  noexcept(is_nothrow_constructible_v<T, A>)
+		{
+			new (&val) S (forward<A>(other));
+		}
+
 		template <class... Args>
-		enable_if_t<is_constructible_v<T, Args...>>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
+		requires (!Aggregate<T> && is_constructible_v<T, Args...>)
+		void ConstructParensPreferred(Args&&... ctorArgs)  noexcept(is_nothrow_constructible_v<T, Args...>)
 		{
 			new (&val) S (forward<Args>(ctorArgs)...);
 		}
 
 		template <class... Args>
-		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible_v<T, Args...>>
-		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
+		requires (Aggregate<T> || !is_constructible_v<T, Args...> && IsBraceConstructible<T, Args...>::value)
+		void ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			new (&val) S { forward<Args>(ctorArgs)... };
 		}
@@ -285,10 +293,10 @@ namespace std {
 	template<class T>
 	struct hash<Enumerables::TypeHelpers::RefHolder<T>> : hash<remove_const_t<T>>	// inherit disabledness
 	{
-		// SFINAE: don't define when disabled for referred type
-		template<class TT = T, enable_if_t<is_same_v<TT, T>, int> = 0>
-		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
-		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
+		// also don't define when disabled for the referred type!
+		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<T>& ref) const
+		noexcept (noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
+		requires Enumerables::TypeHelpers::StdHashable<remove_const_t<T>>
 		{
 			return hash<remove_const_t<T>>::operator()(ref.Get());
 		}

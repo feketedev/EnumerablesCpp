@@ -64,6 +64,7 @@ namespace Enumerables::TypeHelpers {
 	using std::is_nothrow_move_constructible_v;
 	using std::is_nothrow_copy_constructible_v;
 	using std::is_nothrow_assignable_v;
+	using std::convertible_to;
 
 
 
@@ -646,6 +647,10 @@ namespace Enumerables::TypeHelpers {
 
 
 
+	template <class T>
+	concept Aggregate = std::is_aggregate_v<T>;
+
+
 	template <class T, class... Args>
 	struct IsBraceConstructible {
 
@@ -722,6 +727,13 @@ namespace Enumerables::TypeHelpers {
 		}
 
 		static constexpr bool value = Check(nullptr);
+	};
+
+
+	template <class T>
+	concept StdHashable = requires (const std::hash<T>& h, const T& x)
+	{
+		{ h(x) } -> convertible_to<size_t>;
 	};
 
 
