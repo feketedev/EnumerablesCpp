@@ -650,7 +650,7 @@ namespace TypeHelpers {
 	};
 
 
-	// NOTE: For MSVC v141 tolerates inline "noexcept(T { declval<Args...>() })" checks badly.
+	// NOTE: For MSVC v141 tolerates inline "noexcept(T { declval<Args...>() })" checks poorly.
 	//		 (Seems to instantiate default-ctor calls where we don't have SFINAE against that.)
 	template <class T, class... Args>
 	struct IsNothrowBraceConstructible {

@@ -242,7 +242,7 @@ namespace Def {
 		static_assert (std::is_move_constructible<std::remove_reference_t<SourceFact>>::value,
 					   "Can't chain: the source factory contains unmovable and uncopiable elements!");
 
-		using SF				  = typename std::remove_reference_t<SourceFact>;
+		using SF				  = std::remove_reference_t<SourceFact>;
 		using ParametrizedStorage = ArgStorage<std::decay_t<Args>...>;
 		using SteadyStorage		  = ArgStorage<std::decay_t<SteadyArgs>...>;
 
@@ -289,7 +289,7 @@ namespace Def {
 
 	/// Same as above overload but with no SteadyParams specified.
 	template <template <class...> class NextEnumerator, class... PureTypeArgs, class FactoryRefsTuple, class... Args,
-			  class = typename std::enable_if_t<!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
+			  class = std::enable_if_t<!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
 	auto JoinFactories(const FactoryRefsTuple& sourceFactories, Args&&... pargs)
 	{
 		return JoinFactories<NextEnumerator, PureTypeArgs...>(sourceFactories, NoSteadyParams(), std::forward<Args>(pargs)...);

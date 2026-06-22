@@ -51,7 +51,7 @@ namespace TypeHelpers {
 		operator T&()  const noexcept	{ return *ptr; }
 
 
-		// let's have full transparency with equality-checks
+		// let's have full transparency with equality-checks [No SFINAE - hard error if missed]
 		template <class RH = T>
 		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
 
@@ -65,7 +65,7 @@ namespace TypeHelpers {
 		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
 
 
-		// also support default ordering -> be usable in tree-sets
+		// also support default ordering -> be usable in tree-sets [No SFINAE - hard error if missed]
 		template <class RH = T>
 		bool operator <(const RH& rhs)				const	 noexcept(noexcept(Get() < rhs))		{ return Get() < rhs; }
 
@@ -326,7 +326,7 @@ namespace TypeHelpers {
 		}
 
 		template <class... Args>
-		enable_if_t<IsBraceConstructible<T, Args...>::value && !is_constructible<T, Args...>::value>
+		enable_if_t<!is_constructible<T, Args...>::value && IsBraceConstructible<T, Args...>::value>
 		ConstructParensPreferred(Args&&... ctorArgs)  noexcept(IsNothrowBraceConstructible<T, Args...>::value)
 		{
 			ConstructBraced(forward<Args>(ctorArgs)...);
@@ -502,10 +502,11 @@ namespace std {
 	template<class T>
 	struct hash<Enumerables::TypeHelpers::RefHolder<T>> : hash<remove_const_t<T>>	// inherit disabledness
 	{
-		// SFINAE: don't define when disabled for referred type
+		// SFINAE: don't define when disabled for the referred type
 		template<class TT = T, enable_if_t<is_same<TT, T>::value, int> = 0>
-		size_t operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
-		noexcept(noexcept(hash<remove_const_t<T>>::operator()(ref.Get())))
+		auto operator ()(const Enumerables::TypeHelpers::RefHolder<TT>& ref) const
+		noexcept(noexcept(hash<remove_const_t<TT>>::operator()(ref.Get())))
+			-> decltype(hash<remove_const_t<TT>>{}(ref.Get()))						// must be size_t, unchecked
 		{
 			return hash<remove_const_t<T>>::operator()(ref.Get());
 		}
