@@ -545,15 +545,6 @@ namespace Enumerables::Def {
 		const Stepper&	step;
 		bool			firstFetched = false;
 
-
-		// Chose operation depending on StepByMutate
-		// CONSIDER: Still a move-conversion (requires movable). To avoid it, some alternating storage would be necessary.
-		template <class PAcc>
-		void ApplyStep(Reassignable<PAcc>& acc)	{ acc = step(*acc); }
-
-		template <class PAcc>
-		void ApplyStep(PAcc& acc)				{ step(acc); }
-
 	public:
 		using typename SequenceEnumerator::IEnumerator::TElem;
 
@@ -572,7 +563,11 @@ namespace Enumerables::Def {
 			//			 Check also: ScannerBase
 
 			if (firstFetched) {
-				ApplyStep(curr);
+				if constexpr (StepByMutate)
+					step(curr);
+				else
+					curr = step(*curr);
+
 				return true;
 			}
 			return firstFetched = true;
@@ -1702,12 +1697,12 @@ namespace Enumerables::Def {
 
 	#pragma region Sequence deductions
 
-	/// Helper for SeqAccuDeducer
-	template <class Res, class SeedStorage, class StepFunction>
-	struct CheckedAccuFromDeducedResult {
+	/// Helper for Sequence with implicit types.
+	template <class SeedIn, class StepFunction, class Res>
+	struct CheckedAccuForStep {
 
 		// void => assume mutator over (decayed) Seed type
-		using TAccumulator = OverrideT<Res, BaseT<SeedStorage>>;
+		using TAccumulator = OverrideT<LambdaCreators::NonExpiringT<Res>, BaseT<SeedIn>>;
 
 		static constexpr bool callable = IsConstCallable<StepFunction, TAccumulator&>::value
 									  || IsCallableMember<TAccumulator&, StepFunction>::value;
@@ -1716,43 +1711,6 @@ namespace Enumerables::Def {
 					   "The supplied mapper (function/member) is not const-callable on its result stored as accumulator!");
 		static_assert (callable || !is_void<Res>(),
 					   "The supplied step function/member is not callable on the seed type. Specify accumulator type explicitly!");
-	};
-
-
-
-	/// Helper for Enumerables::Sequence.
-	template <class ForcedAcc, class SeedStorage, class StepFunction, class = void>
-	struct SeqAccuDeducer {
-
-		// default case: ForcedAcc is specified
-		using TAccumulator = ForcedAcc;
-
-		static_assert (IsConstCallable<StepFunction, ForcedAcc&>::value
-					|| IsCallableMember<ForcedAcc&, StepFunction>::value,
-					   "The supplied step function/member is not const-callable on the specified accumulator type!");
-	};
-
-	template <class SeedStorage, class StepFunction>
-	struct SeqAccuDeducer<void, SeedStorage, StepFunction, void_t<typename DeclaredResult<StepFunction>::type>> {
-
-		// Use declaration if exact (instead of probing with fictive argument)
-		// void => assume mutator over [decayed] Seed type
-		using TResult      = typename DeclaredResult<StepFunction>::type;
-		using TAccumulator = typename CheckedAccuFromDeducedResult<LambdaCreators::NonExpiringT<TResult>, SeedStorage, StepFunction>::TAccumulator;
-	};
-
-	template <class SeedStorage, class StepFunction>
-	struct SeqAccuDeducer<void, SeedStorage, StepFunction, enable_if_t<!DeclaredResult<StepFunction>::isFound>> {
-
-		// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
-		using ProbingArg = SeedStorage&;
-
-		static_assert (IsConstCallable<StepFunction, ProbingArg>::value
-					|| IsCallableMember<ProbingArg, StepFunction>::value,
-					   "Unable to deduce accumulator type. Specify it as explicit type argument!");
-
-		using DeducedResult = InvokeResultT<LambdaCreators::CustomMapperT<ProbingArg, StepFunction>, ProbingArg>;
-		using TAccumulator  = typename CheckedAccuFromDeducedResult<DeducedResult, SeedStorage, StepFunction>::TAccumulator;
 	};
 
 	#pragma endregion

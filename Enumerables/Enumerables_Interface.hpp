@@ -1213,6 +1213,23 @@ namespace Enumerables::Def {
 	};
 
 
+	// Common, forwarding part of assembling a Sequence, once Acc type is successfully determined.
+	template <class ForcedElem, class Acc, class ForcedSeed = void, class SeedFwd, class StepFunctionFwd>
+	auto CreateSequence(SeedFwd& start, StepFunctionFwd& step)
+	{
+		static_assert (IsConstCallable<StepFunctionFwd, Acc&>::value || IsCallableMember<Acc&, StepFunctionFwd>::value,
+					   "The supplied step function/member is not const-callable on the specified accumulator type!"   );
+
+		using SeedStorage = typename SeededEnumerationTypes<SeedFwd, ForcedSeed>::SeedStorage;
+		using StepStorage = LambdaCreators::CustomMapperT<Acc&, StepFunctionFwd>;
+
+		return AutoEnumerable { SequenceFactory<SeedStorage, StepStorage, Acc, ForcedElem> {
+			forward<SeedFwd>(start),
+			LambdaCreators::CustomMapper<Acc&>(forward<StepFunctionFwd>(step))
+		}};
+	}
+
+
 	/// Custom infinite sequence specified by the starting value/reference and a step function.
 	/// The step function can be pure or a void mutator action over a decayed Accumulator type.
 	/// @param start:  	captured ref/value to initialize Acc for the first element [copy-converts on query]
@@ -1232,14 +1249,26 @@ namespace Enumerables::Def {
 			  IfNotScalarConversion<Seed, ForcedAcc> = 0>
 	auto Sequence(Seed&& start, StepFunction&& step)
 	{
-		using SeedStorage = typename SeededEnumerationTypes<Seed, ForcedAcc>::SeedStorage;
-		using Acc		  = typename SeqAccuDeducer<ForcedAcc, SeedStorage, StepFunction>::TAccumulator;
-		using StepStorage = LambdaCreators::CustomMapperT<Acc&, StepFunction>;
+		if constexpr (!is_void_v<ForcedAcc>) {
+			return CreateSequence<Elem, ForcedAcc, ForcedAcc, Seed, StepFunction>(start, step);
+		}
+		else if constexpr (DeclaredResult<StepFunction>::isFound) {
+			using TResult = typename DeclaredResult<StepFunction>::type;
+			using TAcc	  = typename CheckedAccuForStep<Seed, StepFunction, TResult>::TAccumulator;
 
-		return AutoEnumerable { SequenceFactory<SeedStorage, StepStorage, Acc, Elem> {
-			forward<Seed>(start),
-			LambdaCreators::CustomMapper<Acc&>(forward<StepFunction>(step))
-		}};
+			return CreateSequence<Elem, TAcc, void, Seed, StepFunction>(start, step);
+		}
+		else {
+			// Use fictive probing call with Seed (in actual operation the first element will copy-convert instead)
+			using ProbingArg = Seed&;
+			static_assert (IsConstCallable<StepFunction, ProbingArg>::value || IsCallableMember<ProbingArg, StepFunction>::value,
+						   "Unable to deduce accumulator type. Specify it as explicit type argument!"							);
+
+			using DeducedResult = LambdaCreators::LambdaResultT<StepFunction, ProbingArg>;
+			using TAcc			= typename CheckedAccuForStep<Seed, StepFunction, DeducedResult>::TAccumulator;
+
+			return CreateSequence<Elem, TAcc, void, Seed, StepFunction>(start, step);
+		}
 	}
 
 
@@ -1248,8 +1277,7 @@ namespace Enumerables::Def {
 			  IfNotScalarConversion<Seed, Acc> = 0    >
 	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, Acc>> step)
 	{
-		// force main overload  ---------v
-		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, Acc>&>(forward<Seed>(start), step);
+		return CreateSequence<Elem, Acc, Acc, Seed>(start, step);
 	}
 
 
@@ -1258,8 +1286,7 @@ namespace Enumerables::Def {
 			  IfNotScalarConversion<Seed, Acc> = 0    >
 	auto Sequence(Seed&& start, NoDeduce<OverloadResolver<Acc&, void>> step)
 	{
-		// force main overload  ---------v
-		return Sequence<Elem, Acc, Seed, OverloadResolver<Acc&, void>&>(forward<Seed>(start), step);
+		return CreateSequence<Elem, Acc, Acc, Seed>(start, step);
 	}
 
 	// NOTE: NoDeduce for OverloadResolver params is required by MSVC.
@@ -1274,12 +1301,7 @@ namespace Enumerables::Def {
 	template <class Elem, class ScalarAcc = Elem, class StepFun>
 	auto Sequence(IfScalar<ScalarAcc>&& start, StepFun&& step)
 	{
-		using Acc = typename SeqAccuDeducer<ScalarAcc, ScalarAcc, StepFun>::TAccumulator;
-
-		return AutoEnumerable { SequenceFactory<ScalarAcc, BaseT<StepFun>, Acc, Elem> {
-			start,
-			forward<StepFun>(step)
-		}};
+		return CreateSequence<Elem, ScalarAcc, ScalarAcc, ScalarAcc, StepFun>(start, step);
 	}
 
 
@@ -1287,8 +1309,7 @@ namespace Enumerables::Def {
 	template <class Elem, class ScalarAcc = Elem>
 	auto Sequence(IfScalar<ScalarAcc>&& start, NoDeduce<OverloadResolver<ScalarAcc&, ScalarAcc>> step)
 	{
-		// force main scalar overload ---v
-		return Sequence<Elem, ScalarAcc, OverloadResolver<ScalarAcc&, ScalarAcc>&>(move(start), step);
+		return CreateSequence<Elem, ScalarAcc, ScalarAcc, ScalarAcc>(start, step);
 	}
 
 
@@ -1296,8 +1317,7 @@ namespace Enumerables::Def {
 	template <class Elem, class ScalarAcc = Elem>
 	auto Sequence(IfScalar<ScalarAcc>&& start, NoDeduce<OverloadResolver<ScalarAcc&, void>> step)
 	{
-		// force main scalar overload ---v
-		return Sequence<Elem, ScalarAcc, OverloadResolver<ScalarAcc&, void>&>(move(start), step);
+		return CreateSequence<Elem, ScalarAcc, ScalarAcc, ScalarAcc>(start, step);
 	}
 
 
