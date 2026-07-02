@@ -82,7 +82,7 @@ namespace Enumerables::Def {
 			auto diff = e - s;
 
 			static_assert (std::numeric_limits<decltype(diff)>::digits <= std::numeric_limits<size_t>::digits
-						   && std::is_integral_v<decltype(diff)>,
+						   && std::is_integral<decltype(diff)>(),
 						   "Unsafe cast to size_t.");
 
 			// infrequent call, unknown types, rather make sure
@@ -1382,7 +1382,7 @@ namespace Enumerables::Def {
 		void InitFromCurrent()
 		{
 			if constexpr (IsNone<InitAccMapper>) {
-				if constexpr (is_same_v<InElem, TAcc>) {
+				if constexpr (is_same<InElem, TAcc>()) {
 					this->accumulator.AcceptCurrent(this->source);
 				}
 				else {
@@ -1394,7 +1394,7 @@ namespace Enumerables::Def {
 				}
 			}
 			else {
-				if constexpr (is_same_v<MappedT<InElem, InitAccMapper>, TAcc>) {
+				if constexpr (is_same<MappedT<InElem, InitAccMapper>, TAcc>()) {
 					this->accumulator.AcceptRvo([this]() -> decltype(auto) {
 						return initAccumulator(this->source.Current());
 					});
@@ -1556,7 +1556,7 @@ namespace Enumerables::Def {
 
 		static constexpr bool IsMapper()
 		{
-			if constexpr (is_void_v<ForcedAcc> || !IsConstructibleAnyway<ForcedAcc, ValOrMapper>)
+			if constexpr (is_void<ForcedAcc>() || !IsConstructibleAnyway<ForcedAcc, ValOrMapper>)
 				return IsCallable<ValOrMapper, TElem>::value;
 				// Shouldn't try to deduce (possibly running into Error) on the other branch!
 			else

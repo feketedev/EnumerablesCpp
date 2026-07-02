@@ -299,7 +299,7 @@ namespace Enumerables::Def {
 	template <class T, class... Os>
 	SetType<RefHolder<T>> InitRefholderSet(const initializer_list<T*>& elems, const Os&... opts)
 	{
-		static_assert (!is_scalar<T>::value,
+		static_assert (!is_scalar<T>(),
 					   "Capturing set elements by reference is only meant to save copies - no sense for scalars. "
 					   "Since the set is formed eagerly in this case, referred elements can't mutate until query!");
 
@@ -527,7 +527,7 @@ namespace Enumerables::Def {
 	template <class S, class Et>
 	S SumEnumerated(Et& etor)
 	{
-		if constexpr (std::is_floating_point_v<S>) {
+		if constexpr (std::is_floating_point<S>()) {
 			S		sum {};
 			S		err {};
 			while (etor.FetchNext())
@@ -1024,7 +1024,7 @@ namespace Enumerables::Def {
 	template <class Factory>
 	void ResultBuffer<T>::Fill(Factory& getEnumerator, bool isPure, bool autoCall)
 	{
-		if constexpr (!std::is_copy_constructible_v<TDebugValue>) {
+		if constexpr (!is_copy_constructible<TDebugValue>()) {
 			ENUMERABLES_INTERNAL_ASSERT (!isPure);
 			Status = "Not available for this type.";
 			if (!autoCall)

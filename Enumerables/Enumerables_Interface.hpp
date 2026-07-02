@@ -583,24 +583,24 @@ namespace Enumerables::Def {
 		/// Apply an implicit conversion to type R for each element.
 		template <class R>	auto As() const &
 		{
-			if constexpr (is_same_v<R, TElem>)	return *this;
+			if constexpr (is_same<R, TElem>())	return *this;
 			else								return Chain<ConverterEnumerator, R>();
 		}
 		template <class R>	auto As() &&
 		{
-			if constexpr (is_same_v<R, TElem>)	return Move();
+			if constexpr (is_same<R, TElem>())	return Move();
 			else								return MvChain<ConverterEnumerator, R>();
 		}
 
 		/// Apply static_cast to type R for each element.
 		template <class R>	auto Cast() const &
 		{
-			if constexpr (is_same_v<R, TElem>)	return *this;
+			if constexpr (is_same<R, TElem>())	return *this;
 			else								return Chain<CastingEnumerator, R>();
 		}
 		template <class R>	auto Cast() &&
 		{
-			if constexpr (is_same_v<R, TElem>)	return Move();
+			if constexpr (is_same<R, TElem>())	return Move();
 			else								return MvChain<CastingEnumerator, R>();
 		}
 
@@ -1249,7 +1249,7 @@ namespace Enumerables::Def {
 			  IfNotScalarConversion<Seed, ForcedAcc> = 0>
 	auto Sequence(Seed&& start, StepFunction&& step)
 	{
-		if constexpr (!is_void_v<ForcedAcc>) {
+		if constexpr (!is_void<ForcedAcc>()) {
 			return CreateSequence<Elem, ForcedAcc, ForcedAcc, Seed, StepFunction>(start, step);
 		}
 		else if constexpr (DeclaredResult<StepFunction>::isFound) {
