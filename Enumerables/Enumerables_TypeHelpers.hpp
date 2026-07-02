@@ -458,32 +458,28 @@ namespace Enumerables::TypeHelpers {
 
 		/// Add ReturnConverter to a callable if the requested result type differs
 		/// from the pre-determined original.  [LambdaCreators internal!]
-		template <class DeducedRes, class Trg, class L>
-		enable_if_t<is_same_v<DeducedRes, Trg>, L&&>
-		WrapIfConversionReqd(L&& callable)	{ return forward<L>(callable); }
-
-		// Function-pointers: nicer to just return their prvalue.
-		template <class DeducedRes, class Trg, class L>
-		enable_if_t<is_same_v<DeducedRes, Trg>, L*>
-		WrapIfConversionReqd(L* fptr)		{ return fptr; }
-
-
-		template <class DeducedRes, class Trg, class L>
-		enable_if_t<!is_same_v<DeducedRes, Trg>, ReturnConverter<decay_t<L>, Trg>>
-		WrapIfConversionReqd(L&& callable)
+		template <class DeducedRes, class ForcedRes, class L>
+		decltype(auto)  WrapIfConversionReqd(L&& callable)
 		{
-			static_assert (!is_reference<Trg>() || HasConstValue<Trg> || !HasConstValue<DeducedRes>,
-						   "Requested result type loses const qualifier.");
-			static_assert (is_convertible<DeducedRes, Trg>(),
-						   "Given lambda has incompatible return type.");
-			static_assert (!is_void<DeducedRes>(),
-						   "HINT: Return type deduced to void. Can happen with unbound template-parameters for a function.");
-			static_assert (!is_reference<Trg>() || is_lvalue_reference<DeducedRes>(),
-						   "Function returns r-value, expected reference would become dangling!");
-			static_assert (!is_reference<Trg>() || IsRefCompatible<Trg, DeducedRes>,
-						   "Requested type is not reference-compatible with the lambda's result - could return reference to a temporary.");
+			if constexpr (is_void<ForcedRes>() || is_same<DeducedRes, ForcedRes>()) {
+				return forward<L>(callable);
+			}
+			else {
+				static_assert (is_convertible<DeducedRes, ForcedRes>(), "Given lambda has incompatible return type.");
+				static_assert (!is_void<DeducedRes>(),					"HINT: Return type deduced to void. Can happen "
+																		"with unbound template-parameters for a function.");
+				if constexpr (is_reference<ForcedRes>()) {
+					static_assert (HasConstValue<ForcedRes> || !HasConstValue<DeducedRes>,
+								   "Requested result type loses const qualifier."		 );
+					static_assert (is_lvalue_reference<DeducedRes>(),
+								   "Function returns r-value, expected reference would become dangling!");
+					static_assert (IsRefCompatible<ForcedRes, DeducedRes>,
+								   "Requested type is not reference-compatible with the lambda's result"
+								   " - could return reference to a temporary."							);
+				}
 
-			return ReturnConverter<decay_t<L>, Trg> { forward<L>(callable) };
+				return ReturnConverter<decay_t<L>, ForcedRes> { forward<L>(callable) };
+			}
 		}
 
 	}
@@ -518,17 +514,6 @@ namespace Enumerables::TypeHelpers {
 		using NonExpiringMemberT = conditional_t< is_lvalue_reference_v<O> || is_pointer_v<O>,
 												  NonExpiringT<M>,
 												  BaseT<M> >;
-
-
-	// ==== SFINAE helpers ============================================================================
-
-		// M is a member-object or -function pointer
-		template <class M>
-		using IfMemberPointer = enable_if_t<is_member_pointer_v<remove_reference_t<M>>, int>;
-
-		// F is potentially a lambda object or free function pointer
-		template <class F>
-		using IfNotMemberPointer = enable_if_t<!is_member_pointer_v<remove_reference_t<F>>, int>;
 
 	}
 
@@ -656,6 +641,9 @@ namespace Enumerables::TypeHelpers {
 		}
 	};
 
+	template <class M>
+	MemberCaller(M) -> MemberCaller<M>;
+
 
 
 	namespace LambdaCreators {
@@ -682,33 +670,37 @@ namespace Enumerables::TypeHelpers {
 
 		/// A LambdaCallable procection forwarded or wrapped as a standard callable,
 		/// with manually overridable return type. [Const-callability is checked, but not enforced!]
-		template <class T, class R = void, class L, IfNotMemberPointer<L> = 0>
+		template <class T, class R = void, class L>
 		decltype(auto) UniformMapper(L&& lambda)
 		{
-			// will be stored inside Enumerable ==> should not find && overload; constness required!
-			static_assert (IsConstCallable<L, T>::value,
-						   "The lambda is not const-callable with the expected argument."
-						   " Check the parameter type including qualifiers!"			 );
+			if constexpr (is_member_pointer<BaseT<L>>()) {
+				static_assert (MemberPointerHelpers::IsCallableMemberExt<T, BaseT<L>>,
+							   "Cannot use this member-pointer to project the given object. "
+							   "Pointers to fields or parameterless methods (getters) are accepted."
+							   " Check the pointed member and its owner type, including qualifiers!");
+				using OrigR = SelectedMemberT<T, L>;
 
-			using OrigR = InvokeResultT<ConstValueT<L>&, T>;
-			using Trg   = OverrideT<R, OrigR>;
+				// ensure returning pr-value!
+				auto callable = WrapIfConversionReqd<OrigR, R>(MemberCaller { lambda });
+				return callable;
+			}
+			else {
+				// will be stored inside Enumerable ==> should not find && overload; constness required!
+				static_assert (IsConstCallable<L, T>::value,
+							   "The lambda is not const-callable with the expected argument."
+							   " Check the parameter type, including qualifiers!"			 );
+				using OrigR = InvokeResultT<ConstValueT<L>&, T>;
 
-			return WrapIfConversionReqd<OrigR, Trg>(forward<L>(lambda));
-		}
-
-
-		template <class T, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
-		auto UniformMapper(Mptr p)
-		{
-			static_assert (MemberPointerHelpers::IsCallableMemberExt<T, Mptr>,
-						   "Cannot use this member-pointer to project the given object. "
-						   "Pointers to fields or parameterless methods (getters) are accepted."
-						   " Check the pointed member and its owner type, including qualifiers!");
-
-			using OrigR = SelectedMemberT<T, Mptr>;
-			using Trg   = OverrideT<R, OrigR>;
-
-			return WrapIfConversionReqd<OrigR, Trg>(MemberCaller<Mptr> { p });
+				if constexpr (is_pointer<remove_reference_t<L>>()) {
+					// Function-pointers: nicer to just return their pr-value.
+					auto wrapperOrPtr = WrapIfConversionReqd<OrigR, R>(lambda);
+					return wrapperOrPtr;
+				}
+				else {
+					// Lambda-objects: forward ref directly if needs no wrapper
+					return WrapIfConversionReqd<OrigR, R>(forward<L>(lambda));
+				}
+			}
 		}
 
 		// CONSIDER: Nicer would be to have a single UniformLambda<L, Args..> creator function
@@ -819,6 +811,10 @@ namespace Enumerables::TypeHelpers {
 		}
 	};
 
+	template <class M>
+	MemberBinopCaller(M) -> MemberBinopCaller<M>;
+
+
 
 	namespace LambdaCreators {
 
@@ -833,32 +829,36 @@ namespace Enumerables::TypeHelpers {
 
 		/// A LambdaCallable binary operation forwarded or wrapped as a standard callable,
 		/// with manually overridable return type. [Const-callability is checked, but not enforced!]
-		template <class T1, class T2, class R = void, class L, IfNotMemberPointer<L> = 0>
+		template <class T1, class T2, class R = void, class L>
 		decltype(auto) UniformBinop(L&& lambda)
 		{
-			// will be stored inside Enumerable ==> should not find && overload; constness required!
-			static_assert (IsConstCallable<L, T1, T2>::value,
-						   "The lambda is not const-callable with the expected arguments."
-						   " Check the parameter types including qualifiers!"			  );
+			if constexpr (is_member_pointer<BaseT<L>>()) {
+				static_assert (MemberPointerHelpers::IsCallableMemberExt<T1, BaseT<L>, T2>,
+							   "Cannot call this method with the expected argument. "
+							   "Check the owner type and the parameter, including qualifiers!");
+				using OrigR = AppliedMemberT<T1, L, T2>;
 
-			using OrigR = InvokeResultT<ConstValueT<L>&, T1, T2>;
-			using Trg   = OverrideT<R, OrigR>;
+				// ensure returning pr-value!
+				auto callable = WrapIfConversionReqd<OrigR, R>(MemberBinopCaller { lambda });
+				return callable;
+			}
+			else {
+				// will be stored inside Enumerable ==> should not find && overload; constness required!
+				static_assert (IsConstCallable<L, T1, T2>::value,
+							   "The lambda is not const-callable with the expected arguments."
+							   " Check the parameter types including qualifiers!"			  );
+				using OrigR = InvokeResultT<ConstValueT<L>&, T1, T2>;
 
-			return WrapIfConversionReqd<OrigR, Trg>(forward<L>(lambda));
-		}
-
-
-		template <class T1, class T2, class R = void, class Mptr, IfMemberPointer<Mptr> = 0>
-		auto UniformBinop(Mptr p)
-		{
-			static_assert (MemberPointerHelpers::IsCallableMemberExt<T1, Mptr, T2>,
-						   "Cannot call this method with the expected argument. "
-						   "Check the owner type and the parameter, including qualifiers!");
-
-			using OrigR = AppliedMemberT<T1, Mptr, T2>;
-			using Trg   = OverrideT<R, OrigR>;
-
-			return WrapIfConversionReqd<OrigR, Trg>(MemberBinopCaller<Mptr> { p });
+				if constexpr (is_pointer<remove_reference_t<L>>()) {
+					// Function-pointers: nicer to just return their pr-value.
+					auto wrapperOrPtr = WrapIfConversionReqd<OrigR, R>(lambda);
+					return wrapperOrPtr;
+				}
+				else {
+					// Lambda-objects: forward ref directly if needs no wrapper
+					return WrapIfConversionReqd<OrigR, R>(forward<L>(lambda));
+				}
+			}
 		}
 
 
@@ -1270,11 +1270,13 @@ namespace Enumerables::TypeHelpers {
 
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
-		template <class TT = T>
-		void AssignHeadMoved(IfReference<TT> src) noexcept	{ Storage::Reassign(src); }
-
-		template <class TT = T>
-		void AssignHeadMoved(IfPRValue<TT>& src)			{ Storage::Reassign(move(src)); }
+		void AssignHeadMoved(T& src)  noexcept(IsNothrowReassignable<T, T&&>)
+		{
+			if constexpr (is_reference<T>())
+				Storage::Reassign(src);
+			else
+				Storage::Reassign(move(src));
+		}
 	};
 
 
@@ -1391,11 +1393,14 @@ namespace Enumerables::TypeHelpers {
 		}
 
 		// allow generic code to move (without triggering dangling assignment checks inside)
-		template <class TT = T>
-		void AssignHeadMoved(IfReference<TT> src) noexcept	{ operator=(src); }
-
-		template <class TT = T>
-		void AssignHeadMoved(IfPRValue<TT>& src)			{ operator=(move(src)); }
+		void AssignHeadMoved(T& src)  noexcept(is_nothrow_move_constructible_v<T> &&
+											   (!Replaceable || IsNothrowReassignable<T, T&&>))
+		{
+			if constexpr (is_reference<T>())
+				operator=(src);
+			else
+				operator=(move(src));
+		}
 	};
 
 
