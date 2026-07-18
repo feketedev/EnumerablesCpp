@@ -911,7 +911,7 @@ namespace Def {
 		using typename SetFilterEnumerator::IEnumerator::TElem;
 
 	private:
-		// CONSIDER: this decaying is not transparent currently, if Options has an allocator, that must follow it. Hint added to static assert.
+		// CONSIDER: this decaying is currently opaque, if Options has an allocator, that must follow it. Hint added to static assert.
 		using Op = DecayIfScalarT<EnumeratedT<OpSource>>;
 
 		// Having user options -> No further manipulation, offer opportunity to implement "transparent" containment check (e.g. std::less<>)
@@ -928,7 +928,7 @@ namespace Def {
 		static_assert (!is_void<CompBase>::value || !is_convertible<Op, BaseT<TElem>>::value || is_same<BaseT<Op>, BaseT<TElem>>::value || !HaveRefcompatibleRoots<TElem, Op>,
 					   "Converting elements for comparison could lose data. If the conversion is desired, use .As<T> explicitly!");
 
-		using S	   = StorableT<CompBase>;
+		using S	   = StorableLogicalConstT<CompBase>;
 		using TSet = AdjustedSet<S, SetOptions...>;
 
 		Source		source;
@@ -953,7 +953,7 @@ namespace Def {
 		{
 			while (source.FetchNext()) {
 				TElem  elem = source.Current();
-				bool inOper = SetOperations::Contains<S>(operand, elem);
+				bool inOper = SetOperations::Contains(operand, elem);
 				if (inOper == intersect)
 					return true;
 			}

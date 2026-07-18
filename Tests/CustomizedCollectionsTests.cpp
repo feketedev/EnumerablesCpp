@@ -529,12 +529,8 @@ namespace EnumerableTests {
 				allocations.Reset();
 			}
 
-#		if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
 			// Yet again: Older MSVC doesn't apply NRVO in debug + its move ctor does allocate!
-			constexpr size_t dbgExtra = 4;
-#		else
-			constexpr size_t dbgExtra = 0;
-#		endif
+			constexpr size_t dbgExtra = IFNO_NRVO(4);
 
 			std::unordered_map<int, std::vector<int>> fromTemplated = vectorsAsc.ToDictionaryOf<int>(&std::vector<int>::front);
 			allocations.AssertFreshCount(N + 1 + dictAssembly + dbgExtra);

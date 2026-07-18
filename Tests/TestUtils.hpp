@@ -37,6 +37,15 @@
 								catch (const Ex&) {}									\
 								(void)0
 
+// NRVO-dependent allocation count became quite widespread with associative STL containers...
+// Matters for strict allocation-count tests (e.g. to rule out extra object creations).
+// Older MSVC doesn't apply NRVO in debug + its move ctors do allocate!
+#if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
+#	define IFNO_NRVO(count)	static_cast<size_t>(count)
+#else
+#	define IFNO_NRVO(count)	0u
+#endif
+
 
 
 namespace EnumerableTests {
