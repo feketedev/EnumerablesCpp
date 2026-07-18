@@ -15,7 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)Enumerables.hpp" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)TestAllocator.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)Tests.hpp" />
   </ItemGroup>
   <ItemGroup>

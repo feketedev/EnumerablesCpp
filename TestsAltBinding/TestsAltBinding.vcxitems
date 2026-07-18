@@ -18,6 +18,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)AltTests.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)OrderedSetTests.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)StdOptionalTests.cpp" />
   </ItemGroup>
 </Project>

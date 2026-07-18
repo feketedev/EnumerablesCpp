@@ -9,6 +9,8 @@
 
 
 #include <optional>
+#include <set>
+#include <map>
 
 #ifdef _DEBUG
 	#include <cassert>
@@ -23,9 +25,13 @@
 
 // Custom container bindings can be defined and set here.
 //
-// StlBinding::OptionalOperations is readily made available whenever <optional> is included,
-// but an own binding struct could be defined here as well.
+// StlBinding::OptionalOperations is readily made available whenever <optional> is included.
+// Similarly, alternative bindings in StlBinding::Ordered are available for <set> and <map>.
+// [Custom binding structs could be defined here just as well.]
 #define ENUMERABLES_OPTIONAL_BINDING	Enumerables::StlBinding::OptionalOperations;
+#define ENUMERABLES_SET_BINDING			Enumerables::StlBinding::Ordered::SetOperations;
+#define ENUMERABLES_DICTIONARY_BINDING	Enumerables::StlBinding::Ordered::DictionaryOperations;
+
 
 
 // For custom types, you might want to define appropriate GetSize / HasValue overloads.

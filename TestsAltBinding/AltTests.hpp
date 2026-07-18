@@ -7,11 +7,14 @@
 namespace EnumerableTests::AltBinding {
 
 	void TestStdOptionalResults();
+	void TestOrderedSetBindings();
+
 
 
 	inline void RunAll()
 	{
 		TestStdOptionalResults();
+		TestOrderedSetBindings();
 	}
 
 }

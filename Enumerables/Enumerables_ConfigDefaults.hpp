@@ -393,7 +393,7 @@ namespace Enumerables::StlBinding {
 
 
 
-#if defined(_MSC_VER) && defined(_OPTIONAL_) || defined(_GLIBCXX_OPTIONAL)
+#if defined(_MSC_VER) && defined(_OPTIONAL_) || defined(_LIBCPP_OPTIONAL) || defined(_GLIBCXX_OPTIONAL)
 
 	// Suggested way of using std::optional if OptResult is undesired.
 	struct OptionalOperations {
@@ -407,6 +407,68 @@ namespace Enumerables::StlBinding {
 	};
 
 #endif
+
+
+	namespace Ordered {
+
+#	if defined(_MSC_VER) && defined(_SET_) || defined(_LIBCPP_SET) || defined(_GLIBCXX_SET)
+
+		struct SetOperations {
+
+			template <class V, class... Options>
+			using Container = std::set<V, Options...>;
+
+			static constexpr unsigned AllocatorOptionIdx = 1;
+
+
+			template <class TContainer, class... Opts>
+			static TContainer	Init(size_t /*capacity*/, const Opts&... options)
+			{
+				return TContainer(options...);
+			}
+
+			template <class V, class... Opts>
+			static bool			Contains(const Container<V, Opts...>& s, const V& elem)	{ return s.find(elem) != s.end(); }
+
+			template <class V, class... Opts, class Vin>
+			static void			Add(Container<V, Opts...>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
+		};
+
+#	endif
+
+
+
+#	if defined(_MSC_VER) && defined(_MAP_) || defined(_LIBCPP_MAP) || defined(_GLIBCXX_MAP)
+
+	struct DictionaryOperations {
+
+		template <class K, class V, class... Options>
+		using Container = std::map<K, V, Options...>;
+
+		static constexpr unsigned AllocatorOptionIdx = 1;
+
+		template <class K, class V, class... Options>
+		using AllocatedValueT = std::pair<const K, V>;
+
+
+		template <class TContainer, class... Opts>
+		static TContainer	Init(size_t /*capacity*/, const Opts&... options)			{ return TContainer(options...); }
+
+
+		template <class K, class V, class... Opts>
+		static bool			Contains(const Container<K, V, Opts...>& d, const K& key)	{ return d.find(key) != d.end(); }
+
+		template <class K, class V, class... Opts, class Kin, class Vin>
+		static void			Add(Container<K, V, Opts...>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
+
+		template <class K, class V, class... Opts>
+		static V&			Access(Container<K, V, Opts...>& d, const K& key)			{ return d[key]; }
+	};
+
+#	endif
+
+
+	}	// namespace Ordered
 
 }	// namespace Enumerables::StlBinding
 
