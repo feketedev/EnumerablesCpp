@@ -24,7 +24,7 @@ permissions:
 jobs:
   clangBuild:
     name: Build on Clang
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 4
 
     strategy: &matrixStrategy
