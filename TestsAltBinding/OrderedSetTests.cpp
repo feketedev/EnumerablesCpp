@@ -56,8 +56,8 @@ namespace EnumerableTests::AltBinding {
 
 		// Passing a stateful allocator
 		NO_MORE_HEAP;
-		std::aligned_storage_t<sizeof(Record), alignof(void*)>  buffer[30];
-		TestAllocator<Record, 4> fixedAlloc { buffer };
+		std::aligned_storage_t<sizeof(Record), alignof(void*)>	buffer[30 + IFNO_NRVO(8)];
+		TestAllocator<Record, 4 + IFNO_NRVO(1)>					fixedAlloc { buffer };
 
 		std::set<Record, std::less<>, decltype(fixedAlloc)> distinctById2 = records.ToSet(3u, std::less<>{}, fixedAlloc);
 		ASSERT (EqualSets(distinctById, distinctById2));
@@ -95,8 +95,8 @@ namespace EnumerableTests::AltBinding {
 		// Passing a stateful allocator
 		NO_MORE_HEAP;
 		using Pair = std::pair<const Record, char>;
-		std::aligned_storage_t<sizeof(Pair), alignof(void*)>  buffer[30];
-		TestAllocator<Pair, 4> fixedAlloc { buffer };
+		std::aligned_storage_t<sizeof(Pair), alignof(void*)>	buffer[30 + IFNO_NRVO(8)];
+		TestAllocator<Pair, 4 + IFNO_NRVO(1)>					fixedAlloc { buffer };
 
 		std::map<Record, char, std::less<>, decltype(fixedAlloc)> distinctById2 =
 			records.ToDictionary(FUN(r, r), getExtData, 3u, std::less<>{}, fixedAlloc);
