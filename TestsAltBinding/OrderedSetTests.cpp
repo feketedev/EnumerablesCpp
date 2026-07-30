@@ -473,7 +473,7 @@ namespace EnumerableTests::AltBinding {
 			//	auto rn = Enumerate(deriveds).Except(ops);			// CTE
 			//	auto rd = Enumerate(deriveds).Except(ops.Copy());	// CTE
 
-			// More typical example (though providing a transparent hash/equals could avoid conversions - from C++17):
+			// More typical example (though providing a transparent hash/equals could avoid conversions from C++17 - see TransparentComparisons lower):
 			std::string fruits[] = { "apple", "banana" };
 			auto remFruits1 = Enumerate(fruits).Except({ "coconut", "banana" });	// direct (eager) operand set
 
@@ -526,6 +526,128 @@ namespace EnumerableTests::AltBinding {
 	}
 
 
+	// Demonstrate transparent comparisons to avoid unnecessary conversions
+	static void TransparentComparisons()
+	{
+		// 1. Technically trivial direction: a set<string> is formed as filter
+		{
+			// Testcase should avoid short-string optimization!
+			const char* fruits[] = { "apple longstring", "banana longstring" };
+			std::string toHide[] = { "coconut longstring", "banana longstring" };	// deferred operand set
+
+			AllocationCounter allocs;
+
+			auto remFruits = Enumerate(fruits).Except<std::less<>>(toHide);
+			auto hidFruits = Enumerate(fruits).Intersect<std::less<>>(toHide);
+			ASSERT_ELEM_TYPE (const char*&, remFruits);
+			ASSERT_ELEM_TYPE (const char*&, hidFruits);
+			ASSERT_EQ (fruits[0], remFruits.Single());
+			ASSERT_EQ (fruits[1], hidFruits.Single());
+
+			// 2 items + 1 head for each operation - but no separate string objects!
+			static constexpr unsigned expectedNodes	= 3;
+			static constexpr unsigned setAllocs		= 2 * (expectedNodes + IFNO_NRVO(1));
+			allocs.AssertMaxFreshCount(setAllocs);
+
+
+			// ----- Using custom comparator type -----
+			struct AsString {
+
+				// NOTE: Without this statement std::set.find only accepts the exact item type
+				//		 - which is problematic in case of T& elements -> wrapped as Ref<T>
+				//		 I consider this an acceptable limitation.
+				using is_transparent = int;
+
+				// Fix overloads are fine
+				bool operator ()(const std::string& lhs, const std::string& rhs) const { return lhs < rhs; }
+				bool operator ()(const std::string& lhs, const char* rhs)		 const { return lhs < rhs; }
+				bool operator ()(const char* lhs, const std::string& rhs)		 const { return lhs < rhs; }
+			};
+			auto rem2 = Enumerate(fruits).Except<AsString>(toHide);
+			auto hid2 = Enumerate(fruits).Intersect<AsString>(toHide);
+			ASSERT_ELEM_TYPE (const char*&, remFruits);
+			ASSERT_ELEM_TYPE (const char*&, hidFruits);
+			ASSERT_EQ (fruits[0], rem2.Single());
+			ASSERT_EQ (fruits[1], hid2.Single());
+			allocs.AssertMaxFreshCount(setAllocs);
+
+
+			// ----- The same utilizing string_view -----
+			struct AsView : std::less<std::string_view> {
+				using is_transparent = int;
+				// Both operand types are convertible -
+				// declaring transparency is needed against fixed find(RefHolder<string>) in STL
+			};
+			auto rem3 = Enumerate(fruits).Except<AsView>(toHide);
+			auto hid3 = Enumerate(fruits).Intersect<AsView>(toHide);
+			ASSERT_ELEM_TYPE (const char*&, remFruits);
+			ASSERT_ELEM_TYPE (const char*&, hidFruits);
+			ASSERT_EQ (fruits[0], rem3.Single());
+			ASSERT_EQ (fruits[1], hid3.Single());
+			allocs.AssertMaxFreshCount(setAllocs);
+
+
+			// ----- Using fixed parameter is possible when no RefHolder is involved -----
+			auto copiesToHide = Enumerate(toHide).Copy();
+			auto rem4 = Enumerate(fruits).Except<std::less<std::string_view>>(copiesToHide);
+			auto hid4 = Enumerate(fruits).Intersect<std::less<std::string_view>>(copiesToHide);
+			ASSERT_ELEM_TYPE (const char*&, remFruits);
+			ASSERT_ELEM_TYPE (const char*&, hidFruits);
+			ASSERT_EQ (fruits[0], rem4.Single());
+			ASSERT_EQ (fruits[1], hid4.Single());
+			allocs.AssertFreshCount(setAllocs + 4 + 4);	// HOWEVER, non-transparent set.find(string)
+			//									^	^	   incurs additional unnecessary copies!
+			//	legit copies for the testcase  -'	|
+			//	  penalty for non-transparent find -'
+		}
+
+		// 2. Filter strings by char* operands
+		{
+			// Testcase should avoid short-string optimization!
+			std::string fruits[] = { "apple longstring", "banana longstring" };
+			const char* toHide[] = { "coconut longstring", "banana longstring" };
+
+			AllocationCounter allocs;
+
+			// ----- Cleanest way: as string_view -----
+			auto hideViews = Enumerate<std::string_view>(toHide);
+
+			auto remFruits = Enumerate(fruits).Except<std::less<>>(hideViews);
+			auto hidFruits = Enumerate(fruits).Intersect<std::less<>>(hideViews);
+			ASSERT_ELEM_TYPE (std::string&, remFruits);
+			ASSERT_ELEM_TYPE (std::string&, hidFruits);
+			ASSERT_EQ (fruits[0], remFruits.Single());
+			ASSERT_EQ (fruits[1], hidFruits.Single());
+
+			static constexpr unsigned setAllocs = 2 * (3 + IFNO_NRVO(1));
+			allocs.AssertMaxFreshCount(setAllocs);
+
+			// In fact this needs no transparency, just a custom comparator
+			// to override comparing as TElem = string
+			auto rem2 = Enumerate(fruits).Except<std::less<std::string_view>>(hideViews);
+			auto hid2 = Enumerate(fruits).Intersect<std::less<std::string_view>>(hideViews);
+			ASSERT_ELEM_TYPE (std::string&, rem2);
+			ASSERT_ELEM_TYPE (std::string&, hid2);
+			ASSERT_EQ (fruits[0], rem2.Single());
+			ASSERT_EQ (fruits[1], hid2.Single());
+			allocs.AssertMaxFreshCount(setAllocs);
+
+
+			// ----- Using custom comparator type on char* directly -----
+			struct AsStringView : std::less<std::string_view> {
+				using is_transparent = int;
+			};
+			auto rem3 = Enumerate(fruits).Except<AsStringView>(toHide);
+			auto hid3 = Enumerate(fruits).Intersect<AsStringView>(toHide);
+			ASSERT_ELEM_TYPE (std::string&, rem3);
+			ASSERT_ELEM_TYPE (std::string&, hid3);
+			ASSERT_EQ (fruits[0], rem3.Single());
+			ASSERT_EQ (fruits[1], hid3.Single());
+			allocs.AssertMaxFreshCount(setAllocs);
+		}
+	}
+
+
 
 	void TestOrderedSetBindings()
 	{
@@ -539,8 +661,7 @@ namespace EnumerableTests::AltBinding {
 		SetOperationsByReference();
 		SetOperationsDefaultConversions();
 
-		// TODO: Fix + demonstrate transparent comparisons
-		// TransparentComparisons();
+		TransparentComparisons();
 	}
 
 }	// namespace EnumerableTests::AltBinding

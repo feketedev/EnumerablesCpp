@@ -342,11 +342,11 @@ namespace Enumerables::StlBinding {
 		}
 
 
-		template <class V, class... Opts>
-		static bool			Contains(const Container<V, Opts...>& s, const V& elem)	{ return s.find(elem) != s.end(); }
+		template <class V, class... Opts, class Trg>
+		static bool			Contains(const Container<V, Opts...>& s, const Trg& elem)	{ return s.find(elem) != s.end(); }
 
 		template <class V, class... Opts, class Vin>
-		static void			Add(Container<V, Opts...>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
+		static void			Add(Container<V, Opts...>& s, Vin&& elem)					{ s.insert(std::forward<Vin>(elem)); }
 	};
 
 #endif
@@ -376,8 +376,8 @@ namespace Enumerables::StlBinding {
 		}
 
 
-		template <class K, class V, class... Opts>
-		static bool		Contains(const Container<K, V, Opts...>& d, const K& key)	{ return d.find(key) != d.end(); }
+		template <class K, class V, class... Opts, class Trg>
+		static bool		Contains(const Container<K, V, Opts...>& d, const Trg& key)	{ return d.find(key) != d.end(); }
 
 		template <class K, class V, class... Opts, class Kin, class Vin>
 		static void		Add(Container<K, V, Opts...>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
@@ -385,8 +385,8 @@ namespace Enumerables::StlBinding {
 		//template <class K, class V, class... Opts, class Kin, class Vin>
 		//static void	Upsert(Container<K, V, Opts...>& d, K&& key, Vin&& val)		{ d.insert_or_assign(std::forward<Kin>(key), std::forward<Vin>(val)); }
 
-		template <class K, class V, class... Opts>
-		static V&		Access(Container<K, V, Opts...>& d, const K& key)			{ return d[key]; }
+		template <class K, class V, class... Opts, class Trg>
+		static V&		Access(Container<K, V, Opts...>& d, const Trg& key)			{ return d[key]; }
 	};
 
 #endif
@@ -422,16 +422,14 @@ namespace Enumerables::StlBinding {
 
 
 			template <class TContainer, class... Opts>
-			static TContainer	Init(size_t /*capacity*/, const Opts&... options)
-			{
-				return TContainer(options...);
-			}
+			static TContainer	Init(size_t /*capacity*/, const Opts&... options)			{ return TContainer (options...); }
 
-			template <class V, class... Opts>
-			static bool			Contains(const Container<V, Opts...>& s, const V& elem)	{ return s.find(elem) != s.end(); }
+
+			template <class V, class... Opts, class Trg>
+			static bool			Contains(const Container<V, Opts...>& s, const Trg& elem)	{ return s.find(elem) != s.end(); }
 
 			template <class V, class... Opts, class Vin>
-			static void			Add(Container<V, Opts...>& s, Vin&& elem)				{ s.insert(std::forward<Vin>(elem)); }
+			static void			Add(Container<V, Opts...>& s, Vin&& elem)					{ s.insert(std::forward<Vin>(elem)); }
 		};
 
 #	endif
@@ -452,17 +450,17 @@ namespace Enumerables::StlBinding {
 
 
 		template <class TContainer, class... Opts>
-		static TContainer	Init(size_t /*capacity*/, const Opts&... options)			{ return TContainer(options...); }
+		static TContainer	Init(size_t /*capacity*/, const Opts&... options)			{ return TContainer (options...); }
 
 
-		template <class K, class V, class... Opts>
-		static bool			Contains(const Container<K, V, Opts...>& d, const K& key)	{ return d.find(key) != d.end(); }
+		template <class K, class V, class... Opts, class Trg>
+		static bool			Contains(const Container<K, V, Opts...>& d, const Trg& key)	{ return d.find(key) != d.end(); }
 
 		template <class K, class V, class... Opts, class Kin, class Vin>
 		static void			Add(Container<K, V, Opts...>& d, Kin&& key, Vin&& val)		{ d.emplace(std::forward<Kin>(key), std::forward<Vin>(val)); }
 
-		template <class K, class V, class... Opts>
-		static V&			Access(Container<K, V, Opts...>& d, const K& key)			{ return d[key]; }
+		template <class K, class V, class... Opts, class Trg>
+		static V&			Access(Container<K, V, Opts...>& d, const Trg& key)			{ return d[key]; }
 	};
 
 #	endif

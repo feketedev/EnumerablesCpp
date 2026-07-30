@@ -49,8 +49,12 @@ namespace Enumerables::TypeHelpers {
 		T&		 Get() const noexcept	{ return *ptr; }
 		operator T&()  const noexcept	{ return *ptr; }
 
+		// enable custom comparators of manual param types to be used by containers transparently
+		template <class Trg, class = enable_if_t<is_convertible_v<T, Trg>>>
+		operator Trg() const noexcept(is_nothrow_constructible_v<Trg, T&>) { return *ptr; }
 
-		// let's have full transparency with equality-checks
+
+		// let's have full transparency with equality-checks (mind the possibly templated operators of T - conversion won't suffice!)
 		template <class RH = T>
 		bool operator ==(const RH& rhs)				const	 noexcept(noexcept(Get() == rhs))		{ return Get() == rhs; }
 
@@ -64,12 +68,18 @@ namespace Enumerables::TypeHelpers {
 		bool operator !=(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() != rhs.Get()))	{ return Get() != rhs.Get(); }
 
 
-		// also support default ordering -> be usable in tree-sets
+		// also support default ordering -> be usable in tree-sets, sort etc.
 		template <class RH = T>
 		bool operator <(const RH& rhs)				const	 noexcept(noexcept(Get() < rhs))		{ return Get() < rhs; }
 
+		template <class RH = T>
+		bool operator >(const RH& rhs)				const	 noexcept(noexcept(Get() > rhs))		{ return Get() > rhs; }
+
 		template <class RT>
 		bool operator <(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() < rhs.Get()))	{ return Get() < rhs.Get(); }
+
+		template <class RT>
+		bool operator >(const RefHolder<RT>& rhs)	const	 noexcept(noexcept(Get() > rhs.Get()))	{ return Get() > rhs.Get(); }
 	};
 
 	template <class T, class LH = T>
@@ -80,6 +90,9 @@ namespace Enumerables::TypeHelpers {
 
 	template <class T, class LH = T>
 	bool operator <(const LH& lhs, const RefHolder<T>& ref)	 noexcept(noexcept(lhs < ref.Get()))	{ return lhs < ref.Get(); }
+
+	template <class T, class LH = T>
+	bool operator >(const LH& lhs, const RefHolder<T>& ref)	 noexcept(noexcept(lhs > ref.Get()))	{ return lhs > ref.Get(); }
 
 
 
@@ -95,14 +108,28 @@ namespace Enumerables::TypeHelpers {
 
 	/// Temporary storage for arbitrary T to be stored in a container/union by generic code - supports (l-value) references and values.
 	/// @remarks
-	///	  The input element, as a source Enumerator's return value can be:
-	///	 	* lvalue ref  -> its address is available, and we assume it is sustained during the entire enumeration (constness preserved)
-	///	 	* prvalue	  -> temporary / mapped result, must be stored if needed later (T left as is, no overhead)
-	///	 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the next Fetch
+	///   The input element, as a source Enumerator's return value can be:
+	/// 	* lvalue ref  -> its address is available, and we assume it is sustained during the entire enumeration (constness preserved)
+	/// 	* prvalue	  -> temporary / mapped result, must be stored if needed later (T left as is, no overhead)
+	/// 	* xvalue (&&) -> to be avoided in general; still, decaying it makes most sense, as it probably won't survive the next Fetch
 	template <class T>
 	using StorableT = conditional_t< is_lvalue_reference_v<T>,
 										RefHolder<remove_reference_t<T>>,
 										remove_reference_t<T>			 >;
+
+
+	/// Temporary storage for arbitrary T to be stored in a container by generic code
+	/// - wraps (l-value) references with const qualifier added to the referee.
+	/// @remarks
+	///   Provides a convenient workaround for transparent reference-wrapping in algorithms that only
+	///   use const operations of containers [e.g. find(const T& elem)], so that the incoming argument
+	///   won't be required to be mutable just for the reference-wrapper [find(const RefHolder<T>&)].
+	///   In fact, this aligns with the behaviour of non-ref items:
+	///   "find" or a stored comparator (e.g. std::less<>) will have const access to elements.
+	template <class T>
+	using StorableLogicalConstT = conditional_t< is_lvalue_reference_v<T>,
+													RefHolder<const remove_reference_t<T>>,
+													remove_reference_t<T>				   >;
 
 
 	/// Elem type restorable from a temporary container - i.e. resolve StorableT.
