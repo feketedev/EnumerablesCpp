@@ -49,38 +49,41 @@
 namespace Enumerables {
 namespace Def {
 
+using namespace Enumerables::TypeHelpers;
+
+
 
 #pragma region Tuple-tools (internal)
 
 	template<class... Elems>
-	constexpr typename std::conjunction<std::is_reference<Elems>...>::type	IsReferenceOnlyTrait(const std::tuple<Elems...>&)
+	constexpr typename std::conjunction<is_reference<Elems>...>::type	IsReferenceOnlyTrait(const std::tuple<Elems...>&)
 	{
 		return {};
 	}
 
 	template<class... Elems>
-	constexpr typename std::disjunction<std::is_reference<Elems>...>::type	HasReferenceTrait(const std::tuple<Elems...>&)
+	constexpr typename std::disjunction<is_reference<Elems>...>::type	HasReferenceTrait(const std::tuple<Elems...>&)
 	{
 		return {};
 	}
 
 	template<class Tuple>
-	constexpr bool	IsReferenceOnlyTuple = decltype(IsReferenceOnlyTrait(std::declval<Tuple>()))::value;
+	constexpr bool	IsReferenceOnlyTuple = decltype(IsReferenceOnlyTrait(declval<Tuple>()))::value;
 
 	template<class Tuple>
-	constexpr bool	IsGroundTuple		 = !decltype(HasReferenceTrait(std::declval<Tuple>()))::value;
+	constexpr bool	IsGroundTuple		 = !decltype(HasReferenceTrait(declval<Tuple>()))::value;
 
 
 
 
 	template<class... Elems>
-	constexpr std::tuple<const Elems&...>		 ToConstRefTuple(const std::tuple<Elems...>& src)
+	constexpr std::tuple<const Elems&...>     ToConstRefTuple(const std::tuple<Elems...>& src)
 	{
 		return src;
 	}
 
 	template<class... Elems>
-	constexpr std::tuple<std::decay_t<Elems>...>   ToGroundTuple(const std::tuple<Elems...>& src)
+	constexpr std::tuple<decay_t<Elems>...>   ToGroundTuple(const std::tuple<Elems...>& src)
 	{
 		return src;
 	}
@@ -156,7 +159,7 @@ namespace Def {
 		/*const*/ TArgsStorage		parametrizedCtorArgs;
 		/*const*/ SteadyStorage		steadyCtorArgs;
 
-		static_assert (!std::is_reference<SourceFactory>::value, "Factory of source Enumerator must be stored here.");
+		static_assert (!is_reference<SourceFactory>::value, "Factory of source Enumerator must be stored here.");
 
 		auto operator ()() const
 		{
@@ -178,7 +181,7 @@ namespace Def {
 		/*const*/ TArgsStorage			parametrizedCtorArgs;
 		/*const*/ SteadyStorage			steadyCtorParams;
 
-		static_assert (!std::is_reference<SourceFactoryStorage>::value && IsGroundTuple<SourceFactoryStorage>, "Factories must be stored here.");
+		static_assert (!is_reference<SourceFactoryStorage>::value && IsGroundTuple<SourceFactoryStorage>, "Factories must be stored here.");
 
 		auto operator ()() const
 		{
@@ -207,11 +210,11 @@ namespace Def {
 	template <class T> struct IsSteadyParamPack;
 
 	template <class... Types> struct IsSteadyParamPack<SteadyParamPack<Types...>> {
-		constexpr static bool value = true;
+		static constexpr bool value = true;
 	};
 
 	template <class T> struct IsSteadyParamPack {
-		constexpr static bool value = false;
+		static constexpr bool value = false;
 	};
 
 
@@ -237,19 +240,19 @@ namespace Def {
 	auto ChainFactory(SourceFact&& sourceFact, SteadyParamPack<SteadyArgs...>&& sargs, Args&&... args)
 	{
 		// just against cryptic errors...
-		static_assert (!std::is_lvalue_reference<SourceFact>::value || std::is_copy_constructible<std::remove_reference_t<SourceFact>>::value,
+		static_assert (!is_lvalue_reference<SourceFact>::value || is_copy_constructible<remove_reference_t<SourceFact>>::value,
 					   "Can't chain by copy: the source factory contains uncopiable elements!"		);
-		static_assert (std::is_move_constructible<std::remove_reference_t<SourceFact>>::value,
+		static_assert (is_move_constructible<remove_reference_t<SourceFact>>::value,
 					   "Can't chain: the source factory contains unmovable and uncopiable elements!");
 
-		using SF				  = std::remove_reference_t<SourceFact>;
-		using ParametrizedStorage = ArgStorage<std::decay_t<Args>...>;
-		using SteadyStorage		  = ArgStorage<std::decay_t<SteadyArgs>...>;
+		using SF				  = remove_reference_t<SourceFact>;
+		using ParametrizedStorage = ArgStorage<decay_t<Args>...>;
+		using SteadyStorage		  = ArgStorage<decay_t<SteadyArgs>...>;
 
 		return ChainedFactory<NextEnumerator, SF, ParametrizedStorage, SteadyStorage, PureTypeArgs...> {
-			std::forward<SourceFact>(sourceFact),
-			ParametrizedStorage		{ { std::forward<Args>(args)... } },
-			SteadyStorage			{ std::move(sargs.tuple) }			// forwards by element
+			forward<SourceFact>(sourceFact),
+			ParametrizedStorage		{ { forward<Args>(args)... } },
+			SteadyStorage			{ move(sargs.tuple) }			// forwards by element
 		};
 	}
 
@@ -257,10 +260,10 @@ namespace Def {
 	/// Same as above overload but with no SteadyParams specified.
 	template <template <class...> class NextEnumerator, class... PureTypeArgs,
 			  class... Args, class SourceFact,
-			  class = std::enable_if_t<sizeof...(Args) == 0 || !IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
+			  class = enable_if_t<sizeof...(Args) == 0 || !IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
 	auto ChainFactory(SourceFact&& sourceFact, Args&&... args)
 	{
-		return ChainFactory<NextEnumerator, PureTypeArgs...>(std::forward<SourceFact>(sourceFact), NoSteadyParams(), std::forward<Args>(args)...);
+		return ChainFactory<NextEnumerator, PureTypeArgs...>(forward<SourceFact>(sourceFact), NoSteadyParams(), forward<Args>(args)...);
 	}
 
 
@@ -276,23 +279,23 @@ namespace Def {
 		static_assert (IsReferenceOnlyTuple<decltype(sourceFactories)>, "Do not copy factories here!");
 
 		using FactoryStorage	  = decltype(ToGroundTuple(sourceFactories));
-		using ParametrizedStorage = ArgStorage<std::decay_t<Args>...>;
-		using SteadyStorage		  = ArgStorage<std::decay_t<SteadyArgs>...>;
+		using ParametrizedStorage = ArgStorage<decay_t<Args>...>;
+		using SteadyStorage		  = ArgStorage<decay_t<SteadyArgs>...>;
 
 		return JoinerChainedFactory<NextEnumerator, FactoryStorage, ParametrizedStorage, SteadyStorage, PureTypeArgs...> {
 			sourceFactories,
-			ParametrizedStorage	{ { std::forward<Args>(args)... } },
-			SteadyStorage		{ std::move(sargs.tuple) }			// forwards by element
+			ParametrizedStorage	{ { forward<Args>(args)... } },
+			SteadyStorage		{ move(sargs.tuple) }			// forwards by element
 		};
 	}
 
 
 	/// Same as above overload but with no SteadyParams specified.
 	template <template <class...> class NextEnumerator, class... PureTypeArgs, class FactoryRefsTuple, class... Args,
-			  class = std::enable_if_t<!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
+			  class = enable_if_t<!IsSteadyParamPack<std::tuple_element_t<0, std::tuple<Args..., void>>>::value>>
 	auto JoinFactories(const FactoryRefsTuple& sourceFactories, Args&&... pargs)
 	{
-		return JoinFactories<NextEnumerator, PureTypeArgs...>(sourceFactories, NoSteadyParams(), std::forward<Args>(pargs)...);
+		return JoinFactories<NextEnumerator, PureTypeArgs...>(sourceFactories, NoSteadyParams(), forward<Args>(pargs)...);
 	}
 
 #pragma endregion
@@ -308,7 +311,7 @@ namespace Def {
 	template <class... T>
 	SteadyParamPack<T&&...>   SteadyParams(T&&... args)
 	{
-		return { std::tuple<T&&...> { std::forward<T>(args)... } };
+		return { std::tuple<T&&...> { forward<T>(args)... } };
 	}
 
 
@@ -318,17 +321,17 @@ namespace Def {
 	///		Using StorableT for & arguments is an opaque workaround for ArgStorage / ChainFactory decays all input expecting lambdas.
 	///		Constructed Enumerator must accept StorableT. Current usage is scarce.
 	template <class Src, class ToInit>
-	auto StoreAllowingRef(Src& x) -> std::conditional_t< std::is_same<std::decay_t<Src>, std::decay_t<ToInit>>::value
-														 && !std::is_reference<ToInit>::value,
-														 Src&&,
-														 TypeHelpers::StorableT<ToInit> >
+	auto StoreAllowingRef(Src& x) -> conditional_t< is_same<decay_t<Src>, decay_t<ToInit>>::value
+													&& !is_reference<ToInit>::value,
+													Src&&,
+													TypeHelpers::StorableT<ToInit>				  >
 	{
-		static_assert (!std::is_lvalue_reference<ToInit>::value || std::is_lvalue_reference<Src>::value,
+		static_assert (!is_lvalue_reference<ToInit>::value || is_lvalue_reference<Src>::value,
 					   "Requested lvalue reference to an rvalue.");
-		static_assert (!std::is_reference<ToInit>::value || TypeHelpers::IsRefCompatible<ToInit, Src>,
+		static_assert (!is_reference<ToInit>::value || TypeHelpers::IsRefCompatible<ToInit, Src>,
 					   "The specified types are not reference-compatible.");
 
-		return std::forward<Src>(x);
+		return forward<Src>(x);
 	}
 
 #pragma endregion

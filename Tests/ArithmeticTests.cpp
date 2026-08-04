@@ -145,7 +145,7 @@ namespace EnumerableTests {
 
 			auto ascending = nums.Order();
 			ASSERT_ELEM_TYPE (int&, ascending);
-			
+
 			ASSERT_EQ (numsArr + 1, &ascending.First());
 			ASSERT_EQ (numsArr + 0, &*ascending.ElementAt(2));
 			ASSERT_EQ (numsArr + 3, &ascending.Last());
@@ -168,10 +168,10 @@ namespace EnumerableTests {
 
 			auto heightsFwd = points.OrderBy(&Vector2D<int>::x).Select(&Vector2D<int>::y);
 			auto heightsBck = points.OrderByDescending(&Vector2D<int>::x).Select(&Vector2D<int>::y);
-			
+
 			ASSERT_ELEM_TYPE (int&, heightsFwd);
 			ASSERT_ELEM_TYPE (int&, heightsBck);
-			
+
 			ASSERT_EQ (&pointArr[3].y, &heightsFwd.First());
 			ASSERT_EQ (&pointArr[2].y, &*heightsFwd.ElementAt(1));
 			ASSERT_EQ (&pointArr[1].y, &heightsFwd.Last());

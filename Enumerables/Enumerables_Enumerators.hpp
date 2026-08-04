@@ -17,7 +17,7 @@
 namespace Enumerables {
 namespace Def {
 
-	using namespace TypeHelpers;
+	using namespace Enumerables::TypeHelpers;
 
 	// debug-only error texts
 	constexpr char DepletedError[]    = "Enumerator has reached the end.";
@@ -293,9 +293,10 @@ namespace Def {
 			//		 -> Omitted ~RvoEmplacer call:	more or less allowed by the standard, provided that nothing relies on its side-effects.
 			//		 -> Possible problem:			it's not a "complete object" that gets destroyed manually, but a subobject of it.
 			//
-			//		 In C++17 this construct allows the omission of [virtual] move ctors, so it is useful.
+			//		 In C++17 this is solved by immediate materialization to the heap - which allows the omission of [virtual] move ctors.
+			//		 Here it only allows the move ctors not to be called actually.
 			//
-			//		 Here, to stay on the safe side, the above initialization can be replaced with a plain move construction:
+			//		 To stay on the safe side, the above initialization can be replaced with a plain move construction:
 			//		 ptr { new (InlineTarget<NestedFactory>()) InvokeResultT<NestedFactory> { fact() } }
 		}
 
@@ -1877,11 +1878,11 @@ namespace Def {
 	#pragma region Sequence deductions
 
 	/// Helper for SeqAccuDeducer
-	template <class Res, class SeedStorage, class StepFunction>
-	struct CheckedAccuFromDeducedResult {
+	template <class SeedStorage, class StepFunction, class Res>
+	struct CheckedAccuForStep {
 
 		// void => assume mutator over (decayed) Seed type
-		using TAccumulator = OverrideT<Res, BaseT<SeedStorage>>;
+		using TAccumulator = OverrideT<LambdaCreators::NonExpiringT<Res>, BaseT<SeedStorage>>;
 
 		static constexpr bool callable = IsConstCallable<StepFunction, TAccumulator&>::value
 									  || IsCallableMember<TAccumulator&, StepFunction>::value;
@@ -1901,8 +1902,8 @@ namespace Def {
 		// default case: ForcedAcc is specified
 		using TAccumulator = ForcedAcc;
 
-		static_assert (IsConstCallable<StepFunction, ForcedAcc&>::value
-					|| IsCallableMember<ForcedAcc&, StepFunction>::value,
+		static_assert (   IsConstCallable<StepFunction, ForcedAcc&>::value
+					   || IsCallableMember<ForcedAcc&, StepFunction>::value,
 					   "The supplied step function/member is not const-callable on the specified accumulator type!");
 	};
 
@@ -1912,7 +1913,7 @@ namespace Def {
 		// Use declaration if exact (instead of probing with fictive argument)
 		// void => assume mutator over [decayed] Seed type
 		using TResult      = typename DeclaredResult<StepFunction>::type;
-		using TAccumulator = typename CheckedAccuFromDeducedResult<LambdaCreators::NonExpiringT<TResult>, SeedStorage, StepFunction>::TAccumulator;
+		using TAccumulator = typename CheckedAccuForStep<SeedStorage, StepFunction, TResult>::TAccumulator;
 	};
 
 	template <class SeedStorage, class StepFunction>
@@ -1925,8 +1926,8 @@ namespace Def {
 					|| IsCallableMember<ProbingArg, StepFunction>::value,
 					   "Unable to deduce accumulator type. Specify it as explicit type argument!");
 
-		using DeducedResult = InvokeResultT<LambdaCreators::CustomMapperT<ProbingArg, StepFunction>, ProbingArg>;
-		using TAccumulator  = typename CheckedAccuFromDeducedResult<DeducedResult, SeedStorage, StepFunction>::TAccumulator;
+		using DeducedResult = LambdaCreators::LambdaResultT<StepFunction, ProbingArg>;
+		using TAccumulator  = typename CheckedAccuForStep<SeedStorage, StepFunction, DeducedResult>::TAccumulator;
 	};
 
 	#pragma endregion

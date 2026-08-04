@@ -34,7 +34,7 @@
 	 *  	- class AutoEnumerable<F>																			  *
 	 *  		The generic template implementation, to be used only with implicit typing (auto).				  *
 	 *  	- typedef for its interfaced subcase: Enumerable<T>													  *
-	 *  		To be used as explicitly, like in C#. Provides type-erasure, applicable for interfaces.			  *
+	 *  		To be used explicitly, like in C#. Provides type-erasure, applicable for interfaces.			  *
 	 *  	- free creator functions																			  *
 	 *  		To wrap containers or take a range of numbers.													  *
 	 *  	- some famous macros to have FUN.																	  *

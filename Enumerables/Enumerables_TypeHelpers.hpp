@@ -538,11 +538,11 @@ namespace TypeHelpers {
 
 		template <class M>
 		struct IsConstLvalMethod {
-			constexpr static bool value = false;
+			static constexpr bool value = false;
 		};
 		template <class R, class T, class... Args>
 		struct IsConstLvalMethod<R (T::*)(Args...) const &> {
-			constexpr static bool value = true;
+			static constexpr bool value = true;
 		};
 
 
@@ -602,7 +602,7 @@ namespace TypeHelpers {
 
 		// For references, need to enhance compiler behaviour (older clang does not propagate rvalueness at all!)
 		template <class T, class Selected>
-		decltype(auto) PropagateRval(Selected&& s)
+		auto&& PropagateRval(Selected&& s)
 		{
 			using RvalPropagated = conditional_t<is_lvalue_reference<T>::value, Selected&, remove_reference_t<Selected>&&>;
 			return static_cast<RvalPropagated>(s);
@@ -619,7 +619,7 @@ namespace TypeHelpers {
 		auto&		   Select(T*  obj, Selector p)   { return  obj->*p; }
 
 		template <class T, class Selector, IfMemberObject<Selector> = 0>
-		decltype(auto) Select(T&& obj, Selector p)   { return PropagateRval<T>(obj.*p); }
+		auto&&		   Select(T&& obj, Selector p)   { return PropagateRval<T>(obj.*p); }
 
 
 		template <class T, class Selector, IfMemberFunction<Selector> = 0>
@@ -681,7 +681,7 @@ namespace TypeHelpers {
 
 
 
-		/// A LambdaCallable procection forwarded or wrapped as a standard callable,
+		/// A LambdaCallable projection forwarded or wrapped as a standard callable,
 		/// with manually overridable return type. [Const-callability is checked, but not enforced!]
 		template <class T, class R = void, class L, IfNotMemberPointer<L> = 0>
 		decltype(auto) UniformMapper(L&& lambda)
@@ -689,7 +689,7 @@ namespace TypeHelpers {
 			// will be stored inside Enumerable ==> should not find && overload; constness required!
 			static_assert (IsConstCallable<L, T>::value,
 						   "The lambda is not const-callable with the expected argument."
-						   " Check the parameter type including qualifiers!"			 );
+						   " Check the parameter type, including qualifiers!"			 );
 
 			using OrigR = InvokeResultT<ConstValueT<L>&, T>;
 			using Trg   = OverrideT<R, OrigR>;
@@ -840,7 +840,7 @@ namespace TypeHelpers {
 			// will be stored inside Enumerable ==> should not find && overload; constness required!
 			static_assert (IsConstCallable<L, T1, T2>::value,
 						   "The lambda is not const-callable with the expected arguments."
-						   " Check the parameter types including qualifiers!"			  );
+						   " Check the parameter types, including qualifiers!"			  );
 
 			using OrigR = InvokeResultT<ConstValueT<L>&, T1, T2>;
 			using Trg   = OverrideT<R, OrigR>;
@@ -871,7 +871,7 @@ namespace TypeHelpers {
 		{
 			static_assert (IsLambdaCallable<L, T1, T2>,
 						   "This method expects a binary operation: (TElem1, TElem2) -> TMapped."
-						   " Check the lambda's parameter types including qualifiers!"			 );
+						   " Check the lambda's parameter types, including qualifiers!"			 );
 
 			using DeducedRes = LambdaBinopResultT<L, T1, T2>;
 			using TargetRes  = OverrideT<R, NonExpiringT<DeducedRes>>;

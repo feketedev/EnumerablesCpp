@@ -284,7 +284,6 @@ namespace EnumerableTests {
 			ASSERT (AreEqual(common,    c1));
 			ASSERT (AreEqual(common,    c2));
 
-			//const auto& constBases    = bases;
 			const auto& constDeriveds = deriveds;
 
 			auto r3 = Enumerate(bases).Except(constDeriveds);

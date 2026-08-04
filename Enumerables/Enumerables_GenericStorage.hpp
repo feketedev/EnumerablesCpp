@@ -252,7 +252,7 @@ namespace TypeHelpers {
 
 		using Emp   = EmplacableT<T>;
 
-		// NOTE: for a P1971R0 compliant compiler, this ceremony and can be omitted. It is safe to just use UnionStorage, no bool param.
+		// NOTE: for a P1971R0 compliant compiler, this ceremony and strategies can be omitted. It is safe to just use UnionStorage, no bool param.
 		static constexpr bool ResortToBytes = SupportReconstruct && !is_reference<T>::value && !is_scalar<T>::value;
 		using Store = conditional_t<ResortToBytes, BytesStorage<Emp>,
 					  conditional_t<TrackLiveness, TrackedUnionStorage<Emp>, UntrackedUnionStorage<Emp>>>;

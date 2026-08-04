@@ -30,6 +30,7 @@ namespace TypeHelpers {
 	using std::is_const;
 	using std::is_constructible;
 	using std::is_copy_constructible;
+	using std::is_move_constructible;
 	using std::is_convertible;
 	using std::is_void;
 	using std::is_reference;
@@ -496,7 +497,7 @@ namespace TypeHelpers {
 	struct IsCallable {
 
 		template <class F = Func>
-		static constexpr bool Check(decay_t<decltype(declval<F>()(declval<Args>()...))>*)
+		static constexpr bool Check(void_t<decltype(declval<F>()(declval<Args>()...))>*)
 		{
 			return true;
 		}
@@ -526,13 +527,13 @@ namespace TypeHelpers {
 		// Possible function calls:
 
 		template <class M = Mptr>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()) (declval<Args>()...))>*)
+		static constexpr bool Check(void_t<decltype((declval<Obj>().*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
 
 		template <class M = Mptr>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()) (declval<Args>()...))>*)
+		static constexpr bool Check(void_t<decltype((declval<Obj>()->*declval<M>()) (declval<Args>()...))>*)
 		{
 			return true;
 		}
@@ -541,13 +542,13 @@ namespace TypeHelpers {
 		// Possible member-access:
 
 		template <class M = Mptr>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>().*declval<M>()))>*)
+		static constexpr bool Check(void_t<decltype((declval<Obj>().*declval<M>()))>*)
 		{
 			return sizeof...(Args) == 0;
 		}
 
 		template <class M = Mptr>
-		static constexpr bool Check(decay_t<decltype((declval<Obj>()->*declval<M>()))>*)
+		static constexpr bool Check(void_t<decltype((declval<Obj>()->*declval<M>()))>*)
 		{
 			return sizeof...(Args) == 0;
 		}
@@ -636,7 +637,7 @@ namespace TypeHelpers {
 	struct IsBraceConstructible {
 
 		template <class TT = T>
-		static constexpr bool Check(decay_t<decltype(TT { declval<Args>()... })>*)
+		static constexpr bool Check(void_t<decltype(TT { declval<Args>()... })>*)
 		{
 			return true;
 		}
@@ -657,17 +658,17 @@ namespace TypeHelpers {
 
 		// Even here, the expression can't be present in the parameter list!
 		template <class TT = T, class = decltype(TT { declval<Args>()... })>
-		constexpr static bool Check(TT* = nullptr)
+		static constexpr bool Check(TT* = nullptr)
 		{
 			return noexcept(TT { declval<Args>()... });
 		}
 
-		constexpr static bool Check(...)
+		static constexpr bool Check(...)
 		{
 			return false;
 		}
 
-		constexpr static bool value = Check(nullptr);
+		static constexpr bool value = Check(nullptr);
 	};
 
 
@@ -695,7 +696,7 @@ namespace TypeHelpers {
 	struct IsAddAssignable {
 
 		template <class TT = T>
-		static constexpr bool Check(decay_t<decltype(declval<TT&>() += declval<Addend>())>*)
+		static constexpr bool Check(void_t<decltype(declval<TT&>() += declval<Addend>())>*)
 		{
 			return true;
 		}
