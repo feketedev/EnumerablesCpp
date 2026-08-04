@@ -8,12 +8,17 @@
 	 *  Tools here should aim for the general case.		*/
 
 
+#include <cstddef>
 #include <type_traits>
 #include <iterator>
 
 
 
 namespace Enumerables {
+
+	using std::size_t;
+
+
 namespace TypeHelpers {
 
 	using std::move;

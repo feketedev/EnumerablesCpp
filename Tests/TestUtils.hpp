@@ -8,6 +8,7 @@
 #	define _ITERATOR_DEBUG_LEVEL 0
 #endif
 
+#include <cstddef>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -49,6 +50,11 @@
 
 
 namespace EnumerableTests {
+
+	using std::size_t;
+	using std::ptrdiff_t;
+
+
 
 	extern bool NoAssertMessages;	// Hide assert dialogs for automatic test runs.
 	extern bool FailureDetected;	// Any assertion has failed. [No reset by individual tests.]
