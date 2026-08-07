@@ -512,8 +512,6 @@ namespace EnumerableTests {
 
 		// Simple scan
 		{
-			using Enumerables::AreEqual;
-
 			// from prvalues
 			{
 				auto sums  = Enumerables::Range(4).Scan(FUN(a, x,		a + x));

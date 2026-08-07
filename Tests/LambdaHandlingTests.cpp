@@ -8,7 +8,6 @@
 
 namespace EnumerableTests {
 
-	using Enumerables::AreEqual;
 	using Enumerables::RangeBetween;
 
 

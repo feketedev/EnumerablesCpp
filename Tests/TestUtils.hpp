@@ -44,7 +44,7 @@
 #if defined(_DEBUG) && !defined(__clang__) && (_MSC_VER < 1934)
 #	define IFNO_NRVO(count)	static_cast<size_t>(count)
 #else
-#	define IFNO_NRVO(count)	0u
+#	define IFNO_NRVO(count)	(UNUSED(count), 0u)
 #endif
 
 

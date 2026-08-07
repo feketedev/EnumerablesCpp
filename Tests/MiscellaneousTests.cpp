@@ -205,7 +205,7 @@ namespace EnumerableTests {
 
 		auto addrs = Enumerate(vec).Addresses();
 
-		ASSERT (Enumerables::AreEqual(addrs, rot0.Addresses()));
+		ASSERT (AreEqual(addrs, rot0.Addresses()));
 
 		ASSERT_EQ (4, rot1.Count());
 		ASSERT_EQ (4, rot2.Count());

@@ -626,7 +626,7 @@ namespace EnumerableTests {
 			ASSERT_EQ (0, shorts.First());
 			ASSERT_EQ (2, shorts.Last());
 			ASSERT_EQ (3, shorts.Count());
-			ASSERT (Enumerables::AreEqual(shorts, uints));
+			ASSERT (AreEqual(shorts, uints));
 
 			// -- Importance:
 			// Letting the initializer_list deduce freely, then converting its elements to the Forced type
