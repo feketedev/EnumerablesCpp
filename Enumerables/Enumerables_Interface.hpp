@@ -1276,7 +1276,11 @@ namespace Def {
 	{
 		using Acc = typename SeqAccuDeducer<ScalarAcc, ScalarAcc, StepFun>::TAccumulator;
 
-		return WrapFactory(SequenceFactory<ScalarAcc, BaseT<StepFun>, Acc, Elem> {
+		// NOTE: the omission of LambdaCreators::CustomMapper is OK here:
+		//			- Acc is scalar  => no member-pointers
+		//			- Acc is non-ref => materializes fine without using NonExpiringT
+
+		return WrapFactory(SequenceFactory<ScalarAcc, decay_t<StepFun>, Acc, Elem> {
 			start,
 			forward<StepFun>(step)
 		});

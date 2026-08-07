@@ -497,6 +497,13 @@ namespace EnumerableTests {
 			ASSERT_EQ		 (16.0,		evens.First());
 			ASSERT_EQ		 (20.0,		evens.ElementAt(2));
 
+			// type-system edge-case: explicitly specified function type prevents
+			// (fixed)				  decaying to pointer -> can't store BaseT<F>
+			auto evens2 = Sequence<float, float, void(&)(float&)>(16.0f, Add2Float);
+			ASSERT_ELEM_TYPE(float, evens2);
+			ASSERT_EQ(16.0f, evens2.First());
+			ASSERT_EQ(20.0f, evens2.ElementAt(2));
+
 			auto pow2sf = Sequence<float>(1, [](float& x) { x *= 2; });
 			ASSERT_ELEM_TYPE (float,	pow2sf);
 			ASSERT_EQ		 (1.0f,		pow2sf.First());

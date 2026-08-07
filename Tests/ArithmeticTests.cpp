@@ -18,6 +18,10 @@ namespace EnumerableTests {
 	using Enumerables::LogicException;
 
 
+	static bool IsLessInt(int a, int b)   { return a < b; }
+
+
+
 	static void Extremes()
 	{
 		// scalars
@@ -158,6 +162,11 @@ namespace EnumerableTests {
 			const std::vector<int> ascVec = ascending.ToList();
 			ASSERT (AreEqual(Enumerate(ascVec.rbegin(), ascVec.rend()), descending2));
 			ASSERT (AreEqual(descending1.Addresses(), descending2.Addresses()));
+
+			// type-system edge-case: specifying a function reference
+			auto ascending2 = nums.Order<bool (&)(int, int)>(IsLessInt);
+			ASSERT_ELEM_TYPE (int&, ascending2);
+			ASSERT (AreEqual(ascVec, ascending2));
 		}
 
 		// records
